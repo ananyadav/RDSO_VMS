@@ -29,6 +29,11 @@ from app.services.recording_metrics import (
 )
 from app.services.storage_dashboard import get_storage_dashboard
 from app.services.recording_health import get_recording_health
+from app.services.storage_settings_store import (
+    get_storage_settings_public,
+    load_storage_settings,
+    update_storage_settings,
+)
 from app.services.recording_retention import run_retention_pass, get_last_retention_pass
 from app.services.recording_config import (
     STATUS_LOG_INTERVAL_SECONDS,
@@ -226,6 +231,28 @@ async def retention_policy_endpoint(_request: web.Request):
             "last_pass": get_last_retention_pass(),
         }
     )
+
+
+async def storage_settings_get_endpoint(_request: web.Request):
+    return web.json_response(get_storage_settings_public())
+
+
+async def storage_settings_update_endpoint(request: web.Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+    try:
+        result = await update_storage_settings(
+            retention_days=body.get("retention_days"),
+            recordings_dir=body.get("recordings_dir"),
+        )
+        return web.json_response(result)
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=400)
+    except Exception as exc:
+        logging.error("[STORAGE] settings update failed: %s", exc, exc_info=True)
+        return web.json_response({"error": "Failed to update storage settings"}, status=500)
 
 
 async def retention_run_endpoint(_request: web.Request):
@@ -432,6 +459,8 @@ def setup_recording_routes(app: web.Application):
     app.router.add_get("/api/recordings/metrics", recording_metrics_endpoint)
     app.router.add_post("/api/recordings/stats/backfill", backfill_recording_stats_endpoint)
     app.router.add_get("/api/storage/dashboard", storage_dashboard_endpoint)
+    app.router.add_get("/api/storage/settings", storage_settings_get_endpoint)
+    app.router.add_put("/api/storage/settings", storage_settings_update_endpoint)
     app.router.add_get("/api/storage/retention", retention_policy_endpoint)
     app.router.add_post("/api/storage/retention/run", retention_run_endpoint)
     app.router.add_get("/api/recordings/health", recording_health_endpoint)
@@ -448,6 +477,7 @@ def setup_recording_routes(app: web.Application):
     # Startup / cleanup for monitor task
     async def on_startup(app: web.Application):
         global monitoring_task
+        await load_storage_settings()
         await recording_sched.bootstrap_recording_schedule()
         # Sync disk stats and close orphaned sessions (no FFmpeg after crash/restart)
         await finalize_orphaned_recording_sessions(stop_reason="backend_restart")

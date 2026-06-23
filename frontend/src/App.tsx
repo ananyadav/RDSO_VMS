@@ -191,7 +191,7 @@ export default function App(): React.ReactElement {
       <Router>
         <div className="flex h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
           <Sidebar user={currentUser} />
-          <div className="flex flex-1 flex-col overflow-hidden">
+          <div className="flex flex-1 flex-col min-h-0">
             <TopBar
               userName={currentUser.name}
               userRole={currentUser.role}

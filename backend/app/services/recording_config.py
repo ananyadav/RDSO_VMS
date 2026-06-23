@@ -22,25 +22,33 @@ STATUS_LOG_INTERVAL_SECONDS = int(os.getenv("RECORDING_STATUS_LOG_SECONDS", "60"
 RETENTION_PASS_INTERVAL_SECONDS = int(os.getenv("RECORDING_RETENTION_PASS_SECONDS", "300"))
 
 
+def _env_retention_days() -> float:
+    if _retention_hours:
+        return float(_retention_hours) / 24
+    if _retention_days:
+        return float(_retention_days)
+    return 15.0
+
+
 def get_retention_policy() -> dict:
     """Current retention window for API / UI."""
-    seconds = RECORDING_RETENTION_SECONDS
-    if _retention_hours:
-        source = "hours"
-        label = f"{float(_retention_hours)} hour(s)"
-    elif _retention_days:
-        source = "days"
-        label = f"{float(_retention_days)} day(s)"
-    else:
-        source = "default"
+    from app.services.storage_settings_store import get_effective_retention_days, get_effective_retention_seconds
+
+    days = get_effective_retention_days()
+    seconds = get_effective_retention_seconds()
+    env_days = _env_retention_days()
+    source = "ui" if abs(days - env_days) > 0.001 else ("days" if _retention_days else ("hours" if _retention_hours else "default"))
+    label = f"{days:g} day(s)"
+    if source == "default" and not _retention_days and not _retention_hours:
         label = "15 days (default)"
     return {
         "source": source,
         "label": label,
         "retention_seconds": int(seconds),
         "retention_hours": round(seconds / 3600, 2),
-        "retention_days": round(seconds / 86400, 3),
+        "retention_days": round(days, 3),
         "pass_interval_seconds": RETENTION_PASS_INTERVAL_SECONDS,
+        "editable": True,
     }
 
 

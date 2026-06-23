@@ -54,8 +54,8 @@ export default function RecordingLocationSummary({ sites }: RecordingLocationSum
     <Card>
       <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-700">
         <Video size={18} className="text-gray-400" />
-        <h3 className="text-sm font-semibold text-white">Recording by location</h3>
-        <span className="text-xs text-gray-500">building / floor — cameras recording now</span>
+        <h3 className="text-sm font-semibold text-white">Recording by Location</h3>
+        <span className="text-xs text-gray-500">Site → Building → Floor — cameras recording now</span>
       </div>
       <div className="space-y-1 text-sm">
         {sites.map((site) => {

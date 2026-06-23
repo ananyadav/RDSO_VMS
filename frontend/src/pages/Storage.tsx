@@ -1,23 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { LayoutGrid, Video, Activity, HardDrive, Settings, RefreshCw, Loader2 } from 'lucide-react';
+import { HardDrive, Video, Settings, RefreshCw, Loader2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
-import RecordingHealthMonitor from '../components/RecordingHealthMonitor';
 import StorageOverviewTab from '../components/storage/StorageOverviewTab';
 import StorageRecordingTab from '../components/storage/StorageRecordingTab';
-import StorageDrivesTab from '../components/storage/StorageDrivesTab';
 import StorageSettingsTab from '../components/storage/StorageSettingsTab';
 import { useStorageDashboard } from '../hooks/useStorageDashboard';
 import { apiFetch } from '../lib/api';
 import Card from '../components/Card';
 
-type StorageTab = 'overview' | 'recording' | 'health' | 'drives' | 'settings';
+type StorageTab = 'storage' | 'recording' | 'settings';
 
 const TABS: { id: StorageTab; label: string; icon: React.ReactNode }[] = [
-  { id: 'overview', label: 'Overview', icon: <LayoutGrid size={16} /> },
+  { id: 'storage', label: 'Storage', icon: <HardDrive size={16} /> },
   { id: 'recording', label: 'Recording', icon: <Video size={16} /> },
-  { id: 'health', label: 'Health', icon: <Activity size={16} /> },
-  { id: 'drives', label: 'Storage Drives', icon: <HardDrive size={16} /> },
   { id: 'settings', label: 'Settings', icon: <Settings size={16} /> },
 ];
 
@@ -34,8 +30,10 @@ export default function Storage({
   onScheduleChange,
   onToggleMasterRecording,
 }: StorageProps): React.ReactElement {
-  const [activeTab, setActiveTab] = useState<StorageTab>('overview');
-  const [allCameras, setAllCameras] = useState<{ id: string; name: string }[]>([]);
+  const [activeTab, setActiveTab] = useState<StorageTab>('storage');
+  const [allCameras, setAllCameras] = useState<
+    { id: string; name: string; site?: string; building?: string; floor?: string }[]
+  >([]);
   const { data, loading, loadingFull, error, refresh, runRetention, runningRetention } = useStorageDashboard();
 
   useEffect(() => {
@@ -55,7 +53,7 @@ export default function Storage({
     <div className="flex flex-col h-full">
       <PageHeader
         title="Storage & Recording"
-        subtitle="Manage storage drives and camera recording schedules"
+        subtitle="Disk usage, retention settings, and recording status by location"
         rightContent={
           loadingFull ? (
             <span className="text-xs text-gray-500 flex items-center gap-1">
@@ -109,7 +107,7 @@ export default function Storage({
             <Card className="py-8 text-center text-red-400">{error}</Card>
           )}
 
-          {activeTab === 'overview' && data && <StorageOverviewTab data={data} />}
+          {activeTab === 'storage' && data && <StorageOverviewTab data={data} />}
 
           {activeTab === 'recording' && (
             <StorageRecordingTab
@@ -122,15 +120,12 @@ export default function Storage({
             />
           )}
 
-          {activeTab === 'health' && <RecordingHealthMonitor />}
-
-          {activeTab === 'drives' && data && <StorageDrivesTab data={data} />}
-
           {activeTab === 'settings' && data && (
             <StorageSettingsTab
               data={data}
               onRunRetention={runRetention}
               runningRetention={runningRetention}
+              onSettingsSaved={() => void refresh()}
             />
           )}
         </div>

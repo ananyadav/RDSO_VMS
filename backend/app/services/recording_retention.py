@@ -7,10 +7,8 @@ from pathlib import Path
 from typing import Optional
 
 from app.core.database import list_recording_sessions, update_recording_session
-from app.services.recording_config import (
-    RECORDING_RETENTION_SECONDS,
-    get_retention_policy,
-)
+from app.services.storage_settings_store import get_effective_retention_seconds
+from app.services.recording_config import get_retention_policy
 from app.services.video_recording import (
     RECORDINGS_DIR,
     session_storage_dir,
@@ -213,7 +211,7 @@ async def run_retention_pass() -> dict:
     global _last_pass_result
 
     now = datetime.now(timezone.utc)
-    cutoff_ts = now.timestamp() - RECORDING_RETENTION_SECONDS
+    cutoff_ts = now.timestamp() - get_effective_retention_seconds()
     policy = get_retention_policy()
 
     fs = await _scan_filesystem_sessions(cutoff_ts)

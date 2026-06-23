@@ -24,8 +24,8 @@ from app.services.camera_identity import (
     storage_folder_keys_for_uid,
 )
 from app.services.recording_storage import mapped_legacy_folder_ids
+from app.services.storage_settings_store import get_effective_recordings_dir, get_storage_settings_public
 from app.services.video_recording import (
-    RECORDINGS_DIR,
     _empty_session_stats,
     is_camera_recording,
 )
@@ -37,7 +37,7 @@ _FS_EXECUTOR = ThreadPoolExecutor(max_workers=8, thread_name_prefix="storage-fs"
 
 def _disk_usage_for_recordings() -> dict:
     """System disk stats for the volume that holds Recordings/."""
-    path = str(RECORDINGS_DIR.resolve())
+    path = str(get_effective_recordings_dir().resolve())
     try:
         disk = psutil.disk_usage(path)
     except Exception as e:
@@ -68,7 +68,7 @@ def _disk_usage_for_recordings() -> dict:
 
 def _camera_filesystem_stats(camera_id: str) -> dict:
     """Aggregate segment stats under Recordings/{camera_id}/ (single-pass walk)."""
-    cam_dir = RECORDINGS_DIR / camera_id
+    cam_dir = get_effective_recordings_dir() / camera_id
     if not cam_dir.is_dir():
         return {**_empty_session_stats(), "session_count": 0}
 
@@ -287,10 +287,12 @@ async def get_storage_dashboard(*, summary_only: bool = False) -> dict:
 
     camera_ids = set(names.keys())
     legacy_mapped = await mapped_legacy_folder_ids()
-    if not summary_only and RECORDINGS_DIR.is_dir():
-        for child in RECORDINGS_DIR.iterdir():
-            if child.is_dir() and child.name not in legacy_mapped:
-                camera_ids.add(child.name)
+    if not summary_only:
+        rec_dir = get_effective_recordings_dir()
+        if rec_dir.is_dir():
+            for child in rec_dir.iterdir():
+                if child.is_dir() and child.name not in legacy_mapped:
+                    camera_ids.add(child.name)
 
     cameras: List[dict] = []
     total_recordings_bytes = 0
@@ -360,10 +362,11 @@ async def get_storage_dashboard(*, summary_only: bool = False) -> dict:
 
     return {
         "updated_at": datetime.now(timezone.utc).isoformat(),
-        "recordings_root": str(RECORDINGS_DIR),
+        "recordings_root": str(get_effective_recordings_dir()),
         "stream_profile": recording_stream_profile(),
         "recording": get_recording_stream_info(),
         "retention": get_retention_policy(),
+        "storage_settings": get_storage_settings_public(),
         "disk": disk,
         "summary": {
             "recordings_storage_gb": recordings_gb,
