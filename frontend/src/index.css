@@ -1,0 +1,53 @@
+/* src/index.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 overflow-hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+}
+
+@layer components {
+  /* Form Inputs and Selects */
+  .input-style {
+    @apply w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none;
+  }
+  .select-style {
+    @apply w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md py-2.5 px-3 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none;
+  }
+  .checkbox-style {
+    @apply h-4 w-4 rounded bg-gray-200 dark:bg-gray-600 border-gray-300 dark:border-gray-500 text-blue-600 focus:ring-2 focus:ring-blue-500 focus:outline-none ring-offset-gray-100 dark:ring-offset-gray-800;
+  }
+  .access-checkbox {
+    @apply h-5 w-5 shrink-0 rounded border-2 border-white bg-white/95 text-emerald-600 accent-emerald-500 cursor-pointer;
+    pointer-events: auto;
+  }
+  .access-checkbox:disabled {
+    @apply opacity-100 cursor-default;
+  }
+
+  /* Buttons */
+  .btn-primary {
+    @apply w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-md transition-colors dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200;
+  }
+
+  /* Form Labels */
+  .label-style {
+    @apply block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1;
+  }
+}
+
+/* Custom Scrollbar Styling */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { @apply bg-gray-200 dark:bg-gray-800; }
+::-webkit-scrollbar-thumb { @apply bg-gray-400 dark:bg-gray-600 rounded-md; }
+::-webkit-scrollbar-thumb:hover { @apply bg-gray-500 dark:bg-gray-500; }
+
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }

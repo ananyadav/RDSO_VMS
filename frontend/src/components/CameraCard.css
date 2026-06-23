@@ -1,0 +1,24 @@
+/* src/components/CameraCard.css */
+
+.rec-dot {
+  width: 8px;
+  height: 8px;
+  background-color: white; /* Dot is white inside the red badge */
+  border-radius: 50%;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 0.8;
+  }
+}

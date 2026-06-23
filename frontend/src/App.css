@@ -1,0 +1,91 @@
+:root{
+  --bg:#091228; --panel:#0f1b3c; --panel-2:#101f47;
+  --line:#1c2b55; --text:#e6ecff; --muted:#9fb0d1;
+  --blue:#3b82f6; --blue2:#2563eb; --green:#22c55e; --red:#ef4444; --amber:#f59e0b;
+}
+
+*{box-sizing:border-box}
+html,body,#root{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}
+
+/* Layout */
+.app{display:grid; grid-template-columns: 260px 1fr; grid-template-rows: 1fr; height:100vh; overflow:hidden}
+.sidebar{background:linear-gradient(#0e1a39,#0a1430); border-right:1px solid var(--line); overflow:auto; height:100vh}
+.sidebar.collapsed{width:64px}
+.main{display:flex; flex-direction:column; height:100vh; overflow:hidden}
+.content{padding:16px; overflow:auto; height:calc(100vh - 56px)}
+
+/* Sidebar */
+.nav{padding:12px}
+.brand{padding:18px 14px; font-weight:700; letter-spacing:.4px; font-size:18px}
+.section{margin-top:8px; color:var(--muted); font-size:12px; padding:8px 12px 4px}
+.link{display:flex; align-items:center; gap:10px; padding:10px 12px; color:#cfe1ff; text-decoration:none; border-radius:10px; margin:4px 8px}
+.link:hover{background:#0f214d}
+.link.active{background:#1b3a7a; color:#fff; border:1px solid #2352b6; box-shadow:inset 0 0 0 1px rgba(255,255,255,.04)}
+.icon{width:18px; text-align:center; opacity:.95}
+
+/* TopBar */
+.topbar{height:56px; border-bottom:1px solid var(--line); background:rgba(12,23,50,.7); backdrop-filter: blur(6px); display:flex; align-items:center; justify-content:space-between; padding:0 12px}
+.actions{display:flex; gap:8px}
+.btn{background:var(--panel-2); border:1px solid var(--line); color:#dbe8ff; padding:8px 10px; border-radius:10px; cursor:pointer}
+.btn:hover{filter:brightness(1.1)}
+.btn.primary{background:linear-gradient(180deg,var(--blue),var(--blue2)); border-color:#2a5bd1; color:white}
+.tag{font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid var(--line); background:rgba(255,255,255,.02)}
+
+/* Page header + cards */
+.header{margin:6px 0 12px}
+.h1{font-size:20px; font-weight:700}
+.sub{color:var(--muted); font-size:13px}
+.card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px}
+.grid{display:grid; gap:12px}
+
+/* Camera card */
+.cam{position:relative; height:220px; border-radius:16px; background:linear-gradient(180deg,#152549,#0e1e41); border:1px solid var(--line); overflow:hidden}
+.cam-head{display:flex; justify-content:space-between; align-items:center; padding:10px 12px}
+.cam-tags{display:flex; gap:6px; align-items:center}
+.badge{font-size:11px; padding:4px 8px; border-radius:999px}
+.badge.live{background:#ff2647; color:#fff}
+.badge.online{background:#063; color:#c8ffd7}
+.badge.offline{background:#4b5563; color:#eee}
+.badge.ptz{background:#1e40af; color:#dbe8ff}
+.badge.activity{background:#eab308; color:#1b1700}
+.cam-body{height:calc(100% - 64px); display:flex; align-items:center; justify-content:center; color:#9bb1df; opacity:.95}
+.cam-actions{position:absolute; left:10px; bottom:10px; display:flex; gap:8px}
+.iconbtn{width:34px; height:34px; border-radius:10px; border:1px solid var(--line); background:var(--panel-2); display:flex; align-items:center; justify-content:center; cursor:pointer}
+.iconbtn:hover{filter:brightness(1.15)}
+.cam-cta{position:absolute; right:10px; bottom:10px}
+
+/* Timeline */
+.timeline{position:relative; height:160px}
+.timeline-shell{position:relative; overflow:auto; border-radius:10px; background:var(--panel-2); border:1px solid var(--line); height:120px}
+.timeline-inner{position:relative; min-width:1200px; height:100%}
+.ruler{position:absolute; top:4px; left:0; right:0; height:18px}
+.tick{position:absolute; top:0; height:18px; border-left:1px solid var(--line); color:var(--muted); font-size:11px}
+.tick span{position:absolute; top:-2px; transform:translateX(-50%)}
+.bar{position:absolute; left:0; right:0; top:40px; height:28px; background:linear-gradient(180deg,#3868d9,#1b44c2); border-radius:6px}
+.stripe{position:absolute; top:40px; height:28px; border-radius:2px; opacity:.95}
+.stripe.person{background:#22c55e}
+.stripe.vehicle{background:#f59e0b}
+.stripe.animal{background:#f59e0b}
+.icons{position:absolute; top:22px; left:0; right:0; height:16px; pointer-events:none}
+.iconmark{position:absolute; transform:translateX(-50%)}
+.playhead{position:absolute; top:24px; bottom:6px; width:2px; background:#ef4444; transform:translateX(-1px)}
+.playhead::before, .playhead::after{content:""; position:absolute; left:50%; transform:translateX(-50%); border-left:6px solid transparent; border-right:6px solid transparent}
+.playhead::before{top:-8px; border-bottom:8px solid #ef4444}
+.playhead::after{bottom:-8px; border-top:8px solid #ef4444}
+.timebubble{position:absolute; top:0; transform:translateX(-50%); background:#000; color:#fff; padding:2px 6px; border-radius:8px; font-family:ui-monospace,monospace; font-size:12px; display:none}
+
+/* Pills/controls */
+.pills{display:flex; gap:8px; flex-wrap:wrap}
+.pill{padding:8px 12px; background:var(--panel-2); border:1px solid var(--line); border-radius:999px; cursor:pointer}
+.pill.active{outline:2px solid var(--blue)}
+.right{margin-left:auto}
+
+/* Login */
+.login-wrap{height:100vh; display:flex; align-items:center; justify-content:center; background:radial-gradient(1200px 600px at 50% -200px,#123,#091228)}
+.login-card{width:420px; background:rgba(20,33,70,.9); border:1px solid var(--line); border-radius:18px; padding:22px; box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.login-title{display:flex; flex-direction:column; align-items:center; gap:6px; margin-bottom:12px}
+.login-icon{width:56px; height:56px; border-radius:50%; background:#10265a; color:#9fc1ff; display:flex; align-items:center; justify-content:center}
+.input{width:100%; background:#0e1f47; border:1px solid #1f3b7a; color:#e6ecff; padding:10px 12px; border-radius:10px}
+.row{display:flex; gap:10px; align-items:center}
+.help{color:#9fb0d1; font-size:12px; text-align:center; margin-top:8px}

@@ -1,0 +1,42 @@
+/* Live CCTV monitoring — no media-player chrome (grid + fullscreen only) */
+
+.live-monitor-player video {
+  pointer-events: none;
+}
+
+.live-monitor-player video::-webkit-media-controls {
+  display: none !important;
+}
+
+.live-monitor-player video::-webkit-media-controls-enclosure {
+  display: none !important;
+}
+
+.live-monitor-player video::-webkit-media-controls-panel {
+  display: none !important;
+}
+
+.live-monitor-player video::-webkit-media-controls-play-button {
+  display: none !important;
+}
+
+.live-monitor-player video::-webkit-media-controls-timeline {
+  display: none !important;
+}
+
+.live-monitor-player video::-webkit-media-controls-current-time-display,
+.live-monitor-player video::-webkit-media-controls-time-remaining-display {
+  display: none !important;
+}
+
+/* go2rtc video-stream overlays (mode label, time, status) */
+.live-monitor-player video-stream .mode,
+.live-monitor-player video-stream .status,
+.live-monitor-player video-stream .time,
+.live-monitor-player video-stream .info {
+  display: none !important;
+}
+
+.live-monitor-player video-stream {
+  pointer-events: none;
+}

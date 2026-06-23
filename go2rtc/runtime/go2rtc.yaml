@@ -1,0 +1,532 @@
+api:
+  listen: 127.0.0.1:1984
+rtsp:
+  listen: 127.0.0.1:8554
+webrtc:
+  listen: :8555
+  candidates:
+  - 127.0.0.1:8555
+  - stun:8555
+  ice_servers:
+  - urls:
+    - stun:stun.cloudflare.com:3478
+    - stun:stun.l.google.com:19302
+streams:
+  ip_192_168_41_18_sub:
+    - rtsp://admin:Corp%232024@192.168.41.18:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_18_main:
+    - rtsp://admin:Corp%232024@192.168.41.18:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_62_sub:
+    - rtsp://admin:Corp%232024@192.168.41.62:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_62_main:
+    - rtsp://admin:Corp%232024@192.168.41.62:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_67_sub:
+    - rtsp://admin:Corp%232024@192.168.41.67:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_67_main:
+    - rtsp://admin:Corp%232024@192.168.41.67:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_77_sub:
+    - rtsp://admin:Corp%232024@192.168.41.77:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_77_main:
+    - rtsp://admin:Corp%232024@192.168.41.77:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_86_sub:
+    - rtsp://admin:Corp%232024@192.168.41.86:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_86_main:
+    - rtsp://admin:Corp%232024@192.168.41.86:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_102_sub:
+    - rtsp://admin:Corp%232024@192.168.41.102:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_102_main:
+    - rtsp://admin:Corp%232024@192.168.41.102:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_104_sub:
+    - rtsp://admin:Corp%232024@192.168.41.104:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_104_main:
+    - rtsp://admin:Corp%232024@192.168.41.104:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_27_sub:
+    - rtsp://admin:Rashmi%40432@192.168.41.27:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_27_main:
+    - rtsp://admin:Rashmi%40432@192.168.41.27:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_127_sub:
+    - rtsp://admin:Rashmi%40432@192.168.41.127:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_127_main:
+    - rtsp://admin:Rashmi%40432@192.168.41.127:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_111_sub:
+    - rtsp://admin:Corp%232024@192.168.41.111:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_111_main:
+    - rtsp://admin:Corp%232024@192.168.41.111:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_112_sub:
+    - rtsp://admin:Corp%232024@192.168.41.112:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_112_main:
+    - rtsp://admin:Corp%232024@192.168.41.112:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_118_sub:
+    - rtsp://admin:Corp%232024@192.168.41.118:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_118_main:
+    - rtsp://admin:Corp%232024@192.168.41.118:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_113_sub:
+    - rtsp://admin:Corp%232024@192.168.41.113:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_113_main:
+    - rtsp://admin:Corp%232024@192.168.41.113:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_114_sub:
+    - rtsp://admin:Corp%232024@192.168.41.114:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_114_main:
+    - rtsp://admin:Corp%232024@192.168.41.114:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_115_sub:
+    - rtsp://admin:Corp%232024@192.168.41.115:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_115_main:
+    - rtsp://admin:Corp%232024@192.168.41.115:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_116_sub:
+    - rtsp://admin:Corp%232024@192.168.41.116:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_116_main:
+    - rtsp://admin:Corp%232024@192.168.41.116:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_117_sub:
+    - rtsp://admin:Corp%232024@192.168.41.117:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_117_main:
+    - rtsp://admin:Corp%232024@192.168.41.117:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_109_sub:
+    - rtsp://admin:Corp%232024@192.168.41.109:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_109_main:
+    - rtsp://admin:Corp%232024@192.168.41.109:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_122_sub:
+    - rtsp://admin:Corp%232024@192.168.41.122:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_122_main:
+    - rtsp://admin:Corp%232024@192.168.41.122:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_42_sub:
+    - rtsp://admin:Corp%232024@192.168.41.42:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_42_main:
+    - rtsp://admin:Corp%232024@192.168.41.42:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_90_sub:
+    - rtsp://admin:Corp%232024@192.168.41.90:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_90_main:
+    - rtsp://admin:Corp%232024@192.168.41.90:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_60_sub:
+    - rtsp://admin:Corp%232024@192.168.41.60:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_60_main:
+    - rtsp://admin:Corp%232024@192.168.41.60:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_41_sub:
+    - rtsp://admin:Corp%232024@192.168.41.41:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_41_main:
+    - rtsp://admin:Corp%232024@192.168.41.41:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_43_sub:
+    - rtsp://admin:Corp%232024@192.168.41.43:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_43_main:
+    - rtsp://admin:Corp%232024@192.168.41.43:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_49_sub:
+    - rtsp://admin:Corp%232024@192.168.41.49:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_49_main:
+    - rtsp://admin:Corp%232024@192.168.41.49:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_13_sub:
+    - rtsp://admin:Corp%232024@192.168.41.13:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_13_main:
+    - rtsp://admin:Corp%232024@192.168.41.13:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_23_sub:
+    - rtsp://admin:Corp%232024@192.168.41.23:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_23_main:
+    - rtsp://admin:Corp%232024@192.168.41.23:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_24_sub:
+    - rtsp://admin:Corp%232024@192.168.41.24:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_24_main:
+    - rtsp://admin:Corp%232024@192.168.41.24:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_7_sub:
+    - rtsp://admin:Corp%232024@192.168.41.7:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_7_main:
+    - rtsp://admin:Corp%232024@192.168.41.7:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_93_sub:
+    - rtsp://admin:Corp%232024@192.168.41.93:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_93_main:
+    - rtsp://admin:Corp%232024@192.168.41.93:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_95_sub:
+    - rtsp://admin:Corp%232024@192.168.41.95:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_95_main:
+    - rtsp://admin:Corp%232024@192.168.41.95:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_96_sub:
+    - rtsp://admin:Corp%232024@192.168.41.96:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_96_main:
+    - rtsp://admin:Corp%232024@192.168.41.96:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_106_sub:
+    - rtsp://admin:Corp%232024@192.168.41.106:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_106_main:
+    - rtsp://admin:Corp%232024@192.168.41.106:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_68_sub:
+    - rtsp://admin:Corp%232024@192.168.41.68:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_68_main:
+    - rtsp://admin:Corp%232024@192.168.41.68:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_54_sub:
+    - rtsp://admin:Corp%232024@192.168.41.54:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_54_main:
+    - rtsp://admin:Corp%232024@192.168.41.54:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_55_sub:
+    - rtsp://admin:Corp%232024@192.168.41.55:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_55_main:
+    - rtsp://admin:Corp%232024@192.168.41.55:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_58_sub:
+    - rtsp://admin:Corp%232024@192.168.41.58:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_58_main:
+    - rtsp://admin:Corp%232024@192.168.41.58:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_46_sub:
+    - rtsp://admin:Corp%232024@192.168.41.46:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_46_main:
+    - rtsp://admin:Corp%232024@192.168.41.46:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_64_sub:
+    - rtsp://admin:Corp%232024@192.168.41.64:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_64_main:
+    - rtsp://admin:Corp%232024@192.168.41.64:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_66_sub:
+    - rtsp://admin:Corp%232024@192.168.41.66:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_66_main:
+    - rtsp://admin:Corp%232024@192.168.41.66:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_83_sub:
+    - rtsp://admin:Corp%232024@192.168.41.83:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_83_main:
+    - rtsp://admin:Corp%232024@192.168.41.83:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_87_sub:
+    - rtsp://admin:Corp%232024@192.168.41.87:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_87_main:
+    - rtsp://admin:Corp%232024@192.168.41.87:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_126_sub:
+    - rtsp://admin:Corp%232024@192.168.41.126:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_126_main:
+    - rtsp://admin:Corp%232024@192.168.41.126:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_133_sub:
+    - rtsp://admin:Rashmi%40432@192.168.41.133:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_133_main:
+    - rtsp://admin:Rashmi%40432@192.168.41.133:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_107_sub:
+    - rtsp://admin:Corp%232024@192.168.41.107:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_107_main:
+    - rtsp://admin:Corp%232024@192.168.41.107:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_44_131_sub:
+    - rtsp://admin:Rashmi%40432@192.168.44.131:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_44_131_main:
+    - rtsp://admin:Rashmi%40432@192.168.44.131:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_25_sub:
+    - rtsp://admin:Corp%232024@192.168.41.25:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_25_main:
+    - rtsp://admin:Corp%232024@192.168.41.25:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_30_sub:
+    - rtsp://admin:Corp%232024@192.168.41.30:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_30_main:
+    - rtsp://admin:Corp%232024@192.168.41.30:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_36_sub:
+    - rtsp://admin:Corp%232024@192.168.41.36:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_36_main:
+    - rtsp://admin:Corp%232024@192.168.41.36:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_37_sub:
+    - rtsp://admin:Corp%232024@192.168.41.37:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_37_main:
+    - rtsp://admin:Corp%232024@192.168.41.37:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_51_sub:
+    - rtsp://admin:Corp%232024@192.168.41.51:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_51_main:
+    - rtsp://admin:Corp%232024@192.168.41.51:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_53_sub:
+    - rtsp://admin:Corp%232024@192.168.41.53:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_53_main:
+    - rtsp://admin:Corp%232024@192.168.41.53:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_47_sub:
+    - rtsp://admin:Corp%232024@192.168.41.47:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_47_main:
+    - rtsp://admin:Corp%232024@192.168.41.47:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_31_sub:
+    - rtsp://admin:Corp%232024@192.168.41.31:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_31_main:
+    - rtsp://admin:Corp%232024@192.168.41.31:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_84_sub:
+    - rtsp://admin:Corp%232024@192.168.41.84:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_84_main:
+    - rtsp://admin:Corp%232024@192.168.41.84:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_94_sub:
+    - rtsp://admin:Corp%232024@192.168.41.94:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_94_main:
+    - rtsp://admin:Corp%232024@192.168.41.94:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_99_sub:
+    - rtsp://admin:Corp%232024@192.168.41.99:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_99_main:
+    - rtsp://admin:Corp%232024@192.168.41.99:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_69_sub:
+    - rtsp://admin:Corp%232024@192.168.41.69:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_69_main:
+    - rtsp://admin:Corp%232024@192.168.41.69:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_74_sub:
+    - rtsp://admin:Corp%232024@192.168.41.74:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_74_main:
+    - rtsp://admin:Corp%232024@192.168.41.74:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_89_sub:
+    - rtsp://admin:Corp%232024@192.168.41.89:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_89_main:
+    - rtsp://admin:Corp%232024@192.168.41.89:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_12_sub:
+    - rtsp://admin:Corp%232024@192.168.41.12:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_12_main:
+    - rtsp://admin:Corp%232024@192.168.41.12:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_16_sub:
+    - rtsp://admin:Corp%232024@192.168.41.16:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_16_main:
+    - rtsp://admin:Corp%232024@192.168.41.16:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_20_sub:
+    - rtsp://admin:Corp%232024@192.168.41.20:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_20_main:
+    - rtsp://admin:Corp%232024@192.168.41.20:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_29_sub:
+    - rtsp://admin:Corp%232024@192.168.41.29:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_29_main:
+    - rtsp://admin:Corp%232024@192.168.41.29:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_39_sub:
+    - rtsp://admin:Corp%232024@192.168.41.39:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_39_main:
+    - rtsp://admin:Corp%232024@192.168.41.39:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_45_sub:
+    - rtsp://admin:Corp%232024@192.168.41.45:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_45_main:
+    - rtsp://admin:Corp%232024@192.168.41.45:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_63_sub:
+    - rtsp://admin:Corp%232024@192.168.41.63:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_63_main:
+    - rtsp://admin:Corp%232024@192.168.41.63:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_119_sub:
+    - rtsp://admin:Corp%232024@192.168.41.119:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_119_main:
+    - rtsp://admin:Corp%232024@192.168.41.119:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_100_sub:
+    - rtsp://admin:Corp%232024@192.168.41.100:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_100_main:
+    - rtsp://admin:Corp%232024@192.168.41.100:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_101_sub:
+    - rtsp://admin:Corp%232024@192.168.41.101:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_101_main:
+    - rtsp://admin:Corp%232024@192.168.41.101:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_105_sub:
+    - rtsp://admin:Corp%232024@192.168.41.105:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_105_main:
+    - rtsp://admin:Corp%232024@192.168.41.105:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_123_sub:
+    - rtsp://admin:Corp%232024@192.168.41.123:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_123_main:
+    - rtsp://admin:Corp%232024@192.168.41.123:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_203_sub:
+    - rtsp://admin:Rashmi%40432@192.168.41.203:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_203_main:
+    - rtsp://admin:Rashmi%40432@192.168.41.203:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_128_sub:
+    - rtsp://admin:Corp%232024@192.168.41.128:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_128_main:
+    - rtsp://admin:Corp%232024@192.168.41.128:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_208_sub:
+    - rtsp://admin:Rashmi%40432@192.168.41.208:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_208_main:
+    - rtsp://admin:Rashmi%40432@192.168.41.208:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_11_sub:
+    - rtsp://admin:Corp%232024@192.168.41.11:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_11_main:
+    - rtsp://admin:Corp%232024@192.168.41.11:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_26_sub:
+    - rtsp://admin:Corp%232024@192.168.41.26:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_26_main:
+    - rtsp://admin:Corp%232024@192.168.41.26:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_28_sub:
+    - rtsp://admin:Corp%232024@192.168.41.28:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_28_main:
+    - rtsp://admin:Corp%232024@192.168.41.28:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_52_sub:
+    - rtsp://admin:Corp%232024@192.168.41.52:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_52_main:
+    - rtsp://admin:Corp%232024@192.168.41.52:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_71_sub:
+    - rtsp://admin:Corp%232024@192.168.41.71:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_71_main:
+    - rtsp://admin:Corp%232024@192.168.41.71:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_73_sub:
+    - rtsp://admin:Corp%232024@192.168.41.73:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_73_main:
+    - rtsp://admin:Corp%232024@192.168.41.73:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_82_sub:
+    - rtsp://admin:Corp%232024@192.168.41.82:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_82_main:
+    - rtsp://admin:Corp%232024@192.168.41.82:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_125_sub:
+    - rtsp://admin:Corp%232024@192.168.41.125:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_125_main:
+    - rtsp://admin:Corp%232024@192.168.41.125:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_121_sub:
+    - rtsp://admin:Corp%232024@192.168.41.121:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_121_main:
+    - rtsp://admin:Corp%232024@192.168.41.121:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_120_sub:
+    - rtsp://admin:Corp%232024@192.168.41.120:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_120_main:
+    - rtsp://admin:Corp%232024@192.168.41.120:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_17_sub:
+    - rtsp://admin:Corp%232024@192.168.41.17:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_17_main:
+    - rtsp://admin:Corp%232024@192.168.41.17:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_70_sub:
+    - rtsp://admin:Corp%232024@192.168.41.70:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_70_main:
+    - rtsp://admin:Corp%232024@192.168.41.70:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_72_sub:
+    - rtsp://admin:Corp%232024@192.168.41.72:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_72_main:
+    - rtsp://admin:Corp%232024@192.168.41.72:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_79_sub:
+    - rtsp://admin:Corp%232024@192.168.41.79:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_79_main:
+    - rtsp://admin:Corp%232024@192.168.41.79:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_85_sub:
+    - rtsp://admin:Corp%232024@192.168.41.85:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_85_main:
+    - rtsp://admin:Corp%232024@192.168.41.85:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_14_sub:
+    - rtsp://admin:Corp%232024@192.168.41.14:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_14_main:
+    - rtsp://admin:Corp%232024@192.168.41.14:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_15_sub:
+    - rtsp://admin:Corp%232024@192.168.41.15:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_15_main:
+    - rtsp://admin:Corp%232024@192.168.41.15:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_32_sub:
+    - rtsp://admin:Corp%232024@192.168.41.32:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_32_main:
+    - rtsp://admin:Corp%232024@192.168.41.32:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_34_sub:
+    - rtsp://admin:Corp%232024@192.168.41.34:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_34_main:
+    - rtsp://admin:Corp%232024@192.168.41.34:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_50_sub:
+    - rtsp://admin:Corp%232024@192.168.41.50:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_50_main:
+    - rtsp://admin:Corp%232024@192.168.41.50:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_59_sub:
+    - rtsp://admin:Corp%232024@192.168.41.59:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_59_main:
+    - rtsp://admin:Corp%232024@192.168.41.59:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_103_sub:
+    - rtsp://admin:Corp%232024@192.168.41.103:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_103_main:
+    - rtsp://admin:Corp%232024@192.168.41.103:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_91_sub:
+    - rtsp://admin:Corp%232024@192.168.41.91:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_91_main:
+    - rtsp://admin:Corp%232024@192.168.41.91:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_124_sub:
+    - rtsp://admin:Corp%232024@192.168.41.124:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_124_main:
+    - rtsp://admin:Corp%232024@192.168.41.124:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_38_sub:
+    - rtsp://admin:Corp%232024@192.168.41.38:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_38_main:
+    - rtsp://admin:Corp%232024@192.168.41.38:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_48_sub:
+    - rtsp://admin:Corp%232024@192.168.41.48:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_48_main:
+    - rtsp://admin:Corp%232024@192.168.41.48:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_207_sub:
+    - rtsp://admin:Rashmi%40432@192.168.41.207:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_207_main:
+    - rtsp://admin:Rashmi%40432@192.168.41.207:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_6_sub:
+    - rtsp://admin:Corp%232024@192.168.41.6:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_6_main:
+    - rtsp://admin:Corp%232024@192.168.41.6:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_19_sub:
+    - rtsp://admin:Corp%232024@192.168.41.19:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_19_main:
+    - rtsp://admin:Corp%232024@192.168.41.19:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_21_sub:
+    - rtsp://admin:Corp%232024@192.168.41.21:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_21_main:
+    - rtsp://admin:Corp%232024@192.168.41.21:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_33_sub:
+    - rtsp://admin:Corp%232024@192.168.41.33:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_33_main:
+    - rtsp://admin:Corp%232024@192.168.41.33:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_35_sub:
+    - rtsp://admin:Corp%232024@192.168.41.35:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_35_main:
+    - rtsp://admin:Corp%232024@192.168.41.35:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_40_sub:
+    - rtsp://admin:Corp%232024@192.168.41.40:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_40_main:
+    - rtsp://admin:Corp%232024@192.168.41.40:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_56_sub:
+    - rtsp://admin:Corp%232024@192.168.41.56:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_56_main:
+    - rtsp://admin:Corp%232024@192.168.41.56:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_8_sub:
+    - rtsp://admin:Corp%232024@192.168.41.8:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_8_main:
+    - rtsp://admin:Corp%232024@192.168.41.8:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_78_sub:
+    - rtsp://admin:Corp%232024@192.168.41.78:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_78_main:
+    - rtsp://admin:Corp%232024@192.168.41.78:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_80_sub:
+    - rtsp://admin:Corp%232024@192.168.41.80:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_80_main:
+    - rtsp://admin:Corp%232024@192.168.41.80:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_81_sub:
+    - rtsp://admin:Corp%232024@192.168.41.81:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_81_main:
+    - rtsp://admin:Corp%232024@192.168.41.81:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_88_sub:
+    - rtsp://admin:Corp%232024@192.168.41.88:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_88_main:
+    - rtsp://admin:Corp%232024@192.168.41.88:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_92_sub:
+    - rtsp://admin:Corp%232024@192.168.41.92:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_92_main:
+    - rtsp://admin:Corp%232024@192.168.41.92:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_97_sub:
+    - rtsp://admin:Corp%232024@192.168.41.97:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_97_main:
+    - rtsp://admin:Corp%232024@192.168.41.97:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_98_sub:
+    - rtsp://admin:Corp%232024@192.168.41.98:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_98_main:
+    - rtsp://admin:Corp%232024@192.168.41.98:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_108_sub:
+    - rtsp://admin:Corp%232024@192.168.41.108:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_108_main:
+    - rtsp://admin:Corp%232024@192.168.41.108:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_9_sub:
+    - rtsp://admin:Corp%232024@192.168.41.9:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_9_main:
+    - rtsp://admin:Corp%232024@192.168.41.9:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_22_sub:
+    - rtsp://admin:Corp%232024@192.168.41.22:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_22_main:
+    - rtsp://admin:Corp%232024@192.168.41.22:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_44_sub:
+    - rtsp://admin:Corp%232024@192.168.41.44:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_44_main:
+    - rtsp://admin:Corp%232024@192.168.41.44:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_57_sub:
+    - rtsp://admin:Corp%232024@192.168.41.57:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_57_main:
+    - rtsp://admin:Corp%232024@192.168.41.57:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_61_sub:
+    - rtsp://admin:Corp%232024@192.168.41.61:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_61_main:
+    - rtsp://admin:Corp%232024@192.168.41.61:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_65_sub:
+    - rtsp://admin:Corp%232024@192.168.41.65:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_65_main:
+    - rtsp://admin:Corp%232024@192.168.41.65:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_75_sub:
+    - rtsp://admin:Corp%232024@192.168.41.75:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_75_main:
+    - rtsp://admin:Corp%232024@192.168.41.75:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_76_sub:
+    - rtsp://admin:Corp%232024@192.168.41.76:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_76_main:
+    - rtsp://admin:Corp%232024@192.168.41.76:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_3_sub:
+    - rtsp://admin:Corp%232024@192.168.41.3:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_3_main:
+    - rtsp://admin:Corp%232024@192.168.41.3:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_10_sub:
+    - rtsp://admin:Corp%232024@192.168.41.10:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_10_main:
+    - rtsp://admin:Corp%232024@192.168.41.10:554/Streaming/Channels/101#rtsp_transport=tcp
+  ip_192_168_41_5_sub:
+    - rtsp://admin:Corp%232024@192.168.41.5:554/Streaming/Channels/102#rtsp_transport=tcp
+  ip_192_168_41_5_main:
+    - rtsp://admin:Corp%232024@192.168.41.5:554/Streaming/Channels/101#rtsp_transport=tcp
+log:
+  level: info

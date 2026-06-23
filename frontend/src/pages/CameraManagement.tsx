@@ -1,0 +1,807 @@
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import toast from 'react-hot-toast';
+import LocationTreePanel, { type BuildingNode } from '../components/camera-management/LocationTreePanel';
+import FloorSummaryCards from '../components/camera-management/FloorSummaryCards';
+import StatusBadge from '../components/camera-management/StatusBadge';
+import { Link } from 'react-router-dom';
+import {
+  Activity,
+  Plus,
+  Search,
+  Video,
+  Edit,
+  Loader2,
+  RefreshCw,
+  PlayCircle,
+  List,
+  Upload,
+  Download,
+  Eye,
+  Power,
+  MapPin,
+} from 'lucide-react';
+import PageHeader from '../components/PageHeader';
+import AddCameraModal, { type CameraFormData, CORPORATE_CAMERA_DEFAULTS } from '../components/AddCameraModal';
+import DuplicateCameraDialog, { type ExistingCameraInfo } from '../components/DuplicateCameraDialog';
+import ManageLocationsModal from '../components/ManageLocationsModal';
+import { preferredBuilding, preferredFloorGroup } from '../constants/corporateFloors';
+import { useLocations } from '../hooks/useLocations';
+import { apiFetch, cameraQuery } from '../lib/api';
+
+interface Camera {
+  id?: string;
+  _id?: string;
+  name: string;
+  ip_address: string;
+  type?: string;
+  protocol?: string;
+  building?: string;
+  floor?: string;
+  floor_group?: string;
+  camera_group?: string;
+  location_path?: string;
+  area?: string;
+  site?: string;
+  is_active?: boolean;
+  status?: string;
+  online?: boolean;
+  displayName?: string;
+  camera_uid?: string;
+  recordingActive?: boolean;
+  lastError?: string | null;
+  liveStatus?: string;
+  port?: number;
+  model?: string;
+  username?: string;
+  password?: string;
+  main_channel?: string;
+  sub_channel?: string;
+  preview_channel?: string;
+  main_rtsp_url?: string;
+  sub_rtsp_url?: string;
+  preview_rtsp_url?: string;
+  rtsp_url_source?: string;
+  ptz?: boolean;
+}
+
+interface DuplicatePayload {
+  message: string;
+  existingCamera: ExistingCameraInfo;
+  pendingCamera?: CameraFormData;
+}
+
+const TOOLBAR_BTN =
+  'inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/80 transition-colors disabled:opacity-50';
+
+const TOOLBAR_BTN_PRIMARY =
+  'inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border border-emerald-600/50 bg-emerald-600 text-white hover:bg-emerald-500 transition-colors disabled:opacity-50';
+
+const ACTION_BTN =
+  'inline-flex items-center gap-1 px-1.5 py-1 text-[11px] font-medium rounded hover:bg-gray-100 dark:hover:bg-gray-700/60 transition-colors';
+
+function cameraToForm(cam: Camera | null): Partial<CameraFormData> | null {
+  if (!cam) return null;
+  return {
+    name: cam.name,
+    ip_address: cam.ip_address,
+    port: String(cam.port ?? 554),
+    model: cam.model || 'Hikvision',
+    username: cam.username || 'admin',
+    password: cam.password && cam.password !== '***' ? cam.password : '',
+    protocol: cam.protocol || 'HIKVISION',
+    site: cam.site || CORPORATE_CAMERA_DEFAULTS.site,
+    building: cam.building || CORPORATE_CAMERA_DEFAULTS.building,
+    floor_group: cam.floor_group || CORPORATE_CAMERA_DEFAULTS.floor_group,
+    floor: cam.floor || '6th Floor',
+    area: cam.area || '',
+    camera_group: cam.camera_group || '',
+    location_path: cam.location_path || '',
+    main_channel: cam.main_channel || '101',
+    sub_channel: cam.sub_channel || '102',
+    preview_channel: cam.preview_channel || '103',
+    main_rtsp_url: cam.main_rtsp_url || '',
+    sub_rtsp_url: cam.sub_rtsp_url || '',
+    preview_rtsp_url: cam.preview_rtsp_url || '',
+    rtsp_url_source: cam.rtsp_url_source || 'auto_hikvision',
+    is_active: cam.is_active !== false,
+    ptz: Boolean(cam.ptz),
+  };
+}
+
+function formToPayload(data: CameraFormData): Record<string, unknown> {
+  return {
+    name: data.name.trim(),
+    ip_address: data.ip_address.trim(),
+    port: parseInt(data.port, 10) || 554,
+    model: data.model,
+    username: data.username,
+    password: data.password,
+    protocol: data.protocol,
+    site: data.site,
+    building: data.building,
+    floor_group: data.floor_group,
+    floor: data.floor,
+    area: data.area,
+    camera_group: data.camera_group,
+    location_path: data.location_path,
+    main_channel: data.main_channel,
+    sub_channel: data.sub_channel,
+    preview_channel: data.preview_channel,
+    main_rtsp_url: data.main_rtsp_url,
+    sub_rtsp_url: data.sub_rtsp_url,
+    preview_rtsp_url: data.preview_rtsp_url,
+    rtsp_url_source: data.rtsp_url_source,
+    is_active: data.is_active,
+    ptz: data.ptz,
+    type: 'rtsp',
+  };
+}
+
+export default function CameraManagement() {
+  const [configuredCameras, setConfiguredCameras] = useState<Camera[]>([]);
+  const [discoveredCameras, setDiscoveredCameras] = useState<Camera[]>([]);
+  const [isScanning, setIsScanning] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingCamera, setEditingCamera] = useState<Camera | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [duplicate, setDuplicate] = useState<DuplicatePayload | null>(null);
+  const [replaceLoading, setReplaceLoading] = useState(false);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+
+  const [protocolFilter, setProtocolFilter] = useState('');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'disabled'>('all');
+  const [search, setSearch] = useState('');
+  const [manageLocationsOpen, setManageLocationsOpen] = useState(false);
+  const [groupTree, setGroupTree] = useState<BuildingNode[]>([]);
+  const [groupsLoading, setGroupsLoading] = useState(true);
+  const [selectedBuilding, setSelectedBuilding] = useState<string | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+  const [onlineFilter, setOnlineFilter] = useState<'all' | 'online' | 'offline'>('all');
+  const [mainTab, setMainTab] = useState<'cameras' | 'scan'>('cameras');
+  const { sites: locationSites, buildings: locationBuildings, reload: reloadLocations } = useLocations();
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchGroupTree = async () => {
+    setGroupsLoading(true);
+    try {
+      const res = await apiFetch('/api/cameras/groups?includeInactive=true&includeStats=true');
+      if (!res.ok) throw new Error('Failed to load location tree');
+      const data = await res.json();
+      const list: BuildingNode[] = data.buildings ?? [];
+      setGroupTree(list);
+      if (!selectedBuilding && list.length > 0) {
+        const b = preferredBuilding(list) ?? list[0];
+        setSelectedBuilding(b.building);
+        const fg = preferredFloorGroup(b.floorGroups);
+        if (fg) setSelectedGroup(fg.camera_group);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load locations');
+    } finally {
+      setGroupsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void fetchGroupTree();
+  }, []);
+
+  const selectedFloorNode = useMemo(() => {
+    if (!selectedBuilding || !selectedGroup) return null;
+    const b = groupTree.find((x) => x.building === selectedBuilding);
+    return b?.floorGroups.find((f) => f.camera_group === selectedGroup) ?? null;
+  }, [groupTree, selectedBuilding, selectedGroup]);
+
+  const fetchConfiguredCameras = async () => {
+    if (!selectedGroup) {
+      setConfiguredCameras([]);
+      return;
+    }
+    try {
+      const params: Record<string, string> = {
+        includeInactive: 'true',
+        camera_group: selectedGroup,
+      };
+      if (selectedFloorNode?.floor) params.floor = selectedFloorNode.floor;
+      if (protocolFilter) params.protocol = protocolFilter;
+      if (search.trim()) params.search = search.trim();
+      if (activeFilter === 'active') params.activeOnly = 'true';
+      if (onlineFilter === 'online') params.online = 'true';
+      if (onlineFilter === 'offline') params.online = 'false';
+
+      const response = await apiFetch(`/api/cameras/configured${cameraQuery(params)}`);
+      if (!response.ok) throw new Error('Failed to fetch configured cameras.');
+      let list: Camera[] = await response.json();
+      if (activeFilter === 'disabled') {
+        list = list.filter((c) => c.is_active === false || c.status === 'Disabled');
+      }
+      setConfiguredCameras(list);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load cameras.');
+    }
+  };
+
+  useEffect(() => {
+    void fetchConfiguredCameras();
+  }, [protocolFilter, activeFilter, search, onlineFilter, selectedBuilding, selectedGroup]);
+
+  const handleTreeSelect = (building: string, cameraGroup: string) => {
+    setSelectedBuilding(building);
+    setSelectedGroup(cameraGroup);
+  };
+
+  const handleRefresh = () => {
+    void fetchGroupTree();
+    void fetchConfiguredCameras();
+  };
+
+  const handleTestStream = async (camera: Camera) => {
+    if (!camera._id) return;
+    toast.loading(`Testing ${camera.name}…`, { id: 'test-stream' });
+    try {
+      const res = await apiFetch(`/api/cameras/${camera._id}/test-stream`, { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) toast.success(data.message || 'Stream OK', { id: 'test-stream' });
+      else toast.error(data.error || 'Stream test failed', { id: 'test-stream' });
+    } catch {
+      toast.error('Stream test failed', { id: 'test-stream' });
+    }
+  };
+
+  const handleReloadGroupGo2rtc = async () => {
+    if (!selectedGroup) {
+      toast.error('Select a floor/group first');
+      return;
+    }
+    try {
+      const res = await apiFetch(`/api/cameras/groups/${encodeURIComponent(selectedGroup)}/reload-go2rtc`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (data.ok) toast.success('go2rtc reloaded for group');
+      else toast.error(data.error || 'Reload failed');
+    } catch {
+      toast.error('go2rtc reload failed');
+    }
+  };
+
+  const handleExport = () => {
+    if (configuredCameras.length === 0) {
+      toast.error('No cameras to export for this floor');
+      return;
+    }
+    const payload = { cameras: configuredCameras };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const slug = (selectedFloorNode?.location_path || 'cameras').replace(/[^\w]+/g, '_');
+    a.href = url;
+    a.download = `cameras_${slug}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${configuredCameras.length} camera(s)`);
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text()) as { cameras?: unknown[] } | unknown[];
+      const cameras = Array.isArray(parsed) ? parsed : parsed.cameras;
+      if (!Array.isArray(cameras) || cameras.length === 0) {
+        throw new Error('File must contain a cameras array');
+      }
+      const res = await apiFetch('/api/cameras/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cameras }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Import failed');
+      toast.success(`Import: ${data.created ?? 0} created, ${data.updated ?? 0} updated`);
+      handleRefresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Import failed');
+    }
+  };
+
+  const selectedLocationDefaults = useMemo((): Partial<CameraFormData> | null => {
+    if (!selectedBuilding || !selectedGroup) return null;
+    const b = groupTree.find((x) => x.building === selectedBuilding);
+    const fg = b?.floorGroups.find((f) => f.camera_group === selectedGroup);
+    if (!fg) return null;
+    return {
+      site: b?.site || CORPORATE_CAMERA_DEFAULTS.site,
+      building: selectedBuilding,
+      floor: fg.floor,
+      floor_group: fg.floor_group || fg.floor,
+      camera_group: fg.camera_group,
+      location_path: fg.location_path,
+    };
+  }, [groupTree, selectedBuilding, selectedGroup]);
+
+  const selectedFloorLabel = useMemo(() => {
+    if (!selectedGroup || !selectedBuilding) return 'Select a floor';
+    const b = groupTree.find((x) => x.building === selectedBuilding);
+    const fg = b?.floorGroups.find((f) => f.camera_group === selectedGroup);
+    return fg?.location_path ?? selectedBuilding;
+  }, [groupTree, selectedBuilding, selectedGroup]);
+
+  const protocols = useMemo(
+    () => [...new Set(configuredCameras.map((c) => c.protocol || 'HIKVISION').filter(Boolean))].sort(),
+    [configuredCameras],
+  );
+
+  const handleApiError = async (
+    response: Response,
+    fallback: string,
+    pendingCamera?: CameraFormData,
+  ) => {
+    try {
+      const body = await response.json();
+      const detail = body.message || body.error;
+      if (response.status === 409 && body.code === 'DUPLICATE_CAMERA') {
+        if (body.existingCamera) {
+          setDuplicate({
+            message: body.message,
+            existingCamera: body.existingCamera,
+            pendingCamera,
+          });
+        } else {
+          toast.error(detail || fallback);
+        }
+        return true;
+      }
+      toast.error(detail || fallback);
+      return true;
+    } catch {
+      toast.error(fallback);
+      return true;
+    }
+  };
+
+  const handleAddCamera = async (data: CameraFormData) => {
+    const response = await apiFetch('/api/cameras', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formToPayload(data)),
+    });
+    if (!response.ok) {
+      const handled = await handleApiError(response, 'Failed to add camera', data);
+      if (handled && response.status === 409) setIsAddModalOpen(false);
+      return;
+    }
+    toast.success(`Camera added: ${data.name}`);
+    setIsAddModalOpen(false);
+    handleRefresh();
+  };
+
+  const handleReplaceDuplicate = async () => {
+    if (!duplicate?.pendingCamera) return;
+    const oldName = duplicate.existingCamera.name;
+    const newName = duplicate.pendingCamera.name;
+    if (!window.confirm(
+      `Delete "${oldName}" and add "${newName}"?\n\nRecordings are kept by IP address.`,
+    )) return;
+    setReplaceLoading(true);
+    try {
+      const delRes = await apiFetch(`/api/cameras/${duplicate.existingCamera.id}`, { method: 'DELETE' });
+      if (!delRes.ok) throw new Error('Failed to delete the existing camera');
+      const addRes = await apiFetch('/api/cameras', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formToPayload(duplicate.pendingCamera)),
+      });
+      if (!addRes.ok) {
+        await handleApiError(addRes, 'Old camera deleted, but adding the new camera failed');
+        return;
+      }
+      toast.success(`Replaced ${oldName} with ${newName}`);
+      setDuplicate(null);
+      handleRefresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Replace failed');
+    } finally {
+      setReplaceLoading(false);
+    }
+  };
+
+  const handleSaveEditCamera = async (data: CameraFormData) => {
+    if (!editingCamera?._id) return;
+    const payload = formToPayload(data);
+    if (!data.password) delete payload.password;
+    const response = await apiFetch(`/api/cameras/${editingCamera._id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const handled = await handleApiError(response, 'Failed to update camera');
+      if (handled && response.status === 409) {
+        setIsEditModalOpen(false);
+        setEditingCamera(null);
+      }
+      return;
+    }
+    toast.success(`Camera updated: ${data.name}`);
+    setIsEditModalOpen(false);
+    setEditingCamera(null);
+    handleRefresh();
+  };
+
+  const openEditExisting = async (existing: ExistingCameraInfo, reactivate = false) => {
+    setDuplicate(null);
+    const cam = configuredCameras.find((c) => c._id === existing.id);
+    if (cam) {
+      setEditingCamera(cam);
+      setIsEditModalOpen(true);
+      if (reactivate) {
+        setTimeout(() => toast('Enable "Active" and save to reactivate.', { icon: 'ℹ️' }), 300);
+      }
+      return;
+    }
+    try {
+      const res = await apiFetch('/api/cameras/configured?includeInactive=true');
+      const all: Camera[] = await res.json();
+      const found = all.find((c) => c._id === existing.id);
+      if (found) {
+        setEditingCamera({ ...found, is_active: reactivate ? true : found.is_active });
+        setIsEditModalOpen(true);
+      }
+    } catch {
+      toast.error('Could not load existing camera');
+    }
+  };
+
+  const handleReactivateExisting = async (existing: ExistingCameraInfo) => {
+    setDuplicate(null);
+    try {
+      const res = await apiFetch(`/api/cameras/${existing.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: true }),
+      });
+      if (!res.ok) throw new Error('Reactivate failed');
+      toast.success(`${existing.name} reactivated`);
+      handleRefresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to reactivate');
+    }
+  };
+
+  const handleScan = async () => {
+    setIsScanning(true);
+    toast('Scanning network…', { icon: '🔍' });
+    try {
+      const response = await apiFetch('/api/cameras/scan', { method: 'POST' });
+      if (!response.ok) throw new Error('Network scan failed.');
+      const data = await response.json();
+      setDiscoveredCameras(data.discovered || []);
+      toast.success(`Found ${(data.discovered || []).length} new camera(s)`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Scan failed');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const handleEditCamera = (camera: Camera) => {
+    setEditingCamera(camera);
+    setIsEditModalOpen(true);
+  };
+
+  const handleToggleActive = async (camera: Camera) => {
+    if (!camera._id) return;
+    const next = camera.is_active === false;
+    try {
+      const response = await apiFetch(`/api/cameras/${camera._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: next }),
+      });
+      if (!response.ok) throw new Error('Failed to update status');
+      toast.success(next ? `${camera.name} enabled` : `${camera.name} disabled`);
+      handleRefresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update status');
+    }
+  };
+
+  return (
+    <div className="h-full min-h-0 flex flex-col overflow-hidden bg-gray-100 dark:bg-gray-900/40">
+      <div className="shrink-0 px-4 pt-3 pb-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+        <PageHeader
+          title="Camera Management"
+          subtitle={mainTab === 'cameras' ? selectedFloorLabel : 'Network discovery utility'}
+        />
+        <div className="flex flex-wrap items-center gap-1.5 mt-2">
+          <button type="button" onClick={handleRefresh} className={TOOLBAR_BTN}>
+            <RefreshCw size={14} /> Refresh
+          </button>
+          <button type="button" onClick={handleReloadGroupGo2rtc} className={TOOLBAR_BTN} disabled={!selectedGroup}>
+            <Activity size={14} /> Reload go2rtc
+          </button>
+          <button
+            type="button"
+            className={TOOLBAR_BTN_PRIMARY}
+            onClick={() => {
+              if (!selectedGroup) {
+                toast.error('Select a floor in the location tree first');
+                return;
+              }
+              setIsAddModalOpen(true);
+            }}
+          >
+            <Plus size={14} /> Add Camera
+          </button>
+          <button type="button" className={TOOLBAR_BTN} onClick={() => importInputRef.current?.click()}>
+            <Upload size={14} /> Import
+          </button>
+          <button type="button" className={TOOLBAR_BTN} onClick={handleExport} disabled={configuredCameras.length === 0}>
+            <Download size={14} /> Export
+          </button>
+          <button type="button" className={TOOLBAR_BTN} onClick={() => setManageLocationsOpen(true)}>
+            <MapPin size={14} /> Manage Locations
+          </button>
+          <input ref={importInputRef} type="file" accept=".json,application/json" className="hidden" onChange={handleImportFile} />
+          <div className="flex-1" />
+          <div className="flex rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setMainTab('cameras')}
+              className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium ${
+                mainTab === 'cameras'
+                  ? 'bg-white dark:bg-gray-800 text-emerald-600'
+                  : 'bg-gray-100 dark:bg-gray-800/50 text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <List size={13} /> Cameras
+            </button>
+            <button
+              type="button"
+              onClick={() => setMainTab('scan')}
+              className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium border-l border-gray-300 dark:border-gray-600 ${
+                mainTab === 'scan'
+                  ? 'bg-white dark:bg-gray-800 text-emerald-600'
+                  : 'bg-gray-100 dark:bg-gray-800/50 text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Search size={13} /> Scan
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {mainTab === 'scan' ? (
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="max-w-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+            <p className="text-xs text-gray-500 mb-3">Discover ONVIF cameras on the network, then add them from the Cameras tab.</p>
+            <button onClick={handleScan} disabled={isScanning} className={TOOLBAR_BTN_PRIMARY}>
+              {isScanning ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+              {isScanning ? 'Scanning…' : 'Start Scan'}
+            </button>
+            {discoveredCameras.length > 0 && (
+              <ul className="mt-4 divide-y divide-gray-200 dark:divide-gray-700 border border-gray-200 dark:border-gray-700 rounded-lg text-sm">
+                {discoveredCameras.map((camera) => (
+                  <li key={camera.ip_address} className="px-3 py-2 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Video size={16} className="text-sky-400 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{camera.name}</p>
+                        <p className="text-xs text-gray-500 font-mono">{camera.ip_address}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setMainTab('cameras'); setIsAddModalOpen(true); }}
+                      className={TOOLBAR_BTN}
+                    >
+                      <Plus size={12} /> Add
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+          <aside className="w-60 shrink-0 flex flex-col border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/80">
+            <div className="shrink-0 px-2.5 py-1.5 border-b border-gray-200 dark:border-gray-700">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Locations</span>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <LocationTreePanel
+                buildings={groupTree}
+                selectedBuilding={selectedBuilding}
+                selectedGroup={selectedGroup}
+                onSelect={handleTreeSelect}
+                loading={groupsLoading}
+              />
+            </div>
+          </aside>
+
+          <main className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden">
+            <div className="shrink-0 px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/50 flex flex-wrap gap-2 items-center">
+              <input
+                type="text"
+                placeholder="Search name or IP…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="input-style py-1 px-2 text-xs w-40 min-w-[8rem]"
+              />
+              <select value={protocolFilter} onChange={(e) => setProtocolFilter(e.target.value)} className="select-style text-xs py-1">
+                <option value="">All protocols</option>
+                {protocols.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <select value={activeFilter} onChange={(e) => setActiveFilter(e.target.value as typeof activeFilter)} className="select-style text-xs py-1">
+                <option value="all">Active + Disabled</option>
+                <option value="active">Active only</option>
+                <option value="disabled">Disabled only</option>
+              </select>
+              <select value={onlineFilter} onChange={(e) => setOnlineFilter(e.target.value as typeof onlineFilter)} className="select-style text-xs py-1">
+                <option value="all">All states</option>
+                <option value="online">Online</option>
+                <option value="offline">Offline</option>
+              </select>
+              <span className="text-[11px] text-gray-500 ml-auto tabular-nums">
+                {configuredCameras.length} shown
+              </span>
+            </div>
+
+            {selectedGroup && (
+              <div className="shrink-0 px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+                <FloorSummaryCards stats={selectedFloorNode?.stats} floorLabel={selectedFloorLabel} />
+              </div>
+            )}
+
+            <div className="flex-1 min-h-0 overflow-auto px-3 py-2">
+              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden shadow-sm">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-gray-50 dark:bg-gray-900/60 text-[10px] uppercase tracking-wide text-gray-500 sticky top-0 z-10 border-b border-gray-200 dark:border-gray-700">
+                    <tr>
+                      <th className="px-3 py-2 font-semibold">Camera</th>
+                      <th className="px-3 py-2 font-semibold">IP Address</th>
+                      <th className="px-3 py-2 font-semibold">Status</th>
+                      <th className="px-3 py-2 font-semibold">Recording</th>
+                      <th className="px-3 py-2 font-semibold min-w-[10rem]">Location</th>
+                      <th className="px-3 py-2 font-semibold min-w-[8rem]">Last Error</th>
+                      <th className="px-3 py-2 font-semibold text-right min-w-[14rem]">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700/80">
+                    {!selectedGroup && (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
+                          Select a floor in the location tree.
+                        </td>
+                      </tr>
+                    )}
+                    {selectedGroup && configuredCameras.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
+                          No cameras match the current filters.
+                        </td>
+                      </tr>
+                    )}
+                    {configuredCameras.map((camera) => {
+                      const rowId = camera._id ?? camera.id ?? '';
+                      const isDisabled = camera.status === 'Disabled' || camera.is_active === false;
+                      const hasError = Boolean(camera.lastError);
+                      return (
+                        <tr
+                          key={rowId}
+                          id={`camera-row-${rowId}`}
+                          className={`hover:bg-gray-50 dark:hover:bg-gray-700/30 ${
+                            highlightId === rowId ? 'bg-amber-500/10' : ''
+                          }`}
+                        >
+                          <td className="px-3 py-1.5">
+                            <div className="font-semibold text-gray-900 dark:text-white">{camera.name}</div>
+                            {camera.displayName && camera.displayName !== camera.name && (
+                              <div className="text-[10px] text-gray-500 truncate max-w-[10rem]">{camera.displayName}</div>
+                            )}
+                          </td>
+                          <td className="px-3 py-1.5 font-mono text-gray-600 dark:text-gray-300">{camera.ip_address}</td>
+                          <td className="px-3 py-1.5">
+                            <div className="flex flex-wrap gap-1">
+                              <StatusBadge variant={isDisabled ? 'disabled' : 'active'}>
+                                {isDisabled ? 'Disabled' : 'Active'}
+                              </StatusBadge>
+                              {!isDisabled && (
+                                <StatusBadge variant={camera.online ? 'online' : 'offline'}>
+                                  {camera.online ? 'Online' : 'Offline'}
+                                </StatusBadge>
+                              )}
+                              {hasError && <StatusBadge variant="error">Error</StatusBadge>}
+                            </div>
+                          </td>
+                          <td className="px-3 py-1.5">
+                            {camera.recordingActive ? (
+                              <StatusBadge variant="recording">Recording</StatusBadge>
+                            ) : (
+                              <span className="text-gray-500">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-1.5 text-gray-500 truncate max-w-[14rem]" title={camera.location_path || ''}>
+                            {camera.location_path || `${camera.building || ''} / ${camera.floor || ''}`}
+                          </td>
+                          <td className="px-3 py-1.5 text-red-400/90 truncate max-w-[12rem]" title={camera.lastError || ''}>
+                            {camera.lastError || '—'}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <div className="flex flex-wrap justify-end gap-0.5">
+                              <Link to="/live" className={`${ACTION_BTN} text-sky-500`} title="View in Live View">
+                                <Eye size={12} /> View
+                              </Link>
+                              <button type="button" onClick={() => handleEditCamera(camera)} className={`${ACTION_BTN} text-sky-400`}>
+                                <Edit size={12} /> Edit
+                              </button>
+                              <button type="button" onClick={() => handleTestStream(camera)} className={`${ACTION_BTN} text-violet-400`}>
+                                <PlayCircle size={12} /> Test
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleActive(camera)}
+                                className={`${ACTION_BTN} ${isDisabled ? 'text-emerald-400' : 'text-amber-400'}`}
+                              >
+                                <Power size={12} />
+                                {isDisabled ? 'Reactivate' : 'Disable'}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </main>
+        </div>
+      )}
+
+      <AddCameraModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSave={handleAddCamera}
+        locationBuildings={locationBuildings}
+        defaultLocation={selectedLocationDefaults}
+      />
+      <AddCameraModal
+        isOpen={isEditModalOpen}
+        onClose={() => { setIsEditModalOpen(false); setEditingCamera(null); }}
+        onSave={handleSaveEditCamera}
+        isEditMode
+        initialData={cameraToForm(editingCamera)}
+        locationBuildings={locationBuildings}
+      />
+      <ManageLocationsModal
+        isOpen={manageLocationsOpen}
+        onClose={() => setManageLocationsOpen(false)}
+        sites={locationSites}
+        onUpdated={() => { void reloadLocations(); void fetchGroupTree(); }}
+      />
+      <DuplicateCameraDialog
+        isOpen={Boolean(duplicate)}
+        message={duplicate?.message ?? ''}
+        existing={duplicate?.existingCamera ?? { id: '', name: '', ip_address: '', is_active: true }}
+        pendingName={duplicate?.pendingCamera?.name}
+        onClose={() => setDuplicate(null)}
+        onReplace={duplicate?.pendingCamera ? handleReplaceDuplicate : undefined}
+        replaceLoading={replaceLoading}
+        onView={() => {
+          if (!duplicate) return;
+          setHighlightId(duplicate.existingCamera.id);
+          setDuplicate(null);
+          document.getElementById(`camera-row-${duplicate.existingCamera.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }}
+        onEdit={() => duplicate && openEditExisting(duplicate.existingCamera)}
+        onReactivate={duplicate && !duplicate.existingCamera.is_active
+          ? () => handleReactivateExisting(duplicate.existingCamera)
+          : undefined}
+      />
+    </div>
+  );
+}

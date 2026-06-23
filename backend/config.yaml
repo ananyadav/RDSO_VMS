@@ -1,0 +1,5 @@
+# config.yaml
+cameras:
+  - id: 'cam1'
+    name: 'Lobby Camera'
+    source: 'Integrated Camera'

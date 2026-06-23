@@ -1,0 +1,100 @@
+"""Recording env config — defaults: main stream 101 (evidence quality), 5 min HLS segments."""
+
+import os
+
+RECORDING_STREAM = os.getenv("RECORDING_STREAM", "main").strip().lower()
+# 5-minute segments — fewer files, same total disk use
+RECORDING_SEGMENT_SECONDS = os.getenv("RECORDING_HLS_SEGMENT_SECONDS", "300")
+RECORDING_LIST_SIZE = int(os.getenv("RECORDING_HLS_LIST_SIZE", "0"))
+
+# Retention: HOURS wins over DAYS if set
+_retention_hours = os.getenv("RECORDING_RETENTION_HOURS", "").strip()
+_retention_days = os.getenv("RECORDING_RETENTION_DAYS", "").strip()
+
+if _retention_hours:
+    RECORDING_RETENTION_SECONDS = float(_retention_hours) * 3600
+elif _retention_days:
+    RECORDING_RETENTION_SECONDS = float(_retention_days) * 86400
+else:
+    RECORDING_RETENTION_SECONDS = 15 * 86400  # 15 days default
+
+STATUS_LOG_INTERVAL_SECONDS = int(os.getenv("RECORDING_STATUS_LOG_SECONDS", "60"))
+RETENTION_PASS_INTERVAL_SECONDS = int(os.getenv("RECORDING_RETENTION_PASS_SECONDS", "300"))
+
+
+def get_retention_policy() -> dict:
+    """Current retention window for API / UI."""
+    seconds = RECORDING_RETENTION_SECONDS
+    if _retention_hours:
+        source = "hours"
+        label = f"{float(_retention_hours)} hour(s)"
+    elif _retention_days:
+        source = "days"
+        label = f"{float(_retention_days)} day(s)"
+    else:
+        source = "default"
+        label = "15 days (default)"
+    return {
+        "source": source,
+        "label": label,
+        "retention_seconds": int(seconds),
+        "retention_hours": round(seconds / 3600, 2),
+        "retention_days": round(seconds / 86400, 3),
+        "pass_interval_seconds": RETENTION_PASS_INTERVAL_SECONDS,
+    }
+
+
+def recording_stream_profile() -> str:
+    if RECORDING_STREAM == "main":
+        return "main/101 HEVC copy (evidence quality)"
+    return "sub/102 HEVC copy (~256-512 Kbps, not recommended for evidence)"
+
+
+def get_recording_stream_info() -> dict:
+    """API/UI payload for current recording stream selection."""
+    is_main = RECORDING_STREAM == "main"
+    return {
+        "recording_stream": RECORDING_STREAM,
+        "channel": "101" if is_main else "102",
+        "quality_label": (
+            "Main Stream / Evidence Quality"
+            if is_main
+            else "Substream / Low Quality"
+        ),
+        "substream_warning": not is_main,
+        "stream_profile": recording_stream_profile(),
+        "transcode": False,
+        "codec_mode": "copy",
+    }
+
+
+def resolve_recording_rtsp_url(camera_doc: dict, urls: dict) -> tuple[str | None, str]:
+    via_go2rtc = os.getenv("RECORDING_VIA_GO2RTC", "true").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    if via_go2rtc:
+        from app.services.go2rtc_service import (
+            GO2RTC_ENABLED,
+            LIVE_PROVIDER,
+            local_recording_rtsp_url,
+        )
+        from app.services.camera_uid import make_camera_uid
+
+        if GO2RTC_ENABLED and LIVE_PROVIDER == "go2rtc":
+            uid = (
+                camera_doc.get("camera_uid")
+                or make_camera_uid(camera_doc.get("ip_address") or "")
+                or str(camera_doc.get("_id") or "")
+            )
+            if uid:
+                stream = "main" if RECORDING_STREAM == "main" else "sub"
+                label = "main/101 via go2rtc" if stream == "main" else "sub/102 via go2rtc"
+                return local_recording_rtsp_url(uid, stream), label
+
+    if RECORDING_STREAM == "main":
+        url = camera_doc.get("main_rtsp_url") or urls.get("main_rtsp_url")
+        return url, "main/101"
+    url = camera_doc.get("sub_rtsp_url") or urls.get("sub_rtsp_url")
+    return url, "sub/102"

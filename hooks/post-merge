@@ -1,0 +1,43 @@
+#!/bin/bash
+
+# NVR Interface Auto-deployment Post-Merge Hook
+# Rebuilds frontend and restarts the service when backend/frontend code changes.
+
+command -v git-lfs >/dev/null 2>&1 || { printf >&2 "\n%s\n\n" "This repository is configured for Git LFS but 'git-lfs' was not found on your path."; exit 2; }
+git lfs post-merge "$@"
+
+echo "=== NVR Interface Auto-deployment Check ==="
+
+PREV_HEAD=$(git rev-parse HEAD@{1} 2>/dev/null || echo "")
+if [ -z "$PREV_HEAD" ]; then
+    echo "No previous HEAD found, skipping auto-deployment"
+    exit 0
+fi
+
+CHANGES=$(git diff --name-only HEAD@{1}..HEAD -- backend/ frontend/ 2>/dev/null || echo "")
+
+if [ -z "$CHANGES" ]; then
+    echo "No relevant code changes detected, skipping restart"
+    exit 0
+fi
+
+echo "Relevant changes detected:"
+echo "$CHANGES" | sed 's/^/- /'
+echo ""
+
+if echo "$CHANGES" | grep -q '^frontend/'; then
+    echo "Frontend changes detected, rebuilding..."
+    (cd frontend && npm run build && cd .. && mkdir -p backend/static && cp -r frontend/dist/* backend/static/) \
+        && echo "Frontend build succeeded" \
+        || echo "Frontend build failed, but continuing with service restart..."
+fi
+
+if echo "$CHANGES" | grep -E '^backend/|^frontend/'; then
+    echo "Restarting nvr-interface service..."
+    if sudo systemctl restart nvr-interface; then
+        echo "Service restarted successfully"
+    else
+        echo "Failed to restart service (check systemctl status nvr-interface)"
+        exit 1
+    fi
+fi

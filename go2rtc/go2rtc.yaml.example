@@ -1,0 +1,24 @@
+# go2rtc example — Cam18 pilot (Phase 1 realtime live engine)
+# Runtime config is auto-generated to go2rtc/runtime/go2rtc.yaml from MongoDB Cam18.
+
+api:
+  listen: "127.0.0.1:1984"
+
+rtsp:
+  listen: "127.0.0.1:8554"
+
+webrtc:
+  listen: ":8555"
+  candidates:
+    - 127.0.0.1:8555
+    - stun:8555
+  ice_servers:
+    - urls: ["stun:stun.cloudflare.com:3478", "stun:stun.l.google.com:19302"]
+
+streams:
+  # Replace with your Cam18 RTSP URLs (channel 102 sub, 101 main)
+  Cam18_sub: rtsp://user:pass@192.168.1.18:554/Streaming/Channels/102#rtsp_transport=tcp
+  Cam18_main: rtsp://user:pass@192.168.1.18:554/Streaming/Channels/101#rtsp_transport=tcp
+
+log:
+  level: info
