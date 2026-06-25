@@ -1,11 +1,16 @@
 /** Load go2rtc video-stream custom element (WebRTC + MSE). */
 
-import { authService } from '../services/authService';
+import { apiFetch } from './api';
 import {
   destroyLiveMonitorVideo,
   LIVE_MONITOR_PLAYER_CLASS,
   watchGo2RtcVideo,
 } from './liveMonitorVideo';
+import { authService } from '../services/authService';
+
+const GO2RTC_PLAYER_MODULE = '/go2rtc/video-stream.js';
+const GO2RTC_RTC_MODULE = '/go2rtc/video-rtc.js';
+const REGISTER_WAIT_MS = 15_000;
 
 let loadPromise: Promise<void> | null = null;
 
@@ -23,20 +28,59 @@ export function destroyAllGo2RtcPlayers(): void {
   activeCleanups.clear();
 }
 
+function isPlayerRegistered(): boolean {
+  return Boolean(customElements.get('video-stream'));
+}
+
+async function waitForPlayerRegistration(timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (isPlayerRegistered()) return true;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return isPlayerRegistered();
+}
+
+async function preflightGo2RtcAssets(): Promise<void> {
+  for (const path of [GO2RTC_PLAYER_MODULE, GO2RTC_RTC_MODULE]) {
+    const res = await apiFetch(path, { headers: { Accept: 'text/javascript,*/*' } });
+    if (!res.ok) {
+      const hint =
+        res.status === 401
+          ? 'Session expired — log in again'
+          : res.status === 502 || res.status === 503
+            ? 'Backend cannot reach go2rtc — open go2rtc Diagnostics and click Start'
+            : `HTTP ${res.status}`;
+      throw new Error(`Failed to load ${path} (${hint})`);
+    }
+  }
+}
+
 export function ensureGo2RtcPlayer(): Promise<void> {
-  if (customElements.get('video-stream')) {
+  if (isPlayerRegistered()) {
     return Promise.resolve();
   }
   if (loadPromise) return loadPromise;
 
-  loadPromise = new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.type = 'module';
-    script.src = '/go2rtc/video-stream.js';
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load /go2rtc/video-stream.js — is go2rtc running?'));
-    document.head.appendChild(script);
+  loadPromise = (async () => {
+    // index.html preloads the module; wait for custom element registration first.
+    if (await waitForPlayerRegistration(2_000)) return;
+
+    await preflightGo2RtcAssets();
+
+    // No query string — relative import ./video-rtc.js must resolve under /go2rtc/.
+    await import(/* @vite-ignore */ GO2RTC_PLAYER_MODULE);
+
+    if (await waitForPlayerRegistration(REGISTER_WAIT_MS)) return;
+
+    throw new Error(
+      'Failed to load go2rtc player — check /go2rtc/video-stream.js and /go2rtc/video-rtc.js',
+    );
+  })().catch((err) => {
+    loadPromise = null;
+    throw err;
   });
+
   return loadPromise;
 }
 

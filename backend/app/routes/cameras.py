@@ -1,5 +1,4 @@
 from aiohttp import web
-import asyncio
 import logging
 
 from app.services.camera_service import (
@@ -13,23 +12,15 @@ from app.services.camera_service import (
 )
 from app.services.camera_management import reload_go2rtc_for_group, test_camera_stream
 from app.core.database import delete_camera
-from app.core.auth_context import get_effective_user
-from app.services.camera_access import is_admin, user_can_access_camera
+from app.core.access_control import require_admin
+from app.services.camera_sync import schedule_camera_side_effects
 
 logger = logging.getLogger(__name__)
 
 
 def _schedule_go2rtc_reload() -> None:
-    async def _reload():
-        try:
-            from app.services.go2rtc_service import GO2RTC_ENABLED, LIVE_PROVIDER, start_go2rtc
-
-            if GO2RTC_ENABLED and LIVE_PROVIDER == "go2rtc":
-                await start_go2rtc(reload=True)
-        except Exception as exc:
-            logger.warning("[go2rtc] Config reload after camera change failed: %s", exc)
-
-    asyncio.create_task(_reload())
+    """Reload go2rtc after camera delete (add/update handled in camera_service)."""
+    schedule_camera_side_effects("", existing=None, updated_fields=None, reason="camera_delete")
 
 
 async def get_camera_list(request):
@@ -48,52 +39,64 @@ async def get_configured_cameras(request):
 
 
 async def scan_for_cameras(request):
+    try:
+        await require_admin(request)
+    except web.HTTPUnauthorized:
+        return web.json_response({"error": "Authentication required"}, status=401)
+    except web.HTTPForbidden:
+        return web.json_response({"error": "Admin only"}, status=403)
     result = await scan_cameras(request)
     return web.json_response(result)
 
 
 async def add_camera_endpoint(request):
+    try:
+        await require_admin(request)
+    except web.HTTPUnauthorized:
+        return web.json_response({"error": "Authentication required"}, status=401)
+    except web.HTTPForbidden:
+        return web.json_response({"error": "Admin only"}, status=403)
     camera_data = await request.json()
     import logging
     log_data = {k: ('***' if k == 'password' and v else v) for k, v in camera_data.items()}
     logging.info(f"Received camera data: {log_data}")
     result, status = await handle_add_camera(camera_data)
-    if status < 400:
-        _schedule_go2rtc_reload()
     return web.json_response(result, status=status)
 
 
 async def import_cameras_endpoint(request):
-    user = await get_effective_user(request)
-    if not is_admin(user):
+    try:
+        await require_admin(request)
+    except web.HTTPUnauthorized:
+        return web.json_response({"error": "Authentication required"}, status=401)
+    except web.HTTPForbidden:
         return web.json_response({"error": "Admin only"}, status=403)
     payload = await request.json()
     result, status = await handle_import_cameras(payload)
-    if status < 400:
-        _schedule_go2rtc_reload()
     return web.json_response(result, status=status)
 
 
 async def update_camera_endpoint(request):
+    try:
+        await require_admin(request)
+    except web.HTTPUnauthorized:
+        return web.json_response({"error": "Authentication required"}, status=401)
+    except web.HTTPForbidden:
+        return web.json_response({"error": "Admin only"}, status=403)
     camera_id = request.match_info['id']
-    user = await get_effective_user(request)
-    if user is not None and not is_admin(user):
-        if not user_can_access_camera(user, camera_id):
-            return web.json_response({'error': 'Forbidden'}, status=403)
-
     camera_data = await request.json()
     result, status = await handle_update_camera(camera_id, camera_data)
-    if status < 400:
-        _schedule_go2rtc_reload()
     return web.json_response(result, status=status)
 
 
 async def delete_camera_endpoint(request):
+    try:
+        await require_admin(request)
+    except web.HTTPUnauthorized:
+        return web.json_response({"error": "Authentication required"}, status=401)
+    except web.HTTPForbidden:
+        return web.json_response({"error": "Admin only"}, status=403)
     camera_id = request.match_info['id']
-    user = await get_effective_user(request)
-    if user is not None and not is_admin(user):
-        return web.json_response({'error': 'Forbidden'}, status=403)
-
     deleted = await delete_camera(camera_id)
     if deleted:
         _schedule_go2rtc_reload()
@@ -102,8 +105,11 @@ async def delete_camera_endpoint(request):
 
 
 async def test_camera_stream_endpoint(request):
-    user = await get_effective_user(request)
-    if not is_admin(user):
+    try:
+        await require_admin(request)
+    except web.HTTPUnauthorized:
+        return web.json_response({"error": "Authentication required"}, status=401)
+    except web.HTTPForbidden:
         return web.json_response({"error": "Admin only"}, status=403)
     camera_id = request.match_info["id"]
     result = await test_camera_stream(camera_id)
@@ -112,8 +118,11 @@ async def test_camera_stream_endpoint(request):
 
 
 async def reload_group_go2rtc_endpoint(request):
-    user = await get_effective_user(request)
-    if not is_admin(user):
+    try:
+        await require_admin(request)
+    except web.HTTPUnauthorized:
+        return web.json_response({"error": "Authentication required"}, status=401)
+    except web.HTTPForbidden:
         return web.json_response({"error": "Admin only"}, status=403)
     group = (request.match_info.get("camera_group") or "").strip()
     if not group:

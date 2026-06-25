@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+import { apiFetch } from './api';
+
 export type LiveProvider = 'go2rtc' | 'hls';
 
 export interface LiveConfig {
@@ -22,7 +24,7 @@ export async function fetchLiveConfig(): Promise<LiveConfig> {
   if (pending) return pending;
   pending = (async () => {
     try {
-      const res = await fetch('/api/live/config', { cache: 'no-store' });
+      const res = await apiFetch('/api/live/config', { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         cached = {
@@ -57,12 +59,33 @@ export function go2rtcStreamName(cameraUid: string, profile: 'sub' | 'main'): st
 
 let syncPromise: Promise<boolean> | null = null;
 
+/** True when go2rtc API is already up (fast path — do not block Live View on full sync). */
+export async function isGo2RtcRunning(): Promise<boolean> {
+  try {
+    const res = await apiFetch('/api/go2rtc/status', { cache: 'no-store' });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return Boolean(data.running);
+  } catch {
+    return false;
+  }
+}
+
 /** Push MongoDB camera streams into go2rtc (fixes stale pilot config). */
 export function ensureGo2RtcStreamsSynced(): Promise<boolean> {
   if (syncPromise) return syncPromise;
-  syncPromise = fetch('/api/go2rtc/sync', { method: 'POST' })
-    .then((res) => res.ok)
-    .catch(() => false);
+  syncPromise = (async () => {
+    try {
+      const running = await isGo2RtcRunning();
+      if (!running) {
+        await apiFetch('/api/go2rtc/start', { method: 'POST' });
+      }
+      const res = await apiFetch('/api/go2rtc/sync', { method: 'POST' });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  })();
   return syncPromise;
 }
 
@@ -73,7 +96,7 @@ export function resetGo2RtcStreamSync(): Promise<boolean> {
 }
 
 export function trackGo2RtcConsumer(stream: string, delta: 1 | -1): void {
-  fetch('/api/go2rtc/consumer', {
+  apiFetch('/api/go2rtc/consumer', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ stream, delta }),

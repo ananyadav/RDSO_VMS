@@ -1,14 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { X, Camera, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { X, Camera, ChevronDown, ChevronUp, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   CORPORATE_OFFICE,
   DEFAULT_SITE_NAME,
+  activeLocationSites,
   buildingsForSite,
-  buildingDefFor,
+  buildingsForSiteTree,
+  floorsForBuildingTree,
   locationForBuildingFloor,
+  siteNamesFromTree,
   zonesForBuilding,
   type LocationBuilding,
+  type LocationSite,
 } from '../constants/corporateFloors';
 
 export interface CameraFormData {
@@ -63,6 +67,31 @@ export const CORPORATE_CAMERA_DEFAULTS: CameraFormData = {
   ptz: false,
 };
 
+function defaultsForLocations(
+  sites: LocationSite[],
+  buildings: LocationBuilding[],
+): CameraFormData {
+  const active = activeLocationSites(sites);
+  if (active.length > 0) {
+    const site = active[0];
+    const building = site.buildings[0];
+    const floor = building?.floors[0]?.name || '';
+    if (site.name && building?.name && floor) {
+      const loc = locationForBuildingFloor(site.name, building.name, floor);
+      return {
+        ...CORPORATE_CAMERA_DEFAULTS,
+        site: loc.site,
+        building: loc.building,
+        floor: loc.floor,
+        floor_group: loc.floor_group,
+        camera_group: loc.camera_group,
+        location_path: loc.location_path,
+      };
+    }
+  }
+  return defaultsForBuildings(buildings);
+}
+
 function defaultsForBuildings(buildings: LocationBuilding[]): CameraFormData {
   const first = buildings[0];
   if (!first) return { ...CORPORATE_CAMERA_DEFAULTS };
@@ -79,6 +108,36 @@ function defaultsForBuildings(buildings: LocationBuilding[]): CameraFormData {
   };
 }
 
+function applyLocationFields(
+  next: CameraFormData,
+  site: string,
+  building: string,
+  zone: string,
+): CameraFormData {
+  const trimmed = zone.trim();
+  const loc = trimmed
+    ? locationForBuildingFloor(site, building, trimmed, '')
+    : {
+        site,
+        building,
+        floor: '',
+        floor_group: '',
+        area: '',
+        camera_group: '',
+        location_path: building ? `${site} / ${building}` : site,
+      };
+  return {
+    ...next,
+    site: loc.site,
+    building: loc.building,
+    floor: loc.floor,
+    floor_group: loc.floor_group,
+    area: '',
+    camera_group: loc.camera_group,
+    location_path: loc.location_path,
+  };
+}
+
 interface AddCameraModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -86,8 +145,11 @@ interface AddCameraModalProps {
   initialData?: Partial<CameraFormData> | null;
   isEditMode?: boolean;
   locationBuildings?: LocationBuilding[];
+  locationSites?: LocationSite[];
   /** Pre-fill building/floor/group when adding from Camera Management selection */
   defaultLocation?: Partial<CameraFormData> | null;
+  /** Open Manage Locations (admin only) without leaving this form */
+  onOpenManageLocations?: () => void;
 }
 
 export default function AddCameraModal({
@@ -97,87 +159,83 @@ export default function AddCameraModal({
   initialData,
   isEditMode = false,
   locationBuildings = [],
+  locationSites = [],
   defaultLocation = null,
+  onOpenManageLocations,
 }: AddCameraModalProps) {
   const [form, setForm] = useState<CameraFormData>(CORPORATE_CAMERA_DEFAULTS);
   const [showStream, setShowStream] = useState(false);
   const [saving, setSaving] = useState(false);
+  const wasOpenRef = useRef(false);
 
   const isManualRtsp = form.protocol === 'ONVIF' || form.protocol === 'CUSTOM';
 
   useEffect(() => {
-    if (isOpen) {
-      const base = defaultsForBuildings(locationBuildings);
+    if (isOpen && !wasOpenRef.current) {
+      const base = defaultsForLocations(locationSites, locationBuildings);
       const withLocation = !isEditMode && defaultLocation
         ? { ...base, ...defaultLocation }
         : base;
       setForm({ ...withLocation, ...initialData });
       setShowStream(initialData?.protocol === 'ONVIF' || initialData?.protocol === 'CUSTOM');
     }
-  }, [isOpen, initialData, locationBuildings, defaultLocation, isEditMode]);
+    wasOpenRef.current = isOpen;
+  }, [isOpen, initialData, locationBuildings, locationSites, defaultLocation, isEditMode]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setForm((prev) => {
+      const zones = locationSites.length > 0
+        ? floorsForBuildingTree(locationSites, prev.site, prev.building)
+        : zonesForBuilding(locationBuildings, prev.building, prev.site);
+      if (zones.length === 0) return prev;
+      if (zones.includes(prev.floor)) return prev;
+      return applyLocationFields(prev, prev.site, prev.building, zones[0]);
+    });
+  }, [locationSites, locationBuildings, isOpen]);
 
   const locationDerived = useMemo(
     () => locationForBuildingFloor(form.site, form.building, form.floor.trim(), ''),
     [form.site, form.building, form.floor],
   );
 
+  const hasSiteTree = locationSites.length > 0;
+
   const siteOptions = useMemo(() => {
+    if (hasSiteTree) return siteNamesFromTree(locationSites);
     const names = new Set<string>();
     for (const b of locationBuildings) names.add(b.site);
     if (names.size === 0) names.add(DEFAULT_SITE_NAME);
     return Array.from(names);
-  }, [locationBuildings]);
+  }, [hasSiteTree, locationSites, locationBuildings]);
 
-  const buildingOptions = useMemo(
-    () => buildingsForSite(locationBuildings, form.site),
-    [locationBuildings, form.site],
-  );
+  const buildingOptions = useMemo(() => {
+    if (hasSiteTree) {
+      return buildingsForSiteTree(locationSites, form.site).map((b) => ({
+        id: b.id,
+        building: b.name,
+      }));
+    }
+    return buildingsForSite(locationBuildings, form.site);
+  }, [hasSiteTree, locationSites, locationBuildings, form.site]);
 
-  const zoneOptions = useMemo(
-    () => zonesForBuilding(locationBuildings, form.building, form.site),
-    [locationBuildings, form.building, form.site],
-  );
+  const zoneOptions = useMemo(() => {
+    if (hasSiteTree) return floorsForBuildingTree(locationSites, form.site, form.building);
+    return zonesForBuilding(locationBuildings, form.building, form.site);
+  }, [hasSiteTree, locationSites, locationBuildings, form.building, form.site]);
 
-  const useFreeTextZone = zoneOptions.length === 0;
+  const noFloorsConfigured = buildingOptions.length > 0 && zoneOptions.length === 0;
 
   if (!isOpen) return null;
-
-  const applyLocationFields = (
-    next: CameraFormData,
-    site: string,
-    building: string,
-    zone: string,
-  ): CameraFormData => {
-    const trimmed = zone.trim();
-    const loc = trimmed
-      ? locationForBuildingFloor(site, building, trimmed, '')
-      : {
-          site,
-          building,
-          floor: '',
-          floor_group: '',
-          area: '',
-          camera_group: '',
-          location_path: building ? `${site} / ${building}` : site,
-        };
-    return {
-      ...next,
-      site: loc.site,
-      building: loc.building,
-      floor: loc.floor,
-      floor_group: loc.floor_group,
-      area: '',
-      camera_group: loc.camera_group,
-      location_path: loc.location_path,
-    };
-  };
 
   const pickZoneForBuilding = (
     site: string,
     building: string,
     currentZone: string,
   ): string => {
-    const zones = zonesForBuilding(locationBuildings, building, site);
+    const zones = hasSiteTree
+      ? floorsForBuildingTree(locationSites, site, building)
+      : zonesForBuilding(locationBuildings, building, site);
     if (zones.length === 0) return '';
     if (zones.includes(currentZone)) return currentZone;
     return zones[0];
@@ -187,14 +245,19 @@ export default function AddCameraModal({
     setForm((prev) => {
       let next = { ...prev, [key]: value };
       if (key === 'site') {
-        const siteBuildings = buildingsForSite(locationBuildings, String(value));
-        const building = siteBuildings[0]?.building ?? next.building;
+        let building = next.building;
+        if (hasSiteTree) {
+          const siteBuildings = buildingsForSiteTree(locationSites, String(value));
+          building = siteBuildings[0]?.name ?? building;
+        } else {
+          const siteBuildings = buildingsForSite(locationBuildings, String(value));
+          building = siteBuildings[0]?.building ?? building;
+        }
         const zone = pickZoneForBuilding(String(value), building, next.floor);
         next = applyLocationFields(next, String(value), building, zone);
       }
       if (key === 'building') {
-        const bdef = buildingDefFor(locationBuildings, String(value), next.site);
-        const site = bdef?.site ?? next.site;
+        const site = next.site;
         const zone = pickZoneForBuilding(site, String(value), next.floor);
         next = applyLocationFields(next, site, String(value), zone);
       }
@@ -218,7 +281,11 @@ export default function AddCameraModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.floor.trim()) {
-      toast.error('Enter a floor, zone, or area for this building');
+      toast.error('Select a floor / zone / sub-area');
+      return;
+    }
+    if (noFloorsConfigured) {
+      toast.error('Add a floor for this building in Manage Locations first');
       return;
     }
     setSaving(true);
@@ -299,11 +366,23 @@ export default function AddCameraModal({
             </section>
 
             <section>
-              <h4 className="text-sm font-semibold text-emerald-300 mb-3 uppercase tracking-wide">Location</h4>
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <h4 className="text-sm font-semibold text-emerald-300 uppercase tracking-wide">Location</h4>
+                {onOpenManageLocations && (
+                  <button
+                    type="button"
+                    onClick={onOpenManageLocations}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:text-emerald-300"
+                  >
+                    <MapPin size={14} />
+                    Add New Location
+                  </button>
+                )}
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className={labelClass}>Site / Unit *</label>
-                  {locationBuildings.length > 0 ? (
+                  {siteOptions.length > 0 ? (
                     <select
                       className={inputClass}
                       value={form.site}
@@ -319,8 +398,8 @@ export default function AddCameraModal({
                   )}
                 </div>
                 <div>
-                  <label className={labelClass}>Building *</label>
-                  {locationBuildings.length > 0 ? (
+                  <label className={labelClass}>Building / Department / Area *</label>
+                  {siteOptions.length > 0 ? (
                     <select
                       className={inputClass}
                       value={form.building}
@@ -336,28 +415,43 @@ export default function AddCameraModal({
                   )}
                 </div>
                 <div className="sm:col-span-2">
-                  <label className={labelClass}>
-                    Floor / Zone / Area *
-                  </label>
-                  {useFreeTextZone ? (
-                    <>
-                      <input
-                        className={inputClass}
-                        value={form.floor}
-                        onChange={(e) => setField('floor', e.target.value)}
-                        placeholder="e.g. Ground Floor, Reception, Main Parking Lot"
-                        required
-                      />
-                      <p className="mt-1 text-xs text-gray-500">
-                        This building has no pre-configured zones — enter a floor name or area label.
-                      </p>
-                    </>
+                  <label className={labelClass}>Floor / Zone / Sub-area *</label>
+                  {noFloorsConfigured ? (
+                    <p className="text-sm text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-md px-3 py-2">
+                      No floors configured for this building.{' '}
+                      {onOpenManageLocations ? (
+                        <button
+                          type="button"
+                          onClick={onOpenManageLocations}
+                          className="font-medium underline hover:text-amber-200"
+                        >
+                          Add one in Manage Locations
+                        </button>
+                      ) : (
+                        <span className="font-medium">Add one in Manage Locations</span>
+                      )}{' '}
+                      first.
+                    </p>
+                  ) : zoneOptions.length === 0 ? (
+                    <p className="text-sm text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-md px-3 py-2">
+                      No locations configured yet.{' '}
+                      {onOpenManageLocations && (
+                        <button
+                          type="button"
+                          onClick={onOpenManageLocations}
+                          className="font-medium underline hover:text-amber-200"
+                        >
+                          Add New Location
+                        </button>
+                      )}
+                    </p>
                   ) : (
                     <select
                       className={inputClass}
                       value={form.floor}
                       onChange={(e) => setField('floor', e.target.value)}
                       required
+                      disabled={zoneOptions.length === 0}
                     >
                       {zoneOptions.map((z) => (
                         <option key={z} value={z}>{z}</option>
@@ -366,8 +460,17 @@ export default function AddCameraModal({
                   )}
                 </div>
                 <div className="sm:col-span-2">
-                  <label className={labelClass}>Location</label>
+                  <label className={labelClass}>Location path</label>
                   <input className={inputClass} value={locationDerived.location_path} readOnly />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={labelClass}>Camera group (auto)</label>
+                  <input
+                    className={`${inputClass} font-mono text-gray-400`}
+                    value={locationDerived.camera_group}
+                    readOnly
+                    tabIndex={-1}
+                  />
                 </div>
               </div>
             </section>
@@ -437,7 +540,11 @@ export default function AddCameraModal({
 
           <div className="flex items-center justify-end p-4 border-t border-gray-700 space-x-2 flex-shrink-0">
             <button type="button" onClick={onClose} className="btn-secondary px-4 py-2 text-sm">Cancel</button>
-            <button type="submit" disabled={saving} className="btn-primary px-4 py-2 text-sm disabled:opacity-50">
+            <button
+              type="submit"
+              disabled={saving || noFloorsConfigured || zoneOptions.length === 0}
+              className="btn-primary px-4 py-2 text-sm disabled:opacity-50"
+            >
               {saving ? 'Saving…' : isEditMode ? 'Update Camera' : 'Add Camera'}
             </button>
           </div>

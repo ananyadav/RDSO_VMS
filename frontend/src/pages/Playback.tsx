@@ -13,7 +13,7 @@ import {
 } from '../constants/corporateFloors';
 import {
   hasUnrestrictedCameraAccess,
-  initialLocationSelection,
+  initialPlaybackSelection,
   type PublicCameraAccess,
 } from '../lib/cameraAccess';
 import { usePlaybackHLS } from '../hooks/usePlaybackHLS';
@@ -226,7 +226,7 @@ export default function Playback(): React.ReactElement {
         const access: PublicCameraAccess = data.cameraAccess ?? { all: true };
         setBuildings(list);
         setCameraAccess(access);
-        const initial = initialLocationSelection(list, access);
+        const initial = initialPlaybackSelection(list, access);
         if (initial) {
           setSelectedBuilding(initial.building);
           setSelectedGroup(initial.group);
@@ -240,25 +240,29 @@ export default function Playback(): React.ReactElement {
     void loadGroups();
   }, []);
 
-  const loadCameras = useCallback(async (group: string) => {
-    if (!group) {
+  const loadCameras = useCallback(async (group: string | null) => {
+    if (!group && hasUnrestrictedCameraAccess(cameraAccess)) {
       setCameras([]);
       return;
     }
     setCamerasLoading(true);
     try {
       const params: Record<string, string> = { forPlayback: '1' };
-      if (group === ALL_CAMERAS_GROUP) {
-        // all cameras
-      } else {
-        const buildingScope = parseBuildingScopeKey(group);
-        if (buildingScope) {
-          params.building = buildingScope.building;
-          params.site = buildingScope.site;
+      const unrestricted = hasUnrestrictedCameraAccess(cameraAccess);
+      if (unrestricted && group) {
+        if (group === ALL_CAMERAS_GROUP) {
+          // all allowed cameras (admin)
         } else {
-          params.camera_group = group;
+          const buildingScope = parseBuildingScopeKey(group);
+          if (buildingScope) {
+            params.building = buildingScope.building;
+            params.site = buildingScope.site;
+          } else {
+            params.camera_group = group;
+          }
         }
       }
+      // Restricted users: no location filter — API returns only permitted cameras.
       const res = await apiFetch(`/api/cameras${cameraQuery(params)}`);
       if (!res.ok) throw new Error('Failed to load cameras');
       setCameras(await res.json());
@@ -268,11 +272,16 @@ export default function Playback(): React.ReactElement {
     } finally {
       setCamerasLoading(false);
     }
-  }, []);
+  }, [cameraAccess]);
 
   useEffect(() => {
-    if (selectedGroup) void loadCameras(selectedGroup);
-  }, [selectedGroup, loadCameras]);
+    if (!cameraAccess) return;
+    if (hasUnrestrictedCameraAccess(cameraAccess) && !selectedGroup) {
+      setCameras([]);
+      return;
+    }
+    void loadCameras(selectedGroup);
+  }, [selectedGroup, cameraAccess, loadCameras]);
 
   const handleSelectBuilding = (building: string) => {
     if (building === ALL_CAMERAS_GROUP) {
@@ -324,7 +333,7 @@ export default function Playback(): React.ReactElement {
       const date = toApiDate(selectedDate);
       const ref = selectedCamera.cameraUid || selectedCamera.id;
       const url = `/api/playback/search?cameraUid=${encodeURIComponent(ref)}&date=${date}`;
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       if (res.status === 404) {
         const err = await res.json().catch(() => ({}));
         const msg = err.error as string | undefined;

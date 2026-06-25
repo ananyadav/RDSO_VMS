@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
+import { apiFetch } from '../lib/api';
 import { Loader2, RefreshCw, Radio, Zap, Play, Square, MapPin, AlertTriangle } from 'lucide-react';
 
 interface StreamRow {
@@ -147,7 +148,7 @@ export default function Go2RtcDiagnostics(): React.ReactElement {
     if (initial) setLoading(true);
     else setRefreshing(true);
     try {
-      const res = await fetch('/api/go2rtc/diagnostics', { cache: 'no-store' });
+      const res = await apiFetch('/api/go2rtc/diagnostics', { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setData(await res.json());
       setLastUpdated(new Date());
@@ -192,7 +193,7 @@ export default function Go2RtcDiagnostics(): React.ReactElement {
   const runAction = async (path: string, label: string) => {
     setActionMsg(null);
     try {
-      const res = await fetch(path, { method: 'POST' });
+      const res = await apiFetch(path, { method: 'POST' });
       const body = await res.json();
       if (!res.ok || body.ok === false) {
         throw new Error(body.error || `HTTP ${res.status}`);

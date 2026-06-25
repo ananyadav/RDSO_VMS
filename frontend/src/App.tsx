@@ -29,6 +29,8 @@ import LiveRealtimeTest from "./pages/LiveRealtimeTest";
 import Maintenance from "./pages/Maintenance";
 import type { User } from './services/authService';
 import { authService } from './services/authService';
+import { apiFetch } from './lib/api';
+import { LocationsProvider } from './context/LocationsContext';
 
 type RecordingScheduleType = Record<string, boolean>;
 
@@ -84,10 +86,11 @@ export default function App(): React.ReactElement {
   }, [beginSessionSync, endSessionSync]);
 
   // --- Data Fetching ---
+  const userId = currentUser?.id;
   useEffect(() => {
     const fetchSchedule = async () => {
       try {
-        const response = await fetch('/api/recordings/schedule');
+        const response = await apiFetch('/api/recordings/schedule');
         const data = await response.json();
         setRecordingSchedule(data.schedule);
         setIsRecordingEnabled(data.master_enabled);
@@ -96,52 +99,73 @@ export default function App(): React.ReactElement {
         console.error("Failed to fetch recording schedule", _error);
       }
     };
-    if (currentUser) { fetchSchedule(); }
-  }, [currentUser]);
+    if (userId) { void fetchSchedule(); }
+  }, [userId]);
 
   // --- Handlers (useCallback keeps references stable across re-renders so
   //     child components don't think their props changed) ---
   const handleToggleCameraRecording = useCallback(async (cameraId: string) => {
     try {
-      const response = await fetch(`/api/recordings/${cameraId}/toggle`, { method: 'POST' });
+      const response = await apiFetch(`/api/recordings/${cameraId}/toggle`, { method: 'POST' });
       const data = await response.json();
       setRecordingSchedule(prev => ({ ...prev, [data.id]: data.recording }));
-      const schedRes = await fetch('/api/recordings/schedule');
+      const schedRes = await apiFetch('/api/recordings/schedule');
       const sched = await schedRes.json();
       setIsRecordingEnabled(Boolean(sched.master_enabled));
       toast.success(`Recording for camera ${data.id} is now ${data.recording ? 'ON' : 'OFF'}`);
     } catch (_error) { toast.error("Failed to update recording status."); }
   }, []);
 
-  const handleScheduleUpdate = useCallback(async (newSchedule: RecordingScheduleType) => {
+  const handleScheduleUpdate = useCallback(async (
+    newSchedule: RecordingScheduleType,
+    options?: { quiet?: boolean },
+  ) => {
     try {
-      const response = await fetch('/api/recordings/schedule', {
+      const response = await apiFetch('/api/recordings/schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ schedule: newSchedule }),
       });
       const data = await response.json();
-      setRecordingSchedule(newSchedule);
+      if (!response.ok) throw new Error(data.error || 'Failed to save schedule');
+      const saved = (data.schedule ?? newSchedule) as RecordingScheduleType;
+      setRecordingSchedule(saved);
       setIsRecordingEnabled(Boolean(data.master_enabled));
-      toast.success('Recording schedule saved!');
+      if (!options?.quiet) {
+        toast.success(
+          data.master_enabled
+            ? 'Schedule saved — recording active for selected cameras'
+            : 'Schedule saved — turn on recording when ready',
+        );
+      }
     } catch (_error) { toast.error("Failed to save schedule."); }
   }, []);
 
   const handleSetMasterRecording = useCallback(async (isEnabled: boolean) => {
+    const previous = isRecordingEnabled;
+    setIsRecordingEnabled(isEnabled);
     try {
-      const response = await fetch('/api/recordings/master', {
+      const response = await apiFetch('/api/recordings/master', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: isEnabled }),
       });
       const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to update master status');
       setIsRecordingEnabled(Boolean(data.master_enabled));
-      if (!isEnabled) {
-        setRecordingSchedule((prev) => Object.fromEntries(Object.keys(prev).map((k) => [k, false])));
+      toast.success(`Recording is now ${data.master_enabled ? 'ON' : 'OFF'}`);
+      if (data.master_enabled) {
+        const schedRes = await apiFetch('/api/recordings/schedule');
+        if (schedRes.ok) {
+          const sched = await schedRes.json();
+          setRecordingSchedule(sched.schedule ?? {});
+        }
       }
-      toast.success(`Master recording is now ${data.master_enabled ? 'ON' : 'OFF'}`);
-    } catch (_error) { toast.error("Failed to update master status."); }
-  }, []);
+    } catch (err) {
+      setIsRecordingEnabled(previous);
+      toast.error(err instanceof Error ? err.message : 'Failed to update master status');
+    }
+  }, [isRecordingEnabled]);
 
   const handleLoginSuccess = useCallback((user: User) => {
     setCurrentUser(user);
@@ -189,6 +213,7 @@ export default function App(): React.ReactElement {
   return (
     <>
       <Router>
+        <LocationsProvider>
         <div className="flex h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
           <Sidebar user={currentUser} />
           <div className="flex flex-1 flex-col min-h-0">
@@ -226,6 +251,7 @@ export default function App(): React.ReactElement {
             </main>
           </div>
         </div>
+        </LocationsProvider>
       </Router>
       <Toaster position="top-right" toastOptions={{
         style: {

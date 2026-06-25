@@ -77,8 +77,6 @@ def _camera_filesystem_stats(camera_id: str) -> dict:
     latest_mtime = 0.0
 
     for root, _dirs, files in os.walk(cam_dir):
-        if "sessions" in root.replace("\\", "/").split("/"):
-            continue
         for name in files:
             if not name.endswith(".ts"):
                 continue
@@ -312,8 +310,16 @@ async def get_storage_dashboard(*, summary_only: bool = False) -> dict:
             if folders:
                 parts = await asyncio.gather(*[_stats_for_folder(f) for f in folders])
                 for part in parts:
-                    if part.get("segment_count", 0) >= stats.get("segment_count", 0):
-                        stats = part
+                    stats["segment_count"] += part.get("segment_count", 0)
+                    stats["total_bytes"] += part.get("total_bytes", 0)
+                    stats["session_count"] += part.get("session_count", 0)
+                    latest = part.get("latest_segment_time")
+                    if latest and (
+                        not stats["latest_segment_time"]
+                        or latest > stats["latest_segment_time"]
+                    ):
+                        stats["latest_segment_time"] = latest
+                stats["storage_used_gb"] = round(stats["total_bytes"] / 1e9, 4)
         else:
             stats = await _stats_for_folder(camera_id)
 

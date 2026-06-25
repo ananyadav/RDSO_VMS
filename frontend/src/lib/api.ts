@@ -11,6 +11,14 @@ export function apiHeaders(extra?: HeadersInit): HeadersInit {
   return headers;
 }
 
+/** Append session uid for media/HLS requests that cannot send custom headers (e.g. Safari). */
+export function withAuthQuery(url: string): string {
+  const user = authService.getCurrentUser();
+  if (!user?.id) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}uid=${encodeURIComponent(user.id)}`;
+}
+
 export async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
   const headers = apiHeaders(init?.headers);
   const response = await fetch(input, { ...init, headers });

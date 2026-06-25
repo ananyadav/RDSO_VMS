@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
+import { apiFetch } from '../lib/api';
 
 export interface DiskInfo {
   disk_path: string;
@@ -144,7 +145,7 @@ export function useStorageDashboard() {
 
   const fetchDashboard = useCallback(async (summaryOnly: boolean) => {
     const url = summaryOnly ? '/api/storage/dashboard?summary=1' : '/api/storage/dashboard';
-    const res = await fetch(url);
+    const res = await apiFetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return (await res.json()) as StorageDashboardData;
   }, []);
@@ -189,7 +190,7 @@ export function useStorageDashboard() {
     };
 
     void load();
-    const interval = setInterval(() => void refresh(), 60000);
+    const interval = setInterval(() => void refresh(), 30000);
     return () => {
       cancelled = true;
       clearInterval(interval);
@@ -199,7 +200,7 @@ export function useStorageDashboard() {
   const runRetention = useCallback(async () => {
     setRunningRetention(true);
     try {
-      const res = await fetch('/api/storage/retention/run', { method: 'POST' });
+      const res = await apiFetch('/api/storage/retention/run', { method: 'POST' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const result = await res.json();
       toast.success(

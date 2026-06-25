@@ -39,7 +39,7 @@ export default function TopBar({ userName, userRole, onLogout, theme, toggleThem
   return (
     <header className="relative z-50 flex-shrink-0 flex items-center justify-end h-14 px-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
       <h1 className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-lg font-semibold text-gray-900 dark:text-white tracking-wide pointer-events-none">
-        NVR System
+        VMS System
       </h1>
       <div className="flex items-center space-x-4">
         <ThemeToggle theme={theme} toggleTheme={toggleTheme} />

@@ -5,9 +5,9 @@ import {
   Network, Users, Bell, Activity, Wrench, Radio, type LucideIcon,
 } from 'lucide-react';
 import type { User } from '../services/authService';
-import { PERMISSIONS, type Permission, hasPermission } from '../lib/permissions';
+import { PERMISSIONS, type Permission, hasPermission, isAdminUser } from '../lib/permissions';
 
-type NavItem = { label: string; href: string; icon: LucideIcon; permission: Permission };
+type NavItem = { label: string; href: string; icon: LucideIcon; permission: Permission; adminOnly?: boolean };
 
 const mainNav: NavItem[] = [
   { label: 'Live View', href: '/live', icon: Camera, permission: PERMISSIONS.LIVE_VIEW },
@@ -26,13 +26,16 @@ const configNav: NavItem[] = [
 
 const systemNav: NavItem[] = [
   { label: 'Status', href: '/system-status', icon: Activity, permission: PERMISSIONS.SYSTEM },
-  { label: 'go2rtc', href: '/go2rtc-diagnostics', icon: Radio, permission: PERMISSIONS.SYSTEM },
+  { label: 'go2rtc', href: '/go2rtc-diagnostics', icon: Radio, permission: PERMISSIONS.SYSTEM, adminOnly: true },
   { label: 'HLS Diag', href: '/live-diagnostics', icon: Zap, permission: PERMISSIONS.SYSTEM },
   { label: 'Maintain', href: '/maintenance', icon: Wrench, permission: PERMISSIONS.SYSTEM },
 ];
 
 function filterNav(items: NavItem[], user: User): NavItem[] {
-  return items.filter((item) => hasPermission(user, item.permission));
+  return items.filter((item) => {
+    if (item.adminOnly && !isAdminUser(user)) return false;
+    return hasPermission(user, item.permission);
+  });
 }
 
 function NavItemLink({ item }: { item: NavItem }) {

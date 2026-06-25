@@ -83,6 +83,9 @@ from aiortc.contrib.media import MediaStreamTrack
 import av
 
 from app.core.database import camera_collection
+from app.core.auth_context import get_effective_user
+from app.services.camera_access import is_admin, user_can_access_camera
+from app.services.camera_identity import get_camera_by_ref
 from bson import ObjectId
 
 # --- Global State ---
@@ -866,6 +869,11 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
     ws = web.WebSocketResponse()
     await ws.prepare(request)
 
+    user = await get_effective_user(request)
+    if user is None:
+        await ws.close(code=4401, message=b"Authentication required")
+        return ws
+
     def exception_handler(loop, context):
         message = context.get("message", "")
         exception = context.get("exception")
@@ -923,6 +931,11 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
             return ws
 
         camera_id_for_log = camera_id
+        cam = await get_camera_by_ref(camera_id)
+        if not is_admin(user) and not user_can_access_camera(user, camera_id, cam):
+            await ws.send_str(json.dumps({"error": "Camera access denied"}))
+            return ws
+
         track_id = camera_id + "_fullscreen" if is_fullscreen else camera_id
         logging.info(f"Received offer for camera: {camera_id}, fullscreen: {is_fullscreen}, using track: {track_id}")
 

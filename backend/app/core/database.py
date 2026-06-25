@@ -153,8 +153,8 @@ async def get_all_cameras_from_db():
 
 
 async def backfill_all_camera_rtsp_urls() -> int:
-    """Ensure every camera with an IP has main/sub RTSP URLs stored."""
-    from app.services.rtsp_utils import build_camera_rtsp_urls
+    """Ensure every camera RTSP URLs match current username/password."""
+    from app.services.rtsp_utils import build_camera_rtsp_urls, rtsp_url_credentials_stale, sync_camera_rtsp_urls
 
     updated = 0
     async for cam in camera_collection.find({}):
@@ -165,12 +165,30 @@ async def backfill_all_camera_rtsp_urls() -> int:
             and cam.get("main_rtsp_url")
             and cam.get("preview_rtsp_url")
         )
-        if has_all:
+        stale = rtsp_url_credentials_stale(cam)
+        if has_all and not stale:
             continue
-        urls = build_camera_rtsp_urls(cam)
+        urls = sync_camera_rtsp_urls(cam)
+        if not urls.get("sub_rtsp_url"):
+            urls = build_camera_rtsp_urls(cam)
         if not urls.get("sub_rtsp_url"):
             continue
-        await camera_collection.update_one({"_id": cam["_id"]}, {"$set": urls})
+        patch = {
+            k: urls[k]
+            for k in (
+                "main_rtsp_url",
+                "sub_rtsp_url",
+                "preview_rtsp_url",
+                "rtsp_url",
+                "rtsp_url_source",
+                "main_channel",
+                "sub_channel",
+                "recording_channel",
+                "preview_channel",
+            )
+            if k in urls
+        }
+        await camera_collection.update_one({"_id": cam["_id"]}, {"$set": patch})
         updated += 1
     if updated:
         logging.info(f"Backfilled RTSP URLs for {updated} camera(s)")
@@ -355,9 +373,8 @@ async def add_camera(camera_data: dict) -> dict:
 
 async def upsert_camera_by_ip(camera_data: dict) -> dict:
     """Upsert camera by ip_address / camera_uid. Preserves recording_storage_id."""
-    import logging
-    from app.services.rtsp_utils import build_camera_rtsp_urls
-    from app.services.camera_uid import make_camera_uid, camera_display_name
+    from app.services.camera_sync import finalize_camera_document
+    from app.services.camera_uid import make_camera_uid
 
     ip_address = (camera_data.get("ip_address") or camera_data.get("ip") or "").strip()
     if not ip_address:
@@ -367,51 +384,12 @@ async def upsert_camera_by_ip(camera_data: dict) -> dict:
     if not camera_uid:
         raise ValueError("Invalid IP address")
 
-    password = camera_data.get("password")
-    if password is None:
-        password = ""
-    else:
-        password = str(password).strip()
-
     existing = await camera_collection.find_one(
         {"$or": [{"camera_uid": camera_uid}, {"ip_address": ip_address}, {"ip": ip_address}]}
     )
 
-    fields = {
-        "name": camera_data.get("name") or (existing or {}).get("name") or ip_address,
-        "ip_address": ip_address,
-        "camera_uid": camera_uid,
-        "model": camera_data.get("model", (existing or {}).get("model", "")),
-        "port": int(camera_data.get("port") or (existing or {}).get("port") or 554),
-        "username": camera_data.get("username", (existing or {}).get("username", "admin")),
-        "type": camera_data.get("type", (existing or {}).get("type", "rtsp")),
-        "recording_channel": str(
-            camera_data.get("recording_channel")
-            or (existing or {}).get("recording_channel")
-            or "102"
-        ),
-        "preview_channel": str(
-            camera_data.get("preview_channel")
-            or (existing or {}).get("preview_channel")
-            or "103"
-        ),
-        "ptz": bool(camera_data.get("ptz", (existing or {}).get("ptz", False))),
-        "site": camera_data.get("site", (existing or {}).get("site", "")),
-        "building": camera_data.get("building", (existing or {}).get("building", "")),
-        "floor_group": camera_data.get("floor_group", (existing or {}).get("floor_group", "")),
-        "floor": camera_data.get("floor", (existing or {}).get("floor", "")),
-        "camera_group": camera_data.get("camera_group", (existing or {}).get("camera_group", "")),
-        "location_path": camera_data.get("location_path", (existing or {}).get("location_path", "")),
-        "is_active": camera_data.get("is_active", True) is not False,
-        "online": (existing or {}).get("online", False),
-        "activity": (existing or {}).get("activity", False),
-    }
-
-    if "password" in camera_data:
-        fields["password"] = password
-
-    fields["display_name"] = camera_data.get("display_name") or camera_display_name(fields)
-    fields.update(build_camera_rtsp_urls({**(existing or {}), **fields}))
+    merged = {**(existing or {}), **camera_data, "ip_address": ip_address}
+    fields = finalize_camera_document(merged, existing=existing)
 
     if existing:
         preserve = {}
@@ -424,8 +402,8 @@ async def upsert_camera_by_ip(camera_data: dict) -> dict:
         updated["_id"] = str(updated["_id"])
         return {"camera": updated, "created": False}
 
-    fields["password"] = fields.get("password", password)
-    fields["registered_at"] = datetime.now(timezone.utc).isoformat()
+    if "registered_at" not in fields:
+        fields["registered_at"] = datetime.now(timezone.utc).isoformat()
     ins = await camera_collection.insert_one(fields)
     created = await camera_collection.find_one({"_id": ins.inserted_id})
     created["_id"] = str(created["_id"])
@@ -449,53 +427,32 @@ async def mark_cameras_inactive_not_in_ips(active_ips: set) -> int:
 async def update_camera(id: str, camera_data: dict):
     """Update a camera in the database by their ID."""
     import logging
-    from app.services.rtsp_utils import build_camera_rtsp_urls
-    from app.services.camera_uid import make_camera_uid, camera_display_name
+    from app.services.camera_sync import finalize_camera_document
+    from app.services.camera_uid import make_camera_uid
     camera = await camera_collection.find_one({"_id": ObjectId(id)})
     if camera:
-        # Handle password - ensure it's always a string, never None
         if "password" in camera_data:
             password = camera_data.get("password")
-            logging.info(f"update_camera received password: type={type(password)}, value={'***' if password else '(empty/None)'}")
-            
             if password is None:
                 password = ""
-                logging.warning("Password was None in update, converting to empty string")
             else:
                 password = str(password).strip()
-            
-            # Always explicitly set password field
             camera_data["password"] = password if password else ""
-            
-            # Double-check password is not None
-            if camera_data["password"] is None:
-                logging.error("CRITICAL: Password is None after processing in update! Setting to empty string.")
-                camera_data["password"] = ""
-        
-        # Log what we're about to update (hide password)
+
         if "port" in camera_data:
             camera_data["port"] = int(camera_data["port"])
 
-        merged = {**camera, **camera_data}
+        merged = finalize_camera_document({**camera, **camera_data}, existing=camera)
         if "ip_address" in camera_data:
             ip = (camera_data.get("ip_address") or "").strip()
             if ip:
-                camera_data["camera_uid"] = make_camera_uid(ip)
-        camera_data.update(build_camera_rtsp_urls(merged))
-        merged_for_display = {**camera, **camera_data}
-        if "display_name" not in camera_data:
-            camera_data["display_name"] = camera_display_name(merged_for_display)
+                merged["camera_uid"] = make_camera_uid(ip)
 
-        log_data = {k: ('***' if k == 'password' and v else v) for k, v in camera_data.items()}
+        log_data = {k: ('***' if k == 'password' and v else v) for k, v in merged.items()}
         logging.info(f"Updating camera document: {log_data}")
 
-        await camera_collection.update_one({"_id": ObjectId(id)}, {"$set": camera_data})
+        await camera_collection.update_one({"_id": ObjectId(id)}, {"$set": merged})
         camera = await camera_collection.find_one({"_id": ObjectId(id)})
-        
-        # Verify password was saved
-        saved_password = camera.get('password')
-        logging.info(f"Camera updated. Password in DB: type={type(saved_password)}, value={'***' if saved_password else '(empty/None)'}")
-        
         camera['_id'] = str(camera['_id'])
         return camera
     return None

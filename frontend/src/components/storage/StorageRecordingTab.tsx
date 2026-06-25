@@ -81,8 +81,8 @@ export default function StorageRecordingTab({
           </span>
           <span className="text-xs text-gray-500 hidden md:inline">
             {isRecordingEnabled
-              ? '— scheduled cameras are writing to disk'
-              : '— enable below to start recording'}
+              ? '— only scheduled cameras are writing to disk'
+              : '— toggle cameras below (saved automatically), then turn recording on'}
           </span>
         </div>
       </div>

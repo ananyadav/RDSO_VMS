@@ -35,7 +35,14 @@ def normalize_camera_access(user: Optional[dict]) -> Dict[str, Any]:
     uids = [str(u).strip() for u in (raw.get("allowedCameraUids") or []) if str(u).strip()]
 
     if legacy_type == "all" and not groups and not uids and not legacy_ids:
-        return _all_access()
+        if role == "admin":
+            return _all_access()
+        return {
+            "all": False,
+            "allowedCameraGroups": [],
+            "allowedCameraUids": [],
+            "allowedCameraIds": [],
+        }
 
     return {
         "all": False,
@@ -131,7 +138,7 @@ def user_can_access_camera(
     camera_doc: Optional[dict] = None,
 ) -> bool:
     if user is None:
-        return True
+        return False
     if is_admin(user):
         return True
 
@@ -173,7 +180,7 @@ def user_can_access_stream(
 ) -> bool:
     """Check access for go2rtc stream name like {camera_uid}_sub."""
     if user is None:
-        return True
+        return False
     if is_admin(user):
         return True
 
@@ -186,7 +193,12 @@ def user_can_access_stream(
     access = normalize_camera_access(user)
     if access.get("all"):
         return True
-    return stream_ref in access["allowedCameraUids"]
+
+    if stream_ref in access["allowedCameraUids"]:
+        return True
+    if stream_ref in (access.get("allowedCameraIds") or []):
+        return True
+    return False
 
 
 def parse_stream_camera_id(stream: str) -> Optional[str]:

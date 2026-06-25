@@ -100,12 +100,12 @@ class TestBuildRecordingEntry(unittest.TestCase):
 class TestPlaybackSearchService(unittest.IsolatedAsyncioTestCase):
     @patch("app.services.playback_search._resolve_camera_name", new_callable=AsyncMock)
     @patch("app.services.playback_search.recording_sessions_collection")
-    @patch("app.services.playback_search.RECORDINGS_DIR")
+    @patch("app.services.playback_search.get_effective_recordings_dir")
     async def test_search_filters_by_date(
         self, mock_recordings_dir, mock_collection, mock_camera_name
     ):
         mock_camera_name.return_value = "Cam10"
-        mock_recordings_dir.__truediv__ = MagicMock(
+        mock_recordings_dir.return_value.__truediv__ = MagicMock(
             return_value=MagicMock(is_dir=MagicMock(return_value=False))
         )
 

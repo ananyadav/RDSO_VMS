@@ -87,15 +87,41 @@ export function initialLiveViewSelection(
   };
 }
 
-/** @deprecated Playback still uses all-locations default for unrestricted users. */
-export function initialLocationSelection(
+/** Pick site/building/floor for Playback when the user has restricted camera access. */
+export function initialPlaybackSelection(
   buildings: BuildingGroup[],
   access?: PublicCameraAccess | null,
 ): { building: string; group: string } | null {
   if (hasUnrestrictedCameraAccess(access)) {
     return { building: ALL_CAMERAS_GROUP, group: ALL_CAMERAS_GROUP };
   }
-  const picked = pickDefaultLocation(buildings);
-  if (!picked) return null;
-  return { building: picked.buildingKey.split('::')[1] ?? '', group: picked.group };
+
+  const allowedGroups = new Set(access?.allowedCameraGroups ?? []);
+  for (const b of buildings) {
+    for (const fg of b.floorGroups) {
+      if (allowedGroups.has(fg.camera_group)) {
+        return { building: b.building, group: fg.camera_group };
+      }
+    }
+  }
+
+  if ((access?.allowedCameraUids?.length ?? 0) > 0) {
+    const picked = pickDefaultLocation(buildings);
+    if (picked) {
+      return {
+        building: picked.buildingKey.split('::')[1] ?? picked.buildingKey,
+        group: picked.group,
+      };
+    }
+  }
+
+  return null;
+}
+
+/** @deprecated Playback still uses all-locations default for unrestricted users. */
+export function initialLocationSelection(
+  buildings: BuildingGroup[],
+  access?: PublicCameraAccess | null,
+): { building: string; group: string } | null {
+  return initialPlaybackSelection(buildings, access);
 }

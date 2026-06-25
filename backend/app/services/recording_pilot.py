@@ -19,11 +19,11 @@ from app.services.recording_config import (
     RECORDING_RETENTION_SECONDS,
     recording_stream_profile,
 )
+from app.services.storage_settings_store import get_effective_recordings_dir
 from app.services.video_recording import (
     start_camera_recording,
     stop_camera_recording,
     is_camera_recording,
-    RECORDINGS_DIR,
 )
 from bson import ObjectId
 
@@ -95,7 +95,7 @@ async def start_pilot(
 
     return {
         **pilot,
-        "storage_root": str(RECORDINGS_DIR),
+        "storage_root": str(get_effective_recordings_dir()),
         "message": "Pilot scheduled — FFmpeg starting in background",
         "quality_note": (
             f"Testing mode: {STREAM_PROFILE}, "
@@ -186,6 +186,6 @@ async def pilot_status() -> dict:
         "active": active,
         "pilot": pilot,
         "remaining_hours": remaining_hours,
-        "storage_root": str(RECORDINGS_DIR),
+        "storage_root": str(get_effective_recordings_dir()),
         "quality_note": STREAM_PROFILE,
     }

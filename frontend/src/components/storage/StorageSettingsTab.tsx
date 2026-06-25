@@ -17,6 +17,12 @@ export default function StorageSettingsTab({
   runningRetention,
   onSettingsSaved,
 }: StorageSettingsTabProps) {
+  const intervalSec = data.retention?.pass_interval_seconds ?? 300;
+  const intervalLabel =
+    intervalSec >= 60 && intervalSec % 60 === 0
+      ? `Every ${intervalSec / 60} minute${intervalSec / 60 === 1 ? '' : 's'}`
+      : `Every ${intervalSec} seconds`;
+
   return (
     <div className="space-y-4 w-full">
       <StorageSettingsEditor data={data} onSaved={onSettingsSaved} />
@@ -30,8 +36,10 @@ export default function StorageSettingsTab({
           <div className="space-y-4">
             <div>
               <label className="text-xs text-gray-400 uppercase tracking-wide">Auto-cleanup Interval</label>
-              <p className="text-white font-medium mt-1">
-                Every {data.retention?.pass_interval_seconds ?? 300} seconds
+              <p className="text-white font-medium mt-1">{intervalLabel}</p>
+              <p className="text-xs text-gray-500 mt-1">
+                The server scans for recordings older than your retention period on this schedule
+                (default every 5 minutes). This is not the length of each video segment.
               </p>
             </div>
 

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -10,6 +12,9 @@ from typing import Any, Dict, Optional
 from app.core.database import database
 
 logger = logging.getLogger(__name__)
+
+# Windows absolute path embedded inside a corrupted cross-platform string.
+_WIN_ABS_RE = re.compile(r"([A-Za-z]:[\\/].+)")
 
 _settings_collection = database.get_collection("system_settings")
 _SETTINGS_ID = "storage"
@@ -46,7 +51,40 @@ def get_effective_retention_seconds() -> float:
 
 def get_effective_recordings_dir() -> Path:
     raw = _runtime_recordings_dir or _env_default_recordings_dir()
-    return Path(raw).resolve()
+    return normalize_recordings_path(raw)
+
+
+def _repair_mixed_recordings_path(raw: str) -> str:
+    """Fix paths that accidentally concatenated POSIX + Windows segments."""
+    text = str(raw).strip().strip('"').strip("'")
+    if not text:
+        return text
+
+    win_match = _WIN_ABS_RE.search(text)
+    has_posix = text.startswith("/")
+    has_windows = bool(win_match) or (len(text) >= 2 and text[1] == ":")
+
+    if has_posix and has_windows:
+        if os.name == "nt" and win_match:
+            return win_match.group(1)
+        # Linux host: keep the POSIX portion before any Windows drive letter.
+        return re.split(r"[A-Za-z]:", text, maxsplit=1)[0].rstrip("/\\")
+
+    return text
+
+
+def normalize_recordings_path(path: str | Path) -> Path:
+    """Resolve user input to one absolute folder path (never append to the old folder)."""
+    repaired = _repair_mixed_recordings_path(str(path))
+    if not repaired:
+        raise ValueError("Recording folder path is required")
+
+    if os.name == "nt" and len(repaired) >= 2 and repaired[1] == ":":
+        resolved = Path(repaired).resolve()
+    else:
+        resolved = Path(repaired).expanduser().resolve()
+
+    return resolved
 
 
 def apply_retention_days(days: float) -> None:
@@ -57,7 +95,7 @@ def apply_retention_days(days: float) -> None:
 
 def apply_recordings_dir(path: str | Path) -> Path:
     global _runtime_recordings_dir
-    resolved = Path(path).expanduser().resolve()
+    resolved = normalize_recordings_path(path)
     resolved.mkdir(parents=True, exist_ok=True)
     _runtime_recordings_dir = str(resolved)
 
@@ -77,8 +115,25 @@ async def load_storage_settings() -> None:
             logger.warning("[STORAGE] Invalid stored retention_days: %s", exc)
     if doc.get("recordings_dir"):
         try:
-            apply_recordings_dir(doc["recordings_dir"])
-        except OSError as exc:
+            stored = str(doc["recordings_dir"])
+            repaired = _repair_mixed_recordings_path(stored)
+            resolved = apply_recordings_dir(repaired)
+            if repaired != stored:
+                logger.warning(
+                    "[STORAGE] Repaired corrupt recordings_dir: %s -> %s",
+                    stored,
+                    resolved,
+                )
+                await _settings_collection.update_one(
+                    {"_id": _SETTINGS_ID},
+                    {
+                        "$set": {
+                            "recordings_dir": str(resolved),
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    },
+                )
+        except (OSError, ValueError) as exc:
             logger.warning("[STORAGE] Could not apply recordings_dir: %s", exc)
 
 
@@ -110,7 +165,7 @@ async def update_storage_settings(
         patch["retention_days"] = days
 
     if recordings_dir is not None:
-        folder = str(recordings_dir).strip()
+        folder = _repair_mixed_recordings_path(str(recordings_dir).strip())
         if not folder:
             raise ValueError("Recording folder path is required")
         resolved = apply_recordings_dir(folder)

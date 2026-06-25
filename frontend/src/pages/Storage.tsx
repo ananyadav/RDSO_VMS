@@ -65,16 +65,16 @@ export default function Storage({
 
       <div className="flex flex-col flex-1 min-h-0 px-4 pb-4">
         {/* Tab bar — full width */}
-        <div className="flex items-center gap-10 mb-4 flex-shrink-0 w-full">
-          <div className="flex flex-1 min-w-0 gap-1 bg-gray-800/80 border border-gray-700 rounded-lg p-1">
+        <div className="flex items-center gap-8 mb-4 flex-shrink-0 w-full">
+          <div className="flex flex-1 max-w-2xl gap-1.5 bg-gray-800/80 border border-gray-700 rounded-lg p-1.5">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex flex-1 items-center justify-center gap-1.5 px-3 py-2.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
+                className={`flex-1 inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap min-w-[9rem] ${
                   activeTab === tab.id
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-blue-600 text-white shadow-sm'
                     : 'text-gray-400 hover:text-white hover:bg-gray-700/60'
                 }`}
               >
@@ -87,7 +87,7 @@ export default function Storage({
             type="button"
             onClick={() => refresh()}
             disabled={loading}
-            className="flex flex-shrink-0 items-center gap-1.5 text-xs px-4 py-2.5 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-300 disabled:opacity-50"
+            className="ml-auto flex flex-shrink-0 items-center gap-1.5 text-xs px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-300 disabled:opacity-50"
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
             Refresh

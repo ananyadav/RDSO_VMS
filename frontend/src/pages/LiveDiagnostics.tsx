@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
+import { apiFetch } from '../lib/api';
 import { Loader2, Radio, Cpu, RefreshCw, Timer } from 'lucide-react';
 
 interface FrontendLatency {
@@ -96,7 +97,7 @@ function diagnosticsErrorMessage(err: unknown): string {
 }
 
 async function fetchDiagnosticsApi(signal: AbortSignal): Promise<LiveDiagnosticsResponse> {
-  const res = await fetch('/api/live/diagnostics', { cache: 'no-store', signal });
+  const res = await apiFetch('/api/live/diagnostics', { cache: 'no-store', signal });
   if (!res.ok) {
     throw new Error(`GET /api/live/diagnostics failed (HTTP ${res.status})`);
   }

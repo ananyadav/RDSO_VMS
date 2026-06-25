@@ -3,6 +3,7 @@ import { FolderOpen, Clock, Save, Loader2, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Card from '../Card';
 import { apiFetch } from '../../lib/api';
+import { sanitizeRecordingsPath } from '../../lib/storagePath';
 import type { StorageDashboardData } from '../../hooks/useStorageDashboard';
 
 interface StorageSettingsEditorProps {
@@ -28,7 +29,7 @@ export default function StorageSettingsEditor({
 
   useEffect(() => {
     setDays(String(retentionDays));
-    setPath(folder);
+    setPath(sanitizeRecordingsPath(folder));
   }, [retentionDays, folder]);
 
   const save = async () => {
@@ -37,7 +38,8 @@ export default function StorageSettingsEditor({
       toast.error('Retention must be between 1 and 3650 days');
       return;
     }
-    if (!path.trim()) {
+    const cleanPath = sanitizeRecordingsPath(path);
+    if (!cleanPath) {
       toast.error('Recording folder path is required');
       return;
     }
@@ -49,11 +51,14 @@ export default function StorageSettingsEditor({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           retention_days: parsedDays,
-          recordings_dir: path.trim(),
+          recordings_dir: cleanPath,
         }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || 'Failed to save settings');
+      if (body.recordings_dir) {
+        setPath(body.recordings_dir);
+      }
       toast.success('Storage settings saved');
       onSaved?.();
     } catch (err) {
@@ -70,7 +75,7 @@ export default function StorageSettingsEditor({
         <h3 className="text-sm font-semibold text-white">Storage Settings</h3>
       </div>
 
-      <div className={`grid gap-4 ${compact ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'}`}>
+      <div className={`grid gap-6 ${compact ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'}`}>
         <div>
           <label className="text-xs text-gray-400 uppercase tracking-wide flex items-center gap-1.5">
             Retention Period (days)
@@ -108,6 +113,7 @@ export default function StorageSettingsEditor({
               type="text"
               value={path}
               onChange={(e) => setPath(e.target.value)}
+              onBlur={() => setPath((p) => sanitizeRecordingsPath(p))}
               className="w-full rounded-md border border-gray-600 bg-gray-800 text-white pl-3 pr-9 py-2 text-sm font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               placeholder="C:\Recordings or /var/nvr/recordings"
             />
@@ -123,15 +129,17 @@ export default function StorageSettingsEditor({
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={() => void save()}
-        disabled={saving}
-        className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-sm disabled:opacity-50"
-      >
-        {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-        Save Settings
-      </button>
+      <div className="flex justify-center mt-8 pt-6 border-t border-gray-700/60">
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={saving}
+          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium disabled:opacity-50"
+        >
+          {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+          Save Settings
+        </button>
+      </div>
     </Card>
   );
 }

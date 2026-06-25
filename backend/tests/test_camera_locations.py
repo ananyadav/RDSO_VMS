@@ -189,6 +189,16 @@ class TestCameraAccess(unittest.TestCase):
         filt = build_access_filter(user)
         self.assertIn("$or", filt)
 
+    def test_legacy_all_access_denied_for_viewer(self):
+        access = normalize_camera_access(
+            {
+                "role": "Viewer",
+                "cameraAccess": {"accessType": "all"},
+            }
+        )
+        self.assertFalse(access.get("all"))
+        self.assertEqual(access["allowedCameraGroups"], [])
+
     def test_active_filter_excludes_disabled(self):
         filt = active_camera_filter(False)
         self.assertIn("$or", filt)

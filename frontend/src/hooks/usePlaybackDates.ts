@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { apiFetch } from '../lib/api';
 
 export function usePlaybackDates(
   cameraId: string | null,
@@ -28,7 +29,7 @@ export function usePlaybackDates(
       params.set('cameraId', cameraId);
     }
 
-    fetch(`/api/playback/dates?${params}`, { signal: ac.signal })
+    apiFetch(`/api/playback/dates?${params}`, { signal: ac.signal })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) => setDates(new Set(data.dates || [])))
       .catch(() => {

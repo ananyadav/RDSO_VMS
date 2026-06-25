@@ -20,6 +20,9 @@ import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 
+from app.services.rtsp_utils import sync_camera_rtsp_urls
+from app.services.camera_sync import schedule_camera_side_effects
+
 MONGO_DETAILS = os.getenv('MONGODB_URI', 'mongodb://localhost:27017')
 DATABASE_NAME = 'nvr_database'
 client = AsyncIOMotorClient(MONGO_DETAILS)
@@ -48,14 +51,32 @@ async def fix_camera_password(camera_id, new_password=None):
             action = "updated"
         
         # Update the camera
+        synced = sync_camera_rtsp_urls({**camera, "password": password_to_set})
+        patch = {"password": password_to_set}
+        for key in (
+            "main_rtsp_url",
+            "sub_rtsp_url",
+            "preview_rtsp_url",
+            "rtsp_url",
+            "rtsp_url_source",
+        ):
+            if synced.get(key) is not None:
+                patch[key] = synced[key]
+
         result = await camera_collection.update_one(
             {"_id": ObjectId(camera_id)},
-            {"$set": {"password": password_to_set}}
+            {"$set": patch},
         )
         
         if result.modified_count > 0:
             print(f"✅ Camera password {action} successfully!")
             print(f"   New password: {'(empty)' if not password_to_set else '***'}")
+            schedule_camera_side_effects(
+                camera_id,
+                existing=camera,
+                updated_fields=patch,
+                reason="password_fix",
+            )
             return True
         else:
             print(f"⚠️  No changes made (password may already be set correctly)")

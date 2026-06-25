@@ -40,7 +40,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
       <div className="w-full max-w-md p-8 space-y-8 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700">
         <div>
           <h2 className="text-3xl font-extrabold text-center text-gray-900 dark:text-white">
-            NVR Login
+            VMS Login
           </h2>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>

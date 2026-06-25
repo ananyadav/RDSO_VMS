@@ -75,6 +75,58 @@ def build_rtsp_url(
     return f"rtsp://{username_encoded}:{password_encoded}@{ip_address}:{port}{path}"
 
 
+def rewrite_rtsp_credentials(rtsp_url: str, username: str, password: str) -> str:
+    """Replace user:pass in an RTSP URL, keeping host/path unchanged."""
+    if not rtsp_url or "://" not in rtsp_url:
+        return rtsp_url
+    scheme, rest = rtsp_url.split("://", 1)
+    if "@" not in rest:
+        return rtsp_url
+    _, host_path = rest.split("@", 1)
+    user = urllib.parse.quote((username or "admin").strip(), safe="")
+    pwd = urllib.parse.quote(str(password).strip(), safe="")
+    return f"{scheme}://{user}:{pwd}@{host_path}"
+
+
+def rtsp_url_credentials_stale(camera_doc: dict) -> bool:
+    """True when stored RTSP URLs embed a different user/pass than the camera doc."""
+    password = str(camera_doc.get("password") or "")
+    username = (camera_doc.get("username") or "admin").strip()
+    for key in ("main_rtsp_url", "sub_rtsp_url", "preview_rtsp_url", "rtsp_url"):
+        url = (camera_doc.get(key) or "").strip()
+        if not url or "://" not in url or "@" not in url:
+            continue
+        auth = url.split("://", 1)[1].split("@", 1)[0]
+        if ":" not in auth:
+            continue
+        user_part, pass_part = auth.split(":", 1)
+        if urllib.parse.unquote(user_part) != username:
+            return True
+        if urllib.parse.unquote(pass_part) != password:
+            return True
+    return False
+
+
+def sync_camera_rtsp_urls(camera_doc: dict) -> dict:
+    """Rebuild auto Hikvision URLs or refresh credentials in manual URLs."""
+    doc = dict(camera_doc)
+    protocol = (doc.get("protocol") or "HIKVISION").upper()
+    if protocol in ("ONVIF", "CUSTOM"):
+        username = (doc.get("username") or "admin").strip()
+        password = doc.get("password") or ""
+        for key in ("main_rtsp_url", "sub_rtsp_url", "preview_rtsp_url"):
+            if doc.get(key):
+                doc[key] = rewrite_rtsp_credentials(doc[key], username, password)
+        sub = (doc.get("sub_rtsp_url") or doc.get("rtsp_url") or "").strip()
+        if sub:
+            doc["rtsp_url"] = sub
+        doc["rtsp_url_source"] = doc.get("rtsp_url_source") or (
+            "onvif" if protocol == "ONVIF" else "custom"
+        )
+        return doc
+    return apply_rtsp_urls(doc, force_auto=True)
+
+
 def apply_rtsp_urls(camera_doc: dict, *, force_auto: bool = False) -> dict:
     """Set RTSP URL fields from protocol/channels. Auto for HIKVISION unless manual."""
     doc = dict(camera_doc)
@@ -106,6 +158,24 @@ def apply_rtsp_urls(camera_doc: dict, *, force_auto: bool = False) -> dict:
     doc.update(urls)
     doc["rtsp_url_source"] = "auto_hikvision"
     return doc
+
+
+def effective_camera_rtsp_urls(camera_doc: dict) -> Dict[str, str]:
+    """Current RTSP URLs — always derived from stored credentials, not stale URL fields."""
+    protocol = (camera_doc.get("protocol") or "HIKVISION").upper()
+    if protocol in ("ONVIF", "CUSTOM"):
+        synced = sync_camera_rtsp_urls(camera_doc)
+        sub = (synced.get("sub_rtsp_url") or synced.get("rtsp_url") or "").strip()
+        main = (synced.get("main_rtsp_url") or sub).strip()
+        if sub:
+            preview = (synced.get("preview_rtsp_url") or sub).strip()
+            return {
+                "main_rtsp_url": main,
+                "sub_rtsp_url": sub,
+                "preview_rtsp_url": preview,
+                "rtsp_url": sub,
+            }
+    return build_camera_rtsp_urls(camera_doc)
 
 
 def build_camera_rtsp_urls(camera_doc: dict) -> Dict[str, str]:

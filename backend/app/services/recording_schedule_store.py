@@ -151,9 +151,22 @@ async def register_camera_for_recording(camera_id: str) -> None:
         logger.info("[RECORDING] Registered new camera %s (enabled=False)", cid)
 
 
+async def apply_schedule_update(incoming: Dict[str, bool]) -> None:
+    """Merge schedule flags for active cameras (never drop cameras missing from payload)."""
+    global recording_schedule
+    await sync_schedule_with_cameras()
+    normalized = {str(k): bool(v) for k, v in incoming.items()}
+    for cid in list(recording_schedule.keys()):
+        if cid in normalized:
+            recording_schedule[cid] = normalized[cid]
+    _sync_master_with_schedule()
+    await save_recording_settings()
+
+
 def set_camera_recording(camera_id: str, enabled: bool) -> None:
     """Update one camera in schedule and sync master flag."""
     global recording_schedule
     cid = str(camera_id)
     recording_schedule[cid] = bool(enabled)
     _sync_master_with_schedule()
+

@@ -15,6 +15,7 @@ from app.services.location_store import (
     delete_building,
     delete_floor,
     delete_site,
+    enrich_sites_with_camera_counts,
     flatten_buildings,
     list_buildings,
     load_sites,
@@ -33,7 +34,14 @@ async def get_locations_endpoint(_request: web.Request) -> web.Response:
         "true",
         "yes",
     )
+    include_stats = (_request.rel_url.query.get("includeStats") or "").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
     sites = await load_sites(include_inactive=include_inactive)
+    if include_stats:
+        sites = await enrich_sites_with_camera_counts(sites)
     buildings = flatten_buildings(sites, include_inactive=include_inactive)
     return web.json_response({"sites": sites, "buildings": buildings})
 

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { apiFetch } from '../lib/api';
+import { authService } from '../services/authService';
+import { isAdminUser } from '../lib/permissions';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import AddUserModal from '../components/AddUserModal';
@@ -27,6 +29,8 @@ interface User {
 export type { User, CameraAccess };
 
 export default function UserManagement() {
+  const currentUser = authService.getCurrentUser();
+  const isAdmin = isAdminUser(currentUser);
   const [users, setUsers] = useState<User[]>([]);
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -37,7 +41,7 @@ export default function UserManagement() {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('/api/users');
+      const response = await apiFetch('/api/users');
       if (!response.ok) throw new Error('Failed to fetch users');
       const data = await response.json();
       setUsers(data);
@@ -46,10 +50,18 @@ export default function UserManagement() {
     }
   };
 
+  if (!isAdmin) {
+    return (
+      <div className="p-6 text-center text-gray-400">
+        User management is available to administrators only.
+      </div>
+    );
+  }
+
   const handleAddUser = async (userData: User) => {
     try {
       const { id: _id, ...payload } = userData;
-      const response = await fetch('/api/users', {
+      const response = await apiFetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -67,7 +79,7 @@ export default function UserManagement() {
   const handleEditUser = async (userData: User) => {
     try {
       if (!editingUser) return;
-      const response = await fetch(`/api/users/${editingUser.id}`, {
+      const response = await apiFetch(`/api/users/${editingUser.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),
@@ -84,7 +96,7 @@ export default function UserManagement() {
   const handleDeleteUser = async (userId: string) => {
     if (!confirm('Are you sure you want to delete this user?')) return;
     try {
-      const response = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+      const response = await apiFetch(`/api/users/${userId}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Failed to delete user');
       toast.success('User deleted successfully');
       fetchUsers();

@@ -15,7 +15,8 @@ from app.services.camera_locations import (
 )
 from app.services.location_store import DEFAULT_SITE_NAME
 from app.services.camera_uid import camera_display_name, make_camera_uid
-from app.services.rtsp_utils import apply_rtsp_urls, mask_rtsp_url
+from app.services.camera_sync import finalize_camera_document
+from app.services.rtsp_utils import mask_rtsp_url
 
 CORPORATE_DEFAULTS: Dict[str, Any] = {
     "site": DEFAULT_SITE_NAME,
@@ -240,8 +241,8 @@ def prepare_camera_fields(
         merged["rtsp_url_source"] = _str(
             camera_data.get("rtsp_url_source") or ("manual" if protocol == "CUSTOM" else "onvif")
         )
-    else:
-        merged = apply_rtsp_urls(merged, force_auto=True)
+
+    merged = finalize_camera_document(merged, existing=existing)
 
     merged["display_name"] = _str(camera_data.get("display_name")) or camera_display_name(merged)
     return merged

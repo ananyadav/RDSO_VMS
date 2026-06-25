@@ -12,7 +12,7 @@ export function useLocations() {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch('/api/locations?includeInactive=true');
+      const res = await apiFetch('/api/locations?includeInactive=true&includeStats=true');
       if (!res.ok) throw new Error('Failed to load locations');
       const data = await res.json();
       setSites(data.sites ?? []);

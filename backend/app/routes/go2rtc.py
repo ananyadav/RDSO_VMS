@@ -7,6 +7,14 @@ import logging
 
 from aiohttp import ClientSession, ClientTimeout, WSMsgType, web
 
+from app.core.access_control import require_admin, require_user
+from app.core.auth_context import get_effective_user
+from app.services.camera_identity import get_camera_by_ref
+from app.services.camera_access import (
+    is_admin,
+    parse_stream_camera_id,
+    user_can_access_stream,
+)
 from app.services.go2rtc_service import (
     GO2RTC_API_URL,
     ensure_go2rtc_streams,
@@ -16,12 +24,6 @@ from app.services.go2rtc_service import (
     report_consumer,
     start_go2rtc,
     stop_go2rtc,
-)
-from app.core.auth_context import get_effective_user
-from app.services.camera_identity import get_camera_by_ref
-from app.services.camera_access import (
-    parse_stream_camera_id,
-    user_can_access_stream,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,6 +37,13 @@ _BENIGN_WS_PHRASES = (
     "websocket connection is closed",
 )
 
+_GO2RTC_PLAYER_ASSETS = frozenset(
+    {
+        "video-stream.js",
+        "video-rtc.js",
+    }
+)
+
 
 def _benign_ws_disconnect(exc: BaseException) -> bool:
     if isinstance(exc, (asyncio.CancelledError, ConnectionResetError, ConnectionAbortedError)):
@@ -43,23 +52,51 @@ def _benign_ws_disconnect(exc: BaseException) -> bool:
     return any(phrase in msg for phrase in _BENIGN_WS_PHRASES)
 
 
-async def go2rtc_status(_request: web.Request) -> web.Response:
+async def _admin_only(request: web.Request) -> web.Response | None:
+    try:
+        await require_admin(request)
+    except web.HTTPUnauthorized:
+        return web.json_response({"error": "Authentication required"}, status=401)
+    except web.HTTPForbidden:
+        return web.json_response({"error": "Admin only"}, status=403)
+    return None
+
+
+async def go2rtc_status(request: web.Request) -> web.Response:
+    denied = await _admin_only(request)
+    if denied is not None:
+        return denied
     return web.json_response(await get_go2rtc_status())
 
 
-async def go2rtc_diagnostics(_request: web.Request) -> web.Response:
+async def go2rtc_diagnostics(request: web.Request) -> web.Response:
+    denied = await _admin_only(request)
+    if denied is not None:
+        return denied
     return web.json_response(await get_go2rtc_diagnostics())
 
 
-async def go2rtc_reload(_request: web.Request) -> web.Response:
+async def go2rtc_reload(request: web.Request) -> web.Response:
+    denied = await _admin_only(request)
+    if denied is not None:
+        return denied
     return web.json_response(await start_go2rtc(reload=True))
 
 
-async def go2rtc_sync(_request: web.Request) -> web.Response:
+async def go2rtc_sync(request: web.Request) -> web.Response:
+    try:
+        await require_user(request)
+    except web.HTTPUnauthorized:
+        return web.json_response({"error": "Authentication required"}, status=401)
     return web.json_response(await ensure_go2rtc_streams())
 
 
 async def go2rtc_consumer(request: web.Request) -> web.Response:
+    try:
+        user = await require_user(request)
+    except web.HTTPUnauthorized:
+        return web.json_response({"ok": False, "error": "Authentication required"}, status=401)
+
     try:
         body = await request.json()
     except Exception:
@@ -68,25 +105,76 @@ async def go2rtc_consumer(request: web.Request) -> web.Response:
     delta = int(body.get("delta") or 0)
     if not stream or delta not in (-1, 1):
         return web.json_response({"ok": False, "error": "stream and delta required"}, status=400)
+
+    if delta > 0 and not is_admin(user):
+        stream_ref = parse_stream_camera_id(stream)
+        if stream_ref:
+            cam_doc = await get_camera_by_ref(stream_ref)
+            if not user_can_access_stream(user, stream, cam_doc):
+                return web.json_response({"ok": False, "error": "Camera access denied"}, status=403)
+
     report_consumer(stream, delta)
     return web.json_response({"ok": True})
 
 
-async def live_config(_request: web.Request) -> web.Response:
+async def live_config(request: web.Request) -> web.Response:
+    try:
+        await require_user(request)
+    except web.HTTPUnauthorized:
+        return web.json_response({"error": "Authentication required"}, status=401)
     return web.json_response(get_live_config())
 
 
-async def go2rtc_start(_request: web.Request) -> web.Response:
+async def go2rtc_start(request: web.Request) -> web.Response:
+    denied = await _admin_only(request)
+    if denied is not None:
+        return denied
     return web.json_response(await start_go2rtc())
 
 
-async def go2rtc_stop(_request: web.Request) -> web.Response:
+async def go2rtc_stop(request: web.Request) -> web.Response:
+    denied = await _admin_only(request)
+    if denied is not None:
+        return denied
     await stop_go2rtc()
     return web.json_response({"ok": True})
 
 
+async def _authorize_go2rtc_proxy(request: web.Request, path: str) -> None:
+    basename = path.rsplit("/", 1)[-1].lower()
+    if basename in _GO2RTC_PLAYER_ASSETS or basename.endswith(".js"):
+        return
+
+    user = await get_effective_user(request)
+    if user is None:
+        raise web.HTTPUnauthorized(text="Authentication required")
+
+    src = (request.query.get("src") or "").strip()
+    if src:
+        stream_ref = parse_stream_camera_id(src)
+        if not stream_ref:
+            raise web.HTTPForbidden(text="Invalid stream")
+        cam_doc = await get_camera_by_ref(stream_ref)
+        if cam_doc and cam_doc.get("is_active") is False:
+            raise web.HTTPForbidden(text="Camera disabled")
+        if not user_can_access_stream(user, src, cam_doc):
+            raise web.HTTPForbidden(text="Camera access denied")
+        return
+
+    if is_admin(user):
+        return
+
+    path_lower = path.lower()
+    if path_lower.startswith("api/streams") or path_lower.startswith("api/config"):
+        raise web.HTTPForbidden(text="Admin only")
+
+    raise web.HTTPForbidden(text="Camera access denied")
+
+
 async def _proxy_to_go2rtc(request: web.Request, path: str) -> web.StreamResponse:
-    """HTTP reverse proxy to go2rtc API (dev + single-origin browser access)."""
+    """HTTP reverse proxy to go2rtc API (single-origin browser access)."""
+    await _authorize_go2rtc_proxy(request, path)
+
     target = f"{GO2RTC_API_URL}/{path}"
     if request.query_string:
         target = f"{target}?{request.query_string}"
@@ -124,14 +212,20 @@ async def go2rtc_ws_proxy(request: web.Request) -> web.WebSocketResponse:
     """WebSocket proxy for go2rtc /api/ws (WebRTC/MSE signaling)."""
     src = request.query.get("src", "")
     user = await get_effective_user(request)
-    if user is not None and src:
-        stream_ref = parse_stream_camera_id(src)
-        if stream_ref:
-            cam_doc = await get_camera_by_ref(stream_ref)
-            if cam_doc and cam_doc.get("is_active") is False:
-                raise web.HTTPForbidden(text="Camera disabled")
-            if not user_can_access_stream(user, src, cam_doc):
-                raise web.HTTPForbidden(text="Camera access denied")
+    if user is None:
+        raise web.HTTPUnauthorized(text="Authentication required")
+
+    if not src:
+        raise web.HTTPForbidden(text="src query parameter required")
+
+    stream_ref = parse_stream_camera_id(src)
+    if not stream_ref:
+        raise web.HTTPForbidden(text="Invalid stream")
+    cam_doc = await get_camera_by_ref(stream_ref)
+    if cam_doc and cam_doc.get("is_active") is False:
+        raise web.HTTPForbidden(text="Camera disabled")
+    if not user_can_access_stream(user, src, cam_doc):
+        raise web.HTTPForbidden(text="Camera access denied")
 
     ws_base = GO2RTC_API_URL.replace("http://", "ws://", 1)
     target = (

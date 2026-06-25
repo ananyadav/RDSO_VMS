@@ -20,7 +20,7 @@ import yaml
 
 from app.core.database import camera_collection
 from app.services.camera_uid import make_camera_uid
-from app.services.rtsp_utils import build_camera_rtsp_urls, mask_rtsp_url
+from app.services.rtsp_utils import effective_camera_rtsp_urls, mask_rtsp_url
 
 logger = logging.getLogger(__name__)
 
@@ -71,9 +71,26 @@ def local_recording_rtsp_url(camera_uid: str, stream: str = "main") -> str:
 def _rtsp_with_tcp(url: str) -> str:
     if not url:
         return url
-    if "#" in url:
-        return url if "rtsp_transport" in url else f"{url}#rtsp_transport=tcp"
-    return f"{url}#rtsp_transport=tcp"
+    timeout = os.getenv("GO2RTC_RTSP_TIMEOUT", "20").strip()
+    base, _, frag = url.partition("#")
+    params: Dict[str, str] = {}
+    if frag:
+        for piece in frag.replace("#", "&").split("&"):
+            piece = piece.strip()
+            if not piece:
+                continue
+            if "=" in piece:
+                k, v = piece.split("=", 1)
+                params[k.strip()] = v.strip()
+            else:
+                params[piece] = ""
+    params.setdefault("rtsp_transport", "tcp")
+    if timeout and "timeout" not in params:
+        params["timeout"] = timeout
+    query = "&".join(
+        f"{k}={v}" if v != "" else k for k, v in params.items()
+    )
+    return f"{base}#{query}" if query else base
 
 
 async def _all_cameras() -> List[dict]:
@@ -99,7 +116,7 @@ async def build_all_streams_config() -> Dict[str, Any]:
         camera_id = str(cam["_id"])
         camera_uid = cam.get("camera_uid") or make_camera_uid(cam.get("ip_address") or "") or camera_id
         name = cam.get("name") or camera_id
-        urls = build_camera_rtsp_urls(cam)
+        urls = effective_camera_rtsp_urls(cam)
         sub_url = _rtsp_with_tcp(urls.get("sub_rtsp_url") or "")
         main_url = _rtsp_with_tcp(urls.get("main_rtsp_url") or "")
 
@@ -160,7 +177,7 @@ def _base_yaml(streams: Dict[str, str]) -> dict:
         "rtsp": {"listen": "127.0.0.1:8554"},
         "webrtc": {
             "listen": ":8555",
-            "candidates": [f"{GO2RTC_API_HOST}:8555", "stun:8555"],
+            "candidates": [f"{GO2RTC_API_HOST}:8555"],
             "ice_servers": [
                 {
                     "urls": [
@@ -207,7 +224,7 @@ async def is_api_healthy() -> bool:
 async def fetch_go2rtc_streams() -> Dict[str, Any]:
     """GET go2rtc /api/streams — producers/consumers per stream."""
     try:
-        timeout = aiohttp.ClientTimeout(total=3.0)
+        timeout = aiohttp.ClientTimeout(total=15.0)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(f"{GO2RTC_API_URL}/api/streams") as resp:
                 if resp.status != 200:
@@ -216,6 +233,20 @@ async def fetch_go2rtc_streams() -> Dict[str, Any]:
     except Exception as exc:
         logger.debug("[go2rtc] streams API: %s", exc)
         return {}
+
+
+def _producer_url_matches(existing_info: dict, desired_src: str) -> bool:
+    """True when go2rtc already has this stream source configured."""
+    producers = existing_info.get("producers") or []
+    if not producers:
+        return False
+    cur = (producers[0].get("url") or "").strip()
+    want = (desired_src or "").strip()
+    if not cur or not want:
+        return False
+    if cur == want:
+        return True
+    return cur.split("#", 1)[0] == want.split("#", 1)[0]
 
 
 async def sync_streams_to_go2rtc(streams: Dict[str, str]) -> Dict[str, Any]:
@@ -228,18 +259,37 @@ async def sync_streams_to_go2rtc(streams: Dict[str, str]) -> Dict[str, Any]:
     if not streams:
         return {"ok": False, "error": "no streams", "added": 0, "updated": 0, "removed": 0}
 
-    timeout = aiohttp.ClientTimeout(total=60.0)
+    timeout = aiohttp.ClientTimeout(total=120.0)
     added = 0
     updated = 0
     removed = 0
+    skipped = 0
     errors: List[str] = []
 
     existing = await fetch_go2rtc_streams()
     existing_names = set(existing.keys()) if isinstance(existing, dict) else set()
     desired = set(streams.keys())
 
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        for name, src in streams.items():
+    if existing_names == desired and all(
+        _producer_url_matches(existing.get(name) or {}, streams[name]) for name in desired
+    ):
+        return {
+            "ok": True,
+            "added": 0,
+            "updated": 0,
+            "removed": 0,
+            "skipped": len(streams),
+        }
+
+    sem = asyncio.Semaphore(12)
+
+    async def _put_stream(session: aiohttp.ClientSession, name: str, src: str) -> None:
+        nonlocal added, updated, skipped
+        info = existing.get(name) or {}
+        if name in existing_names and _producer_url_matches(info, src):
+            skipped += 1
+            return
+        async with sem:
             try:
                 async with session.put(
                     f"{GO2RTC_API_URL}/api/streams",
@@ -255,6 +305,9 @@ async def sync_streams_to_go2rtc(streams: Dict[str, str]) -> Dict[str, Any]:
                         errors.append(f"{name}: HTTP {resp.status} {body[:160]}")
             except Exception as exc:
                 errors.append(f"{name}: {exc}")
+
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        await asyncio.gather(*[_put_stream(session, name, src) for name, src in streams.items()])
 
         for name in sorted(existing_names - desired):
             try:
@@ -272,11 +325,15 @@ async def sync_streams_to_go2rtc(streams: Dict[str, str]) -> Dict[str, Any]:
 
     if added or updated or removed:
         logger.info(
-            "[go2rtc] Stream sync added=%s updated=%s removed=%s",
+            "[go2rtc] Stream sync added=%s updated=%s removed=%s skipped=%s",
             added,
             updated,
             removed,
+            skipped,
         )
+    elif skipped:
+        logger.debug("[go2rtc] Stream sync skipped %s unchanged stream(s)", skipped)
+
     if errors:
         logger.warning("[go2rtc] Stream sync errors: %s", errors[:5])
 
@@ -285,6 +342,7 @@ async def sync_streams_to_go2rtc(streams: Dict[str, str]) -> Dict[str, Any]:
         "added": added,
         "updated": updated,
         "removed": removed,
+        "skipped": skipped,
         "errors": errors,
     }
 

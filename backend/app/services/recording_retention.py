@@ -9,8 +9,8 @@ from typing import Optional
 from app.core.database import list_recording_sessions, update_recording_session
 from app.services.storage_settings_store import get_effective_retention_seconds
 from app.services.recording_config import get_retention_policy
+from app.services.storage_settings_store import get_effective_recordings_dir
 from app.services.video_recording import (
-    RECORDINGS_DIR,
     session_storage_dir,
     is_camera_recording,
     sync_session_stats_to_db,
@@ -134,7 +134,8 @@ async def _scan_filesystem_sessions(cutoff_ts: float) -> dict:
     """Walk Recordings/{camera}/sessions/{id} and enforce retention."""
     totals = {"pruned_segments": 0, "freed_bytes": 0, "deleted_sessions": 0}
 
-    if not RECORDINGS_DIR.is_dir():
+    rec_dir = get_effective_recordings_dir()
+    if not rec_dir.is_dir():
         return totals
 
     live_sessions = set()
@@ -143,7 +144,7 @@ async def _scan_filesystem_sessions(cutoff_ts: float) -> dict:
     for entry in ACTIVE_RECORDINGS.values():
         live_sessions.add(entry["session_id"])
 
-    for camera_dir in RECORDINGS_DIR.iterdir():
+    for camera_dir in rec_dir.iterdir():
         if not camera_dir.is_dir():
             continue
         camera_id = camera_dir.name

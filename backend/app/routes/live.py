@@ -33,21 +33,16 @@ def _base_camera_id(camera_id: str) -> str:
 
 
 async def _deny_unless_allowed(request: web.Request, camera_id: str) -> web.Response | None:
-    user = await get_effective_user(request)
-    if user is None or is_admin(user):
-        return None
-    base_id = _base_camera_id(camera_id)
-    cam = await get_camera_by_ref(base_id)
-    if not cam:
-        return web.json_response({"error": "Camera not found"}, status=404)
-    if not user_can_access_camera(user, base_id, cam):
-        return web.json_response({"error": "Camera access denied"}, status=403)
-    return None
+    from app.core.access_control import deny_unless_camera_access
+
+    return await deny_unless_camera_access(request, _base_camera_id(camera_id))
 
 
 async def _filter_allowed_camera_ids(request: web.Request, camera_ids: list[str]) -> list[str]:
     user = await get_effective_user(request)
-    if user is None or is_admin(user):
+    if user is None:
+        return []
+    if is_admin(user):
         return camera_ids
     allowed: list[str] = []
     for cid in camera_ids:

@@ -10,7 +10,7 @@ import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { flushAllUiConsumers } from '../lib/go2rtcConsumerRegistry';
 import { destroyAllGo2RtcPlayers } from '../lib/go2rtcPlayer';
-import { ensureGo2RtcStreamsSynced, useLiveConfig } from '../lib/liveProvider';
+import { ensureGo2RtcStreamsSynced, isGo2RtcRunning, useLiveConfig } from '../lib/liveProvider';
 import { batchStartLiveStreams } from '../lib/liveStreamRegistry';
 import { apiFetch, cameraQuery } from '../lib/api';
 import {
@@ -80,8 +80,18 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
       setGo2rtcReady(true);
       return;
     }
+    let cancelled = false;
     setGo2rtcReady(false);
-    void ensureGo2RtcStreamsSynced().then(() => setGo2rtcReady(true));
+    // Show grid as soon as go2rtc is up — full sync runs in background.
+    void isGo2RtcRunning().then((running) => {
+      if (!cancelled && running) setGo2rtcReady(true);
+    });
+    void ensureGo2RtcStreamsSynced().finally(() => {
+      if (!cancelled) setGo2rtcReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [useHls]);
 
   useEffect(() => {

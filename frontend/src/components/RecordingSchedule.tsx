@@ -1,31 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Video, Save, ChevronDown, ChevronRight, MapPin, Circle } from 'lucide-react';
 import Card from './Card';
-
-interface ToggleSwitchProps {
-  enabled: boolean;
-  onChange: (enabled: boolean) => void;
-  disabled?: boolean;
-  mixed?: boolean;
-}
-
-const ToggleSwitch = ({ enabled, onChange, disabled = false, mixed = false }: ToggleSwitchProps) => (
-  <button
-    type="button"
-    onClick={() => onChange(!enabled)}
-    disabled={disabled}
-    title={mixed ? 'Partial — click to enable all' : undefined}
-    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 ${
-      mixed ? 'bg-blue-400' : enabled ? 'bg-blue-600' : 'bg-gray-600'
-    } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
-  >
-    <span
-      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-        mixed ? 'translate-x-2.5' : enabled ? 'translate-x-5' : 'translate-x-0'
-      }`}
-    />
-  </button>
-);
+import MasterToggle from './MasterToggle';
 
 interface Camera {
   id: string;
@@ -56,7 +32,10 @@ interface SiteGroup {
 interface RecordingScheduleProps {
   cameras: Camera[];
   schedule: Record<string, boolean>;
-  onSave: (newSchedule: Record<string, boolean>) => void;
+  onSave: (
+    newSchedule: Record<string, boolean>,
+    options?: { quiet?: boolean },
+  ) => void | Promise<void>;
   isRecordingEnabled: boolean;
   onToggleRecording: (enabled: boolean) => void;
 }
@@ -122,6 +101,17 @@ function groupCamerasByLocation(cameras: Camera[]): SiteGroup[] {
   return result;
 }
 
+function buildCompleteSchedule(
+  cameras: Camera[],
+  partial: Record<string, boolean>,
+): Record<string, boolean> {
+  const next: Record<string, boolean> = {};
+  for (const cam of cameras) {
+    next[cam.id] = Boolean(partial[cam.id]);
+  }
+  return next;
+}
+
 function applyGroupToggle(
   ids: string[],
   schedule: Record<string, boolean>,
@@ -154,24 +144,56 @@ export default function RecordingSchedule({
   const [openSites, setOpenSites] = useState<Record<string, boolean>>({});
   const [openBuildings, setOpenBuildings] = useState<Record<string, boolean>>({});
   const [openFloors, setOpenFloors] = useState<Record<string, boolean>>({});
+  const saveQueue = useRef(Promise.resolve());
+  const pendingRef = useRef<Record<string, boolean> | null>(null);
 
   useEffect(() => {
-    setLocalSchedule(schedule);
-  }, [schedule]);
+    setLocalSchedule(buildCompleteSchedule(cameras, schedule));
+  }, [schedule, cameras]);
+
+  const persistSchedule = useCallback((next: Record<string, boolean>, options?: { quiet?: boolean }) => {
+    const complete = buildCompleteSchedule(cameras, next);
+    pendingRef.current = complete;
+    setLocalSchedule(complete);
+    saveQueue.current = saveQueue.current
+      .then(async () => {
+        const payload = pendingRef.current ?? complete;
+        pendingRef.current = null;
+        await onSave(payload, { quiet: options?.quiet ?? true });
+      })
+      .catch(() => undefined);
+  }, [cameras, onSave]);
 
   const locationTree = useMemo(() => groupCamerasByLocation(cameras), [cameras]);
 
   const allIds = useMemo(() => cameras.map((c) => c.id), [cameras]);
 
   const setGroup = (ids: string[]) => {
-    setLocalSchedule((prev) => applyGroupToggle(ids, prev));
+    persistSchedule(applyGroupToggle(ids, localSchedule));
   };
 
   const handleCameraToggle = (cameraId: string) => {
-    setLocalSchedule((prev) => ({
-      ...prev,
-      [cameraId]: !prev[cameraId],
-    }));
+    persistSchedule({
+      ...localSchedule,
+      [cameraId]: !localSchedule[cameraId],
+    });
+  };
+
+  const setAllCameras = (enabled: boolean) => {
+    const next = { ...localSchedule };
+    for (const id of allIds) {
+      next[id] = enabled;
+    }
+    persistSchedule(next);
+  };
+
+  const handleMasterToggle = async (enabled: boolean) => {
+    if (enabled) {
+      await saveQueue.current;
+      const complete = buildCompleteSchedule(cameras, localSchedule);
+      await onSave(complete, { quiet: true });
+    }
+    onToggleRecording(enabled);
   };
 
   return (
@@ -181,7 +203,11 @@ export default function RecordingSchedule({
           <Video size={18} className="mr-3 text-gray-400" />
           <h3 className="text-lg font-bold text-white">Camera Recording</h3>
         </div>
-        <button onClick={() => onSave(localSchedule)} className="btn-primary flex items-center text-sm">
+        <button
+          type="button"
+          onClick={() => persistSchedule(localSchedule, { quiet: false })}
+          className="btn-primary flex items-center text-sm"
+        >
           <Save size={16} className="mr-2" />
           Save Changes
         </button>
@@ -210,18 +236,38 @@ export default function RecordingSchedule({
           </span>
           <p className="text-xs text-gray-500 hidden sm:block">
             {isRecordingEnabled
-              ? 'Cameras on the schedule below are recording to disk'
-              : 'Turn on to start recording scheduled cameras'}
+              ? 'Only cameras toggled ON below are recording'
+              : 'Choose cameras below, save, then turn recording on'}
           </p>
         </div>
-        <ToggleSwitch enabled={isRecordingEnabled} onChange={onToggleRecording} />
+        <MasterToggle enabled={isRecordingEnabled} onChange={handleMasterToggle} />
       </div>
 
       <div className="pt-3">
-        <div className="flex items-center gap-2 mb-3">
-          <MapPin size={16} className="text-sky-400" />
-          <span className="text-sm font-semibold text-white">Schedule by location</span>
-          <span className="text-xs text-gray-500">Site → Building → Floor</span>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <MapPin size={16} className="text-sky-400" />
+            <span className="text-sm font-semibold text-white">Schedule by location</span>
+            <span className="text-xs text-gray-500">Site → Building → Floor</span>
+          </div>
+          {allIds.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setAllCameras(true)}
+                className="text-xs px-3 py-1.5 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-200"
+              >
+                Enable all cameras
+              </button>
+              <button
+                type="button"
+                onClick={() => setAllCameras(false)}
+                className="text-xs px-3 py-1.5 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-200"
+              >
+                Disable all
+              </button>
+            </div>
+          )}
         </div>
 
         {locationTree.length === 0 ? (
@@ -247,11 +293,10 @@ export default function RecordingSchedule({
                       <span className="font-medium text-gray-100 truncate">{site.site}</span>
                       <EnabledCount enabled={siteEnabled} total={siteIds.length} />
                     </button>
-                    <ToggleSwitch
+                    <MasterToggle
                       enabled={siteState === 'all'}
                       mixed={siteState === 'mixed'}
                       onChange={() => setGroup(siteIds)}
-                      disabled={!isRecordingEnabled}
                     />
                   </div>
 
@@ -275,11 +320,10 @@ export default function RecordingSchedule({
                               <span className="font-medium text-gray-200 truncate">{building.building}</span>
                               <EnabledCount enabled={buildingEnabled} total={buildingIds.length} />
                             </button>
-                            <ToggleSwitch
+                            <MasterToggle
                               enabled={buildingState === 'all'}
                               mixed={buildingState === 'mixed'}
                               onChange={() => setGroup(buildingIds)}
-                              disabled={!isRecordingEnabled}
                             />
                           </div>
 
@@ -303,11 +347,10 @@ export default function RecordingSchedule({
                                       <span className="text-gray-300 truncate">{floor.floor}</span>
                                       <EnabledCount enabled={floorEnabled} total={floorIds.length} />
                                     </button>
-                                    <ToggleSwitch
+                                    <MasterToggle
                                       enabled={floorState === 'all'}
                                       mixed={floorState === 'mixed'}
                                       onChange={() => setGroup(floorIds)}
-                                      disabled={!isRecordingEnabled}
                                     />
                                   </div>
 
@@ -321,10 +364,9 @@ export default function RecordingSchedule({
                                           <span className="text-sm text-gray-400 truncate mr-2">
                                             {camera.name}
                                           </span>
-                                          <ToggleSwitch
-                                            enabled={localSchedule[camera.id] || false}
+                                          <MasterToggle
+                                            enabled={Boolean(localSchedule[camera.id])}
                                             onChange={() => handleCameraToggle(camera.id)}
-                                            disabled={!isRecordingEnabled}
                                           />
                                         </div>
                                       ))}
@@ -344,8 +386,8 @@ export default function RecordingSchedule({
 
         {cameras.length > 0 && (
           <p className="text-xs text-gray-500 mt-3">
-            {allIds.filter((id) => localSchedule[id]).length} of {allIds.length} cameras scheduled.
-            Expand a floor to adjust individual cameras.
+            {allIds.filter((id) => localSchedule[id]).length} of {allIds.length} cameras selected.
+            Changes save automatically. Turn recording on when ready.
           </p>
         )}
       </div>

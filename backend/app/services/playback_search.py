@@ -19,9 +19,9 @@ from app.services.camera_identity import (
     resolve_camera_uid,
     storage_folder_keys_for_uid,
 )
+from app.services.storage_settings_store import get_effective_recordings_dir
 from app.services.video_recording import (
     ACTIVE_RECORDINGS,
-    RECORDINGS_DIR,
     _session_stats,
     session_storage_dir,
 )
@@ -282,7 +282,7 @@ async def search_recordings_by_date(camera_ref: str, date_str: str) -> dict:
     camera_name = await _resolve_camera_name(camera_ref)
     uid = await resolve_camera_uid(camera_ref) or camera_ref
     storage_folders = await storage_folder_keys_for_uid(uid)
-    has_disk = any((RECORDINGS_DIR / fid).is_dir() for fid in storage_folders)
+    has_disk = any((get_effective_recordings_dir() / fid).is_dir() for fid in storage_folders)
 
     if camera_name is None and not has_disk:
         return {"error": "Camera not found", "status": 404}
@@ -316,7 +316,7 @@ async def search_recordings_by_date(camera_ref: str, date_str: str) -> dict:
 
     filesystem_fallback_count = 0
     for folder_id in storage_folders:
-        camera_dir = RECORDINGS_DIR / folder_id
+        camera_dir = get_effective_recordings_dir() / folder_id
         sessions_root = camera_dir / "sessions"
         if not sessions_root.is_dir():
             continue
@@ -422,7 +422,7 @@ async def get_recording_dates_for_month(camera_ref: str, year: int, month: int) 
     camera_name = await _resolve_camera_name(camera_ref)
     uid = await resolve_camera_uid(camera_ref) or camera_ref
     storage_folders = await storage_folder_keys_for_uid(uid)
-    has_disk = any((RECORDINGS_DIR / fid).is_dir() for fid in storage_folders)
+    has_disk = any((get_effective_recordings_dir() / fid).is_dir() for fid in storage_folders)
     if camera_name is None and not has_disk:
         return {"error": "Camera not found", "status": 404}
 
@@ -459,7 +459,7 @@ async def get_recording_dates_for_month(camera_ref: str, year: int, month: int) 
             day += timedelta(days=1)
 
     for folder_id in storage_folders:
-        camera_dir = RECORDINGS_DIR / folder_id
+        camera_dir = get_effective_recordings_dir() / folder_id
         sessions_root = camera_dir / "sessions"
         if not sessions_root.is_dir():
             continue

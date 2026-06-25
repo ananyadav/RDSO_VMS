@@ -25,6 +25,12 @@ from app.services.camera_form import (
     validate_camera_payload,
 )
 from app.services.recording_schedule_store import register_camera_for_recording
+from app.services.camera_sync import (
+    apply_bulk_camera_side_effects,
+    finalize_camera_fields,
+    schedule_camera_side_effects,
+    stream_config_changed,
+)
 from app.core.auth_context import get_effective_user
 from app.services.camera_access import (
     active_camera_filter,
@@ -534,6 +540,7 @@ async def handle_add_camera(camera_data):
 
     try:
         fields = prepare_camera_fields(camera_data)
+        fields = finalize_camera_fields(None, fields)
     except ValueError as e:
         return {"success": False, "error": str(e)}, 400
 
@@ -551,6 +558,12 @@ async def handle_add_camera(camera_data):
     try:
         created = await create_camera(fields)
         await register_camera_for_recording(created["_id"])
+        schedule_camera_side_effects(
+            str(created["_id"]),
+            existing=None,
+            updated_fields=fields,
+            reason="camera_add",
+        )
         return public_camera_response(created), 201
     except Exception as e:
         logger.exception("Error adding camera: %s", e)
@@ -580,6 +593,7 @@ async def handle_update_camera(camera_id: str, camera_data: dict):
 
     try:
         fields = prepare_camera_fields(camera_data, existing=existing)
+        fields = finalize_camera_fields(existing, fields)
     except ValueError as e:
         return {"success": False, "error": str(e)}, 400
 
@@ -594,6 +608,8 @@ async def handle_update_camera(camera_id: str, camera_data: dict):
             preserve[key] = existing[key]
     fields.update(preserve)
 
+    needs_stream_refresh = stream_config_changed(existing, fields)
+
     try:
         await camera_collection.update_one({"_id": oid}, {"$set": fields})
     except Exception as e:
@@ -606,6 +622,13 @@ async def handle_update_camera(camera_id: str, camera_data: dict):
                 return duplicate_conflict_response(by_name, "name", fields)
             return {"success": False, "error": "A camera with these details already exists."}, 409
         raise
+    if needs_stream_refresh:
+        schedule_camera_side_effects(
+            camera_id,
+            existing=existing,
+            updated_fields=fields,
+            reason="camera_update",
+        )
     updated = await camera_collection.find_one({"_id": oid})
     updated["_id"] = str(updated["_id"])
     return public_camera_response(updated), 200
@@ -651,6 +674,9 @@ async def handle_import_cameras(payload: dict):
     inactive = 0
     if mark_missing_inactive and active_ips:
         inactive = await mark_cameras_inactive_not_in_ips(active_ips)
+
+    if created or updated or inactive:
+        await apply_bulk_camera_side_effects(reason="camera_import")
 
     return {
         "created": created,

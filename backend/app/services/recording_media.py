@@ -192,12 +192,19 @@ def finalize_vod_playlist(content: str, *, live: bool) -> str:
     return text
 
 
-def rewrite_playlist_urls(content: str, camera_id: str, session_id: str) -> str:
+def rewrite_playlist_urls(
+    content: str,
+    camera_id: str,
+    session_id: str,
+    *,
+    auth_query: str = "",
+) -> str:
     """
     Rewrite relative segment URIs so the browser requests go through the secure
     playback media route (sessionId stays in the path, not lost on segment fetch).
     """
     base = playlist_media_base(camera_id, session_id)
+    suffix = f"?{auth_query}" if auth_query else ""
     out: list[str] = []
     for line in content.splitlines():
         stripped = line.strip()
@@ -211,7 +218,7 @@ def rewrite_playlist_urls(content: str, camera_id: str, session_id: str) -> str:
             if segment_name.lower().endswith((".ts", ".m3u8")):
                 try:
                     validate_filename(segment_name)
-                    out.append(f"{base}{segment_name}")
+                    out.append(f"{base}{segment_name}{suffix}")
                     continue
                 except RecordingMediaError:
                     pass
@@ -226,6 +233,8 @@ async def build_recording_media_response(
     camera_id: str,
     session_id: str,
     filename: str,
+    *,
+    auth_query: str = "",
 ) -> web.Response:
     file_path = await resolve_recording_file(camera_id, session_id, filename)
     content_type = content_type_for(filename)
@@ -233,7 +242,7 @@ async def build_recording_media_response(
 
     if filename.lower() == "index.m3u8":
         raw = file_path.read_text(encoding="utf-8", errors="replace")
-        body = rewrite_playlist_urls(raw, camera_id, session_id)
+        body = rewrite_playlist_urls(raw, camera_id, session_id, auth_query=auth_query)
         body = finalize_vod_playlist(body, live=_session_is_live(camera_id, session_id))
         return web.Response(text=body, headers=headers)
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Activity, Loader2, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import Card from './Card';
 import type { CameraStorageRow } from '../hooks/useStorageDashboard';
+import { apiFetch } from '../lib/api';
 
 interface HealthCamera {
   camera_id: string;
@@ -287,7 +288,7 @@ export default function RecordingHealthMonitor({
 
   const fetchHealth = useCallback(async () => {
     try {
-      const res = await fetch('/api/recordings/health');
+      const res = await apiFetch('/api/recordings/health');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setData(await res.json());
       setError(null);

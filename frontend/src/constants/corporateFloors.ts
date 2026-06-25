@@ -17,6 +17,7 @@ export const CORPORATE_OFFICE_FLOORS: string[] = [
 export interface LocationFloor {
   name: string;
   is_active?: boolean;
+  camera_count?: number;
 }
 
 export interface LocationSiteBuilding {
@@ -24,6 +25,7 @@ export interface LocationSiteBuilding {
   name: string;
   is_active?: boolean;
   floors: LocationFloor[];
+  camera_count?: number;
 }
 
 export interface LocationSite {
@@ -31,6 +33,7 @@ export interface LocationSite {
   name: string;
   is_active?: boolean;
   buildings: LocationSiteBuilding[];
+  camera_count?: number;
 }
 
 export interface LocationBuilding {
@@ -174,4 +177,41 @@ export function preferredFloorGroup(
   const withCameras = floorGroups.filter((fg) => (fg.cameraCount ?? 0) > 0);
   if (withCameras.length) return withCameras[0];
   return floorGroups[0];
+}
+
+/** Active-only site tree for camera forms and dropdowns. */
+export function activeLocationSites(sites: LocationSite[]): LocationSite[] {
+  return sites
+    .filter((s) => s.is_active !== false)
+    .map((site) => ({
+      ...site,
+      buildings: (site.buildings || [])
+        .filter((b) => b.is_active !== false)
+        .map((b) => ({
+          ...b,
+          floors: (b.floors || []).filter((f) => f.is_active !== false),
+        })),
+    }));
+}
+
+export function siteNamesFromTree(sites: LocationSite[]): string[] {
+  return activeLocationSites(sites).map((s) => s.name);
+}
+
+export function buildingsForSiteTree(sites: LocationSite[], siteName: string): LocationSiteBuilding[] {
+  const site = activeLocationSites(sites).find(
+    (s) => s.name.toLowerCase() === siteName.toLowerCase(),
+  );
+  return site?.buildings ?? [];
+}
+
+export function floorsForBuildingTree(
+  sites: LocationSite[],
+  siteName: string,
+  buildingName: string,
+): string[] {
+  const building = buildingsForSiteTree(sites, siteName).find(
+    (b) => b.name.toLowerCase() === buildingName.toLowerCase(),
+  );
+  return (building?.floors ?? []).map((f) => f.name);
 }

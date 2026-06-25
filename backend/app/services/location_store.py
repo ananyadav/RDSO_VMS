@@ -538,6 +538,117 @@ async def migrate_corporate_office_cameras() -> int:
     return updated
 
 
+async def count_cameras_at_location(
+    *,
+    site_name: str,
+    building_name: str | None = None,
+    floor_name: str | None = None,
+) -> int:
+    """Count cameras assigned under site, building, or floor (case-insensitive names)."""
+    site_cf = (site_name or "").strip().casefold()
+    building_cf = (building_name or "").strip().casefold() if building_name else None
+    floor_cf = (floor_name or "").strip().casefold() if floor_name else None
+    count = 0
+    async for cam in camera_collection.find({}):
+        if (cam.get("site") or "").strip().casefold() != site_cf:
+            continue
+        if building_cf is not None:
+            if (cam.get("building") or "").strip().casefold() != building_cf:
+                continue
+        if floor_cf is not None:
+            cam_floor = (cam.get("floor") or cam.get("floor_group") or "").strip()
+            if cam_floor.casefold() != floor_cf:
+                continue
+        count += 1
+    return count
+
+
+async def _build_camera_count_index() -> dict:
+    """Single pass: counts keyed by site, site+building, site+building+floor."""
+    site_counts: Dict[str, int] = {}
+    building_counts: Dict[str, int] = {}
+    floor_counts: Dict[str, int] = {}
+
+    async for cam in camera_collection.find({}):
+        site = (cam.get("site") or "").strip()
+        building = (cam.get("building") or "").strip()
+        floor = (cam.get("floor") or cam.get("floor_group") or "").strip()
+        if not site:
+            continue
+        sk = site.casefold()
+        site_counts[sk] = site_counts.get(sk, 0) + 1
+        if building:
+            bk = f"{sk}\0{building.casefold()}"
+            building_counts[bk] = building_counts.get(bk, 0) + 1
+            if floor:
+                fk = f"{bk}\0{floor.casefold()}"
+                floor_counts[fk] = floor_counts.get(fk, 0) + 1
+    return {
+        "site": site_counts,
+        "building": building_counts,
+        "floor": floor_counts,
+    }
+
+
+async def enrich_sites_with_camera_counts(sites: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Attach camera_count to each site, building, and floor node."""
+    index = await _build_camera_count_index()
+    site_counts = index["site"]
+    building_counts = index["building"]
+    floor_counts = index["floor"]
+
+    enriched: List[Dict[str, Any]] = []
+    for site in sites:
+        site_name = (site.get("name") or "").strip()
+        sk = site_name.casefold()
+        site_copy = {**site, "camera_count": site_counts.get(sk, 0)}
+        buildings_out: List[Dict[str, Any]] = []
+        for bdef in site.get("buildings") or []:
+            building_name = (bdef.get("name") or "").strip()
+            bk = f"{sk}\0{building_name.casefold()}"
+            b_copy = {**bdef, "camera_count": building_counts.get(bk, 0)}
+            floors_out: List[Dict[str, Any]] = []
+            for floor in bdef.get("floors") or []:
+                floor_name = (floor.get("name") or "").strip()
+                fk = f"{bk}\0{floor_name.casefold()}"
+                floors_out.append({**floor, "camera_count": floor_counts.get(fk, 0)})
+            b_copy["floors"] = floors_out
+            buildings_out.append(b_copy)
+        site_copy["buildings"] = buildings_out
+        enriched.append(site_copy)
+    return enriched
+
+
+async def _migrate_cameras_for_site_rename(*, old_site: str, new_site: str) -> int:
+    from app.services.camera_locations import location_fields_for_building_floor
+
+    updated = 0
+    async for cam in camera_collection.find({}):
+        cam_site = (cam.get("site") or "").strip()
+        if cam_site.casefold() != old_site.casefold():
+            continue
+        building = (cam.get("building") or "").strip()
+        floor = (cam.get("floor") or cam.get("floor_group") or "").strip()
+        area = (cam.get("area") or "").strip()
+        fields = location_fields_for_building_floor(new_site, building, floor, area=area)
+        patch: Dict[str, Any] = {}
+        for key in ("site", "floor_group", "floor", "camera_group", "location_path"):
+            val = fields.get(key, "")
+            if val and cam.get(key) != val:
+                patch[key] = val
+        if patch:
+            await camera_collection.update_one({"_id": cam["_id"]}, {"$set": patch})
+            updated += 1
+    if updated:
+        logger.info(
+            "[LOCATIONS] Renamed site '%s' → '%s' on %s camera(s)",
+            old_site,
+            new_site,
+            updated,
+        )
+    return updated
+
+
 # --- CRUD ---
 
 
@@ -561,7 +672,14 @@ async def update_site(*, site_id: str, name: Optional[str] = None, is_active: Op
     if not site:
         raise LocationStoreError("Site not found", 404)
     if name is not None and name.strip():
-        site["name"] = name.strip()
+        new_name = name.strip()
+        old_name = (site.get("name") or "").strip()
+        if new_name.casefold() != old_name.casefold():
+            for s in sites:
+                if s["id"] != site_id and (s.get("name") or "").strip().casefold() == new_name.casefold():
+                    raise LocationStoreError(f"Site '{new_name}' already exists", 409)
+            await _migrate_cameras_for_site_rename(old_site=old_name, new_site=new_name)
+            site["name"] = new_name
     if is_active is not None:
         site["is_active"] = bool(is_active)
     await save_sites(sites)
@@ -573,6 +691,13 @@ async def delete_site(*, site_id: str) -> None:
     site = _find_site(sites, site_id)
     if not site:
         raise LocationStoreError("Site not found", 404)
+    site_name = (site.get("name") or "").strip()
+    assigned = await count_cameras_at_location(site_name=site_name)
+    if assigned > 0:
+        raise LocationStoreError(
+            f"Cannot delete site '{site_name}': {assigned} camera(s) assigned. Disable the site instead.",
+            409,
+        )
     sites = [s for s in sites if s["id"] != site["id"]]
     await save_sites(sites)
 
@@ -715,6 +840,21 @@ async def delete_building(*, site_id: str, building_id: str) -> None:
     site = _find_site(sites, site_id)
     if not site:
         raise LocationStoreError("Site not found", 404)
+    target = None
+    for b in site.get("buildings") or []:
+        if b["id"] == building_id:
+            target = b
+            break
+    if not target:
+        raise LocationStoreError("Building not found", 404)
+    site_name = (site.get("name") or "").strip()
+    building_name = (target.get("name") or "").strip()
+    assigned = await count_cameras_at_location(site_name=site_name, building_name=building_name)
+    if assigned > 0:
+        raise LocationStoreError(
+            f"Cannot delete building '{building_name}': {assigned} camera(s) assigned. Disable it instead.",
+            409,
+        )
     site["buildings"] = [b for b in site.get("buildings") or [] if b["id"] != building_id]
     await save_sites(sites)
 
@@ -794,6 +934,25 @@ async def delete_floor(*, site_id: str, building_id: str, floor_name: str) -> No
     site = _find_site(sites, site_id)
     if not site:
         raise LocationStoreError("Site not found", 404)
+    target_b = None
+    for b in site.get("buildings") or []:
+        if b["id"] == building_id:
+            target_b = b
+            break
+    if not target_b:
+        raise LocationStoreError("Building not found", 404)
+    site_name = (site.get("name") or "").strip()
+    building_name = (target_b.get("name") or "").strip()
+    assigned = await count_cameras_at_location(
+        site_name=site_name,
+        building_name=building_name,
+        floor_name=floor_name,
+    )
+    if assigned > 0:
+        raise LocationStoreError(
+            f"Cannot delete floor '{floor_name}': {assigned} camera(s) assigned. Disable it instead.",
+            409,
+        )
     for b in site.get("buildings") or []:
         if b["id"] != building_id:
             continue

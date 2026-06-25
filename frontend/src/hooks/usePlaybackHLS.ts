@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
+import { authService } from '../services/authService';
+import { withAuthQuery } from '../lib/api';
 
 export function usePlaybackHLS(playlistUrl: string | null, initialSeek: number | null = null) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -64,7 +66,7 @@ export function usePlaybackHLS(playlistUrl: string | null, initialSeek: number |
       initialSeek != null && initialSeek > 0 ? initialSeek : null;
     pendingSeekRef.current = seekTarget;
 
-    const url = `${playlistUrl}?_${Date.now()}`;
+    const url = withAuthQuery(`${playlistUrl}?_${Date.now()}`);
 
     if (Hls.isSupported()) {
       const hls = new Hls({
@@ -74,6 +76,12 @@ export function usePlaybackHLS(playlistUrl: string | null, initialSeek: number |
         manifestLoadingMaxRetry: 4,
         fragLoadingMaxRetry: 6,
         startPosition: seekTarget ?? -1,
+        xhrSetup: (xhr) => {
+          const userId = authService.getUserId();
+          if (userId) {
+            xhr.setRequestHeader('X-User-Id', userId);
+          }
+        },
       });
       hlsRef.current = hls;
       hls.loadSource(url);
@@ -102,7 +110,9 @@ export function usePlaybackHLS(playlistUrl: string | null, initialSeek: number |
           hls.recoverMediaError();
           return;
         }
-        if (data.response?.code === 404) {
+        if (data.response?.code === 401) {
+          setError('Authentication required — log in again');
+        } else if (data.response?.code === 404) {
           setError('Recording file not found');
         } else {
           setError('Failed to load recording');

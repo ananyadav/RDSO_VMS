@@ -25,8 +25,10 @@ import AddCameraModal, { type CameraFormData, CORPORATE_CAMERA_DEFAULTS } from '
 import DuplicateCameraDialog, { type ExistingCameraInfo } from '../components/DuplicateCameraDialog';
 import ManageLocationsModal from '../components/ManageLocationsModal';
 import { preferredBuilding, preferredFloorGroup } from '../constants/corporateFloors';
-import { useLocations } from '../hooks/useLocations';
+import { useLocationsContext } from '../context/LocationsContext';
 import { apiFetch, cameraQuery } from '../lib/api';
+import { authService } from '../services/authService';
+import { isAdminUser } from '../lib/permissions';
 
 interface Camera {
   id?: string;
@@ -109,7 +111,7 @@ function cameraToForm(cam: Camera | null): Partial<CameraFormData> | null {
 }
 
 function formToPayload(data: CameraFormData): Record<string, unknown> {
-  return {
+  const payload: Record<string, unknown> = {
     name: data.name.trim(),
     ip_address: data.ip_address.trim(),
     port: parseInt(data.port, 10) || 554,
@@ -127,14 +129,17 @@ function formToPayload(data: CameraFormData): Record<string, unknown> {
     main_channel: data.main_channel,
     sub_channel: data.sub_channel,
     preview_channel: data.preview_channel,
-    main_rtsp_url: data.main_rtsp_url,
-    sub_rtsp_url: data.sub_rtsp_url,
-    preview_rtsp_url: data.preview_rtsp_url,
     rtsp_url_source: data.rtsp_url_source,
     is_active: data.is_active,
     ptz: data.ptz,
     type: 'rtsp',
   };
+  if (data.protocol === 'ONVIF' || data.protocol === 'CUSTOM') {
+    payload.main_rtsp_url = data.main_rtsp_url;
+    payload.sub_rtsp_url = data.sub_rtsp_url;
+    payload.preview_rtsp_url = data.preview_rtsp_url;
+  }
+  return payload;
 }
 
 export default function CameraManagement() {
@@ -158,8 +163,9 @@ export default function CameraManagement() {
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [onlineFilter, setOnlineFilter] = useState<'all' | 'online' | 'offline'>('all');
   const [mainTab, setMainTab] = useState<'cameras' | 'scan'>('cameras');
-  const { sites: locationSites, buildings: locationBuildings, reload: reloadLocations } = useLocations();
+  const { sites: locationSites, buildings: locationBuildings, reload: reloadLocations } = useLocationsContext();
   const importInputRef = useRef<HTMLInputElement>(null);
+  const isAdmin = isAdminUser(authService.getCurrentUser());
 
   const fetchGroupTree = async () => {
     setGroupsLoading(true);
@@ -519,32 +525,38 @@ export default function CameraManagement() {
           <button type="button" onClick={handleRefresh} className={TOOLBAR_BTN}>
             <RefreshCw size={14} /> Refresh
           </button>
-          <button type="button" onClick={handleReloadGroupGo2rtc} className={TOOLBAR_BTN} disabled={!selectedGroup}>
-            <Activity size={14} /> Reload go2rtc
-          </button>
-          <button
-            type="button"
-            className={TOOLBAR_BTN_PRIMARY}
-            onClick={() => {
-              if (!selectedGroup) {
-                toast.error('Select a floor in the location tree first');
-                return;
-              }
-              setIsAddModalOpen(true);
-            }}
-          >
-            <Plus size={14} /> Add Camera
-          </button>
-          <button type="button" className={TOOLBAR_BTN} onClick={() => importInputRef.current?.click()}>
-            <Upload size={14} /> Import
-          </button>
+          {isAdmin && (
+            <>
+              <button type="button" onClick={handleReloadGroupGo2rtc} className={TOOLBAR_BTN} disabled={!selectedGroup}>
+                <Activity size={14} /> Reload go2rtc
+              </button>
+              <button
+                type="button"
+                className={TOOLBAR_BTN_PRIMARY}
+                onClick={() => {
+                  if (!selectedGroup) {
+                    toast.error('Select a floor in the location tree first');
+                    return;
+                  }
+                  setIsAddModalOpen(true);
+                }}
+              >
+                <Plus size={14} /> Add Camera
+              </button>
+              <button type="button" className={TOOLBAR_BTN} onClick={() => importInputRef.current?.click()}>
+                <Upload size={14} /> Import
+              </button>
+              <input ref={importInputRef} type="file" accept=".json,application/json" className="hidden" onChange={handleImportFile} />
+            </>
+          )}
           <button type="button" className={TOOLBAR_BTN} onClick={handleExport} disabled={configuredCameras.length === 0}>
             <Download size={14} /> Export
           </button>
-          <button type="button" className={TOOLBAR_BTN} onClick={() => setManageLocationsOpen(true)}>
-            <MapPin size={14} /> Manage Locations
-          </button>
-          <input ref={importInputRef} type="file" accept=".json,application/json" className="hidden" onChange={handleImportFile} />
+          {isAdmin && (
+            <button type="button" className={TOOLBAR_BTN} onClick={() => setManageLocationsOpen(true)}>
+              <MapPin size={14} /> Manage Locations
+            </button>
+          )}
           <div className="flex-1" />
           <div className="flex rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden">
             <button
@@ -558,17 +570,19 @@ export default function CameraManagement() {
             >
               <List size={13} /> Cameras
             </button>
-            <button
-              type="button"
-              onClick={() => setMainTab('scan')}
-              className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium border-l border-gray-300 dark:border-gray-600 ${
-                mainTab === 'scan'
-                  ? 'bg-white dark:bg-gray-800 text-emerald-600'
-                  : 'bg-gray-100 dark:bg-gray-800/50 text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Search size={13} /> Scan
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setMainTab('scan')}
+                className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium border-l border-gray-300 dark:border-gray-600 ${
+                  mainTab === 'scan'
+                    ? 'bg-white dark:bg-gray-800 text-emerald-600'
+                    : 'bg-gray-100 dark:bg-gray-800/50 text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <Search size={13} /> Scan
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -705,11 +719,10 @@ export default function CameraManagement() {
                           </td>
                           <td className="px-3 py-1.5 font-mono text-gray-600 dark:text-gray-300">{camera.ip_address}</td>
                           <td className="px-3 py-1.5">
-                            <div className="flex flex-wrap gap-1">
-                              <StatusBadge variant={isDisabled ? 'disabled' : 'active'}>
-                                {isDisabled ? 'Disabled' : 'Active'}
-                              </StatusBadge>
-                              {!isDisabled && (
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                              {isDisabled ? (
+                                <StatusBadge variant="disabled">Disabled</StatusBadge>
+                              ) : (
                                 <StatusBadge variant={camera.online ? 'online' : 'offline'}>
                                   {camera.online ? 'Online' : 'Offline'}
                                 </StatusBadge>
@@ -735,20 +748,24 @@ export default function CameraManagement() {
                               <Link to="/live" className={`${ACTION_BTN} text-sky-500`} title="View in Live View">
                                 <Eye size={12} /> View
                               </Link>
-                              <button type="button" onClick={() => handleEditCamera(camera)} className={`${ACTION_BTN} text-sky-400`}>
-                                <Edit size={12} /> Edit
-                              </button>
-                              <button type="button" onClick={() => handleTestStream(camera)} className={`${ACTION_BTN} text-violet-400`}>
-                                <PlayCircle size={12} /> Test
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleToggleActive(camera)}
-                                className={`${ACTION_BTN} ${isDisabled ? 'text-emerald-400' : 'text-amber-400'}`}
-                              >
-                                <Power size={12} />
-                                {isDisabled ? 'Reactivate' : 'Disable'}
-                              </button>
+                              {isAdmin && (
+                                <>
+                                  <button type="button" onClick={() => handleEditCamera(camera)} className={`${ACTION_BTN} text-sky-400`}>
+                                    <Edit size={12} /> Edit
+                                  </button>
+                                  <button type="button" onClick={() => handleTestStream(camera)} className={`${ACTION_BTN} text-violet-400`}>
+                                    <PlayCircle size={12} /> Test
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleActive(camera)}
+                                    className={`${ACTION_BTN} ${isDisabled ? 'text-emerald-400' : 'text-amber-400'}`}
+                                  >
+                                    <Power size={12} />
+                                    {isDisabled ? 'Reactivate' : 'Disable'}
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -767,7 +784,9 @@ export default function CameraManagement() {
         onClose={() => setIsAddModalOpen(false)}
         onSave={handleAddCamera}
         locationBuildings={locationBuildings}
+        locationSites={locationSites}
         defaultLocation={selectedLocationDefaults}
+        onOpenManageLocations={isAdmin ? () => setManageLocationsOpen(true) : undefined}
       />
       <AddCameraModal
         isOpen={isEditModalOpen}
@@ -776,11 +795,14 @@ export default function CameraManagement() {
         isEditMode
         initialData={cameraToForm(editingCamera)}
         locationBuildings={locationBuildings}
+        locationSites={locationSites}
+        onOpenManageLocations={isAdmin ? () => setManageLocationsOpen(true) : undefined}
       />
       <ManageLocationsModal
         isOpen={manageLocationsOpen}
         onClose={() => setManageLocationsOpen(false)}
         sites={locationSites}
+        stacked={isAddModalOpen || isEditModalOpen}
         onUpdated={() => { void reloadLocations(); void fetchGroupTree(); }}
       />
       <DuplicateCameraDialog

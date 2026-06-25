@@ -84,14 +84,12 @@ async def monitor_recording_schedule():
 
             # Only record if master recording is enabled
             if not recording_sched.master_enabled:
-                # Stop all recordings if master is disabled
                 for camera_id in list(recording_sched.recording_schedule.keys()):
-                    if recording_sched.recording_schedule.get(camera_id, False):
-                        try:
-                            if await is_camera_recording(camera_id):
-                                await stop_camera_recording(camera_id)
-                        except Exception as e:
-                            logging.error(f"[RECORDING] Error stopping recording for {camera_id}: {e}", exc_info=True)
+                    try:
+                        if await is_camera_recording(camera_id):
+                            await stop_camera_recording(camera_id)
+                    except Exception as e:
+                        logging.error(f"[RECORDING] Error stopping recording for {camera_id}: {e}", exc_info=True)
                 continue
 
             # Check each camera in schedule
@@ -139,14 +137,15 @@ async def get_recording_schedule_endpoint(request: web.Request):
 async def update_recording_schedule_endpoint(request: web.Request):
     """Update recording schedule."""
     data = await request.json()
-    recording_sched.recording_schedule = {
-        str(k): bool(v) for k, v in (data.get("schedule") or {}).items()
-    }
-    recording_sched._sync_master_with_schedule()
-    await recording_sched.save_recording_settings()
+    incoming = {str(k): bool(v) for k, v in (data.get("schedule") or {}).items()}
+    await recording_sched.apply_schedule_update(incoming)
     return web.json_response({
         "status": "ok",
         "master_enabled": recording_sched.master_enabled,
+        "schedule": {
+            cid: bool(enabled)
+            for cid, enabled in recording_sched.recording_schedule.items()
+        },
     })
 
 
@@ -243,10 +242,24 @@ async def storage_settings_update_endpoint(request: web.Request):
     except Exception:
         return web.json_response({"error": "Invalid JSON"}, status=400)
     try:
+        from app.services.storage_settings_store import get_effective_recordings_dir
+
+        old_dir = (
+            str(get_effective_recordings_dir())
+            if body.get("recordings_dir") is not None
+            else None
+        )
         result = await update_storage_settings(
             retention_days=body.get("retention_days"),
             recordings_dir=body.get("recordings_dir"),
         )
+        if old_dir and result.get("recordings_dir") and result["recordings_dir"] != old_dir:
+            await recording_sched.stop_all_scheduled_recording(persist=False)
+            logging.info(
+                "[STORAGE] Recordings folder changed %s -> %s; stopped active recordings",
+                old_dir,
+                result["recordings_dir"],
+            )
         return web.json_response(result)
     except ValueError as exc:
         return web.json_response({"error": str(exc)}, status=400)
@@ -268,13 +281,25 @@ async def recording_health_endpoint(_request: web.Request):
 
 
 async def set_master_recording_endpoint(request: web.Request):
-    """Enable/disable master recording switch."""
+    """Enable/disable master recording switch (stops FFmpeg when off; keeps schedule)."""
     data = await request.json()
     enabled = bool(data.get("enabled", False))
     if enabled:
-        recording_sched.master_enabled = any(recording_sched.recording_schedule.values())
+        if not any(recording_sched.recording_schedule.values()):
+            return web.json_response(
+                {"error": "No cameras scheduled — turn on at least one camera and save the schedule first"},
+                status=400,
+            )
+        recording_sched.master_enabled = True
     else:
-        await recording_sched.stop_all_scheduled_recording(persist=False)
+        recording_sched.master_enabled = False
+        for camera_id in list(recording_sched.recording_schedule.keys()):
+            try:
+                if await is_camera_recording(camera_id):
+                    await stop_camera_recording(camera_id)
+            except Exception as exc:
+                logging.error("[RECORDING] Error stopping %s on master off: %s", camera_id, exc)
+
     await recording_sched.save_recording_settings()
     return web.json_response({"status": "ok", "master_enabled": recording_sched.master_enabled})
 

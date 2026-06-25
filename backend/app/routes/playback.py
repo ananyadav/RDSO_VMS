@@ -5,6 +5,7 @@ from datetime import datetime
 
 from aiohttp import web
 
+from app.core.access_control import deny_unless_camera_access, deny_unless_playback_permission
 from app.services.playback_search import get_recording_dates_for_month, search_recordings_by_date
 from app.services.recording_media import (
     RecordingMediaError,
@@ -34,6 +35,14 @@ async def playback_search_endpoint(request: web.Request) -> web.Response:
         return web.json_response({"error": "cameraUid or cameraId is required"}, status=400)
     if not date_str:
         return web.json_response({"error": "date is required (YYYY-MM-DD)"}, status=400)
+
+    denied = await deny_unless_playback_permission(request)
+    if denied is not None:
+        return denied
+
+    denied = await deny_unless_camera_access(request, camera_ref)
+    if denied is not None:
+        return denied
 
     try:
         datetime.strptime(date_str, "%Y-%m-%d")
@@ -65,6 +74,15 @@ async def playback_dates_endpoint(request: web.Request) -> web.Response:
 
     if not camera_ref:
         return web.json_response({"error": "cameraUid or cameraId is required"}, status=400)
+
+    denied = await deny_unless_playback_permission(request)
+    if denied is not None:
+        return denied
+
+    denied = await deny_unless_camera_access(request, camera_ref)
+    if denied is not None:
+        return denied
+
     try:
         year = int(year_str)
         month = int(month_str)
@@ -95,8 +113,21 @@ async def playback_media_endpoint(request: web.Request) -> web.Response:
     session_id = request.match_info.get("sessionId", "").strip()
     filename = request.match_info.get("filename", "").strip()
 
+    denied = await deny_unless_playback_permission(request)
+    if denied is not None:
+        return denied
+
+    denied = await deny_unless_camera_access(request, camera_id)
+    if denied is not None:
+        return denied
+
+    uid = (request.query.get("uid") or request.query.get("userId") or "").strip()
+    auth_query = f"uid={uid}" if uid else ""
+
     try:
-        return await build_recording_media_response(camera_id, session_id, filename)
+        return await build_recording_media_response(
+            camera_id, session_id, filename, auth_query=auth_query
+        )
     except RecordingMediaError as e:
         logger.warning(
             "[PLAYBACK] Media error: camera=%s session=%s file=%s status=%s message=%s",
