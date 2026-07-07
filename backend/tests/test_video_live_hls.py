@@ -14,7 +14,6 @@ class TestLiveStreamUrlPicking(unittest.TestCase):
         self.cam = {
             "sub_rtsp_url": "rtsp://cam/sub102",
             "main_rtsp_url": "rtsp://cam/main101",
-            "preview_rtsp_url": "rtsp://cam/preview103",
         }
 
     def test_grid_always_sub_102(self):
@@ -45,10 +44,10 @@ class TestLiveStreamUrlPicking(unittest.TestCase):
         self.assertEqual(label, "sub/102")
 
     @patch("app.services.video_live_hls.FULLSCREEN_STREAM", "preview")
-    def test_fullscreen_preview_mode(self):
+    def test_fullscreen_legacy_preview_env_uses_main(self):
         url, label = _pick_fullscreen_urls(self.cam)
-        self.assertEqual(url, "rtsp://cam/preview103")
-        self.assertEqual(label, "preview/103")
+        self.assertEqual(url, "rtsp://cam/main101")
+        self.assertEqual(label, "main/101")
 
     def test_fullscreen_stream_suffix(self):
         stream_id = f"camid{FULLSCREEN_SUFFIX}"

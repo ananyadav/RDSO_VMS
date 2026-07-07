@@ -36,13 +36,10 @@ async def main() -> None:
             for k in (
                 "main_rtsp_url",
                 "sub_rtsp_url",
-                "preview_rtsp_url",
-                "rtsp_url",
                 "rtsp_url_source",
                 "main_channel",
                 "sub_channel",
                 "recording_channel",
-                "preview_channel",
             )
             if k in synced
         }

@@ -11,7 +11,6 @@ from app.services.rtsp_utils import rtsp_url_credentials_stale, sync_camera_rtsp
 
 logger = logging.getLogger(__name__)
 
-# Fields that change live/recording stream endpoints.
 STREAM_AFFECTING_FIELDS: frozenset[str] = frozenset(
     {
         "password",
@@ -22,12 +21,9 @@ STREAM_AFFECTING_FIELDS: frozenset[str] = frozenset(
         "model",
         "main_channel",
         "sub_channel",
-        "preview_channel",
         "recording_channel",
         "main_rtsp_url",
         "sub_rtsp_url",
-        "preview_rtsp_url",
-        "rtsp_url",
         "is_active",
     }
 )
@@ -36,19 +32,15 @@ RTSP_DERIVED_FIELDS: frozenset[str] = frozenset(
     {
         "main_rtsp_url",
         "sub_rtsp_url",
-        "preview_rtsp_url",
-        "rtsp_url",
         "rtsp_url_source",
         "main_channel",
         "sub_channel",
         "recording_channel",
-        "preview_channel",
     }
 )
 
 
 def changed_fields(existing: Optional[dict], updated: dict) -> Set[str]:
-    """Keys in updated whose values differ from existing."""
     if not existing:
         return set(updated.keys())
     out: Set[str] = set()
@@ -61,7 +53,6 @@ def changed_fields(existing: Optional[dict], updated: dict) -> Set[str]:
 
 
 def stream_config_changed(existing: Optional[dict], fields: dict) -> bool:
-    """True when live/recording endpoints need to be refreshed."""
     if not existing:
         return True
     if changed_fields(existing, fields) & STREAM_AFFECTING_FIELDS:
@@ -71,12 +62,10 @@ def stream_config_changed(existing: Optional[dict], fields: dict) -> bool:
 
 
 def finalize_camera_fields(existing: Optional[dict], fields: dict) -> dict:
-    """Rebuild derived RTSP URLs, camera_uid, and display_name from current settings."""
     return finalize_camera_document({**(existing or {}), **fields}, existing=existing)
 
 
 def finalize_camera_document(doc: dict, *, existing: Optional[dict] = None) -> dict:
-    """Return camera doc with derived RTSP URLs, camera_uid, and display_name synced."""
     out = dict(doc)
     merged = {**(existing or {}), **out}
     ip = (out.get("ip_address") or merged.get("ip_address") or "").strip()
@@ -99,7 +88,6 @@ async def apply_camera_side_effects(
     updated_fields: Optional[dict] = None,
     reason: str = "camera_change",
 ) -> Dict[str, Any]:
-    """Reload go2rtc (and recording when needed) after stream-affecting changes."""
     result: Dict[str, Any] = {"ok": True, "reason": reason, "go2rtc": None, "recording": None}
 
     if updated_fields is not None and not stream_config_changed(existing, updated_fields):
@@ -124,7 +112,6 @@ async def apply_camera_side_effects(
 
 
 async def _maybe_restart_recording(camera_id: str, existing: Optional[dict]) -> Optional[dict]:
-    """Restart active recording so ffmpeg picks up new RTSP URLs."""
     if not existing:
         return None
     cid = str(camera_id)
@@ -160,8 +147,6 @@ def schedule_camera_side_effects(
     updated_fields: Optional[dict] = None,
     reason: str = "camera_change",
 ) -> None:
-    """Fire-and-forget cascade refresh (go2rtc, recording)."""
-
     async def _run() -> None:
         try:
             await apply_camera_side_effects(
@@ -181,7 +166,6 @@ async def apply_bulk_camera_side_effects(
     any_stream_change: bool = True,
     reason: str = "bulk_camera_change",
 ) -> Dict[str, Any]:
-    """Single go2rtc reload after import/bulk updates."""
     if not any_stream_change:
         return {"ok": True, "skipped": True, "reason": reason}
     return await apply_camera_side_effects("", existing=None, updated_fields=None, reason=reason)

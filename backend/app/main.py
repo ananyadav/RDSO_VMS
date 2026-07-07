@@ -255,7 +255,7 @@ async def main():
             print(f"[OK] Orphan FFmpeg cleanup: killed {len(killed)} process(es) {killed}")
         else:
             print("[OK] Orphan FFmpeg cleanup: none found")
-        from app.services.go2rtc_service import start_go2rtc_on_startup
+        from app.services.go2rtc_service import schedule_go2rtc_stream_sync, start_go2rtc_on_startup
 
         await start_go2rtc_on_startup()
         # Do not wipe live HLS dirs on startup — races with batch-start and causes frozen tiles
@@ -289,6 +289,11 @@ async def main():
     print("Press Ctrl+C to stop the server")
     print("=" * 60 + "\n")
     logging.info(f"Server running on http://0.0.0.0:{args.api_port} (API + WebSocket)")
+
+    from app.services.go2rtc_service import GO2RTC_ENABLED, LIVE_PROVIDER, schedule_go2rtc_stream_sync
+
+    if GO2RTC_ENABLED and LIVE_PROVIDER == "go2rtc":
+        schedule_go2rtc_stream_sync(reason="startup")
 
     try:
         await asyncio.Event().wait()

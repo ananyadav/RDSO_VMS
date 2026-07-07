@@ -3,12 +3,14 @@ import { go2rtcStreamName, resetGo2RtcStreamSync } from '../lib/liveProvider';
 import { acquireGo2RtcSlot, releaseGo2RtcSlot } from '../lib/go2rtcConnectionLimiter';
 import { registerUiConsumer, unregisterUiConsumer } from '../lib/go2rtcConsumerRegistry';
 import { mountGo2RtcPlayer } from '../lib/go2rtcPlayer';
+import { cameraTileLabel } from '../lib/cameraLabel';
 
 interface Camera {
   id: string;
   name: string;
   cameraUid?: string;
   displayName?: string;
+  ip_address?: string;
   online: boolean;
 }
 
@@ -27,22 +29,12 @@ interface UseGo2RtcLiveOptions {
   streamsReady?: boolean;
 }
 
-function cameraStreamLabel(camera: Camera, stream: string): string {
-  const name = camera.displayName || camera.name || 'Camera';
-  const uid = camera.cameraUid || '';
-  const fromUid = uid.match(/^ip_(\d+)_(\d+)_(\d+)_(\d+)$/);
-  if (fromUid) {
-    return `${name} (${fromUid.slice(1).join('.')})`;
-  }
-  const fromStream = stream.match(/^ip_(\d+)_(\d+)_(\d+)_(\d+)_/);
-  if (fromStream) {
-    return `${name} (${fromStream.slice(1, 5).join('.')})`;
-  }
-  return name;
+function cameraStreamLabel(camera: Camera): string {
+  return cameraTileLabel(camera);
 }
 
-function friendlyError(camera: Camera, stream: string, raw: string): string {
-  const label = cameraStreamLabel(camera, stream);
+function friendlyError(camera: Camera, _stream: string, raw: string): string {
+  const label = cameraStreamLabel(camera);
   const lower = raw.toLowerCase();
   if (lower.includes('not found')) {
     return `${label}: stream not registered in go2rtc — use Diagnostics → Reload`;

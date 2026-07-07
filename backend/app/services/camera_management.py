@@ -42,6 +42,22 @@ def _camera_oid(camera_id: str) -> Optional[ObjectId]:
         return None
 
 
+def stream_online(cam: dict, live_row: dict) -> bool:
+    """Online when active and go2rtc reports sub or main stream up."""
+    if cam.get("is_active") is False:
+        return False
+    cid = str(cam.get("_id") or cam.get("id") or "")
+    row = live_row or {}
+    return bool(row.get("subOnline") or row.get("mainOnline"))
+
+
+def apply_stream_online_status(items: List[dict], live_rows: Dict[str, dict]) -> None:
+    for item in items:
+        cid = str(item.get("id") or item.get("_id") or "")
+        row = live_rows.get(cid) or {}
+        item["online"] = stream_online(item, row)
+
+
 def _stats_for_cameras(
     cameras: List[dict],
     *,
@@ -60,11 +76,7 @@ def _stats_for_cameras(
             stats["disabled"] += 1
 
         row = live_rows.get(cid) or {}
-        online = False
-        if active:
-            online = bool(cam.get("online", False)) or bool(
-                row.get("subOnline") or row.get("mainOnline")
-            )
+        online = stream_online(cam, row) if active else False
         if online:
             stats["online"] += 1
         elif active:

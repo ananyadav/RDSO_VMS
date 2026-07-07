@@ -1,4 +1,5 @@
 import { Video } from 'lucide-react';
+import { cameraTileLabel } from '../lib/cameraLabel';
 
 export default function CameraSelector({ cameras, selected, onSelect }) {
   return (
@@ -14,7 +15,7 @@ export default function CameraSelector({ cameras, selected, onSelect }) {
       >
         {cameras.map(cam => (
           <option key={cam.id} value={cam.id}>
-            {cam.name}
+            {cameraTileLabel(cam)}
           </option>
         ))}
       </select>

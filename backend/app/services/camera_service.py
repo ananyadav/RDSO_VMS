@@ -63,27 +63,40 @@ logger = logging.getLogger(__name__)
 _CAM_NUM_RE = re.compile(r"^Cam(\d+)$", re.IGNORECASE)
 
 
+def _display_label(cam: dict) -> str:
+    """Live-view label: display_name, then name, then ip_address."""
+    ip = (cam.get("ip_address") or "").strip()
+    for key in ("display_name", "name", "ip_address"):
+        val = (cam.get(key) or "").strip()
+        if val:
+            return val
+    from app.services.camera_uid import ip_from_camera_uid
+
+    derived = ip_from_camera_uid(cam.get("camera_uid") or make_camera_uid(ip) or "")
+    if derived:
+        return derived
+    return str(cam.get("_id", ""))
+
+
 def _camera_list_item(cam: dict, *, admin: bool = False) -> dict:
     is_active = cam.get("is_active")
     if is_active is None:
         is_active = True
-    streamable = bool(is_active)
     ip = (cam.get("ip_address") or "").strip()
     uid = cam.get("camera_uid") or make_camera_uid(ip) or ""
     item = {
         "id": str(cam["_id"]) if isinstance(cam.get("_id"), ObjectId) else cam.get("_id"),
         "cameraUid": uid,
         "name": cam.get("name", ""),
-        "displayName": camera_display_name(cam),
-        "online": streamable,
-        "ptz": bool(cam.get("ptz", False)),
-        "activity": bool(cam.get("activity", False)),
+        "displayName": _display_label(cam),
+        "online": False,
         "site": cam.get("site", ""),
         "building": cam.get("building", ""),
         "floor_group": cam.get("floor_group", ""),
         "floor": cam.get("floor", ""),
         "camera_group": cam.get("camera_group", ""),
         "location_path": cam.get("location_path", ""),
+        "ip_address": ip,
         "is_active": bool(is_active),
     }
     if admin:
@@ -107,15 +120,12 @@ def _camera_management_item(cam: dict) -> dict:
         "site": cam.get("site", ""),
         "main_channel": cam.get("main_channel", "101"),
         "sub_channel": cam.get("sub_channel") or cam.get("recording_channel", "102"),
-        "preview_channel": cam.get("preview_channel", "103"),
         "main_rtsp_url": cam.get("main_rtsp_url", ""),
         "sub_rtsp_url": cam.get("sub_rtsp_url", ""),
-        "preview_rtsp_url": cam.get("preview_rtsp_url", ""),
         "rtsp_url_source": cam.get("rtsp_url_source", ""),
         "worker_id": cam.get("worker_id", ""),
         "live_provider": cam.get("live_provider", "go2rtc"),
-        "online": bool(cam.get("online", False)),
-        "ptz": bool(cam.get("ptz", False)),
+        "online": False,
         "status": "Disabled" if cam.get("is_active") is False else "Active",
     })
     return item
@@ -227,11 +237,6 @@ def _location_filters(
         )
     if filters.get("protocol"):
         q["protocol"] = filters["protocol"]
-    online = filters.get("online")
-    if online is True:
-        q["online"] = True
-    elif online is False:
-        and_clauses.append({"$or": [{"online": False}, {"online": {"$exists": False}}]})
     if and_clauses:
         q["$and"] = and_clauses
     return q
@@ -324,6 +329,7 @@ async def get_camera_groups(request) -> dict:
 
 async def get_camera_info(request=None, filters: Optional[Dict[str, Any]] = None):
     """Camera list for live view / playback with optional filters."""
+    from app.services.camera_management import _load_go2rtc_context, apply_stream_online_status
     from app.services.video_streaming import CAMERA_SOURCES
 
     user = await get_effective_user(request) if request else None
@@ -340,9 +346,8 @@ async def get_camera_info(request=None, filters: Optional[Dict[str, Any]] = None
         cameras.append({
             "id": cam_id,
             "name": source["name"],
+            "displayName": source["name"],
             "online": True,
-            "ptz": source.get("ptz", False),
-            "activity": False,
             "site": "",
             "building": "",
             "floor_group": "",
@@ -351,6 +356,9 @@ async def get_camera_info(request=None, filters: Optional[Dict[str, Any]] = None
             "location_path": "",
             "is_active": True,
         })
+
+    _, live_rows = await _load_go2rtc_context()
+    apply_stream_online_status(cameras, live_rows)
 
     for_playback = (
         request
@@ -372,19 +380,25 @@ async def get_configured_cameras_for_user(request) -> List[dict]:
     else:
         filters["include_inactive"] = False
     cameras = await query_cameras(user, filters, management=True)
-    from app.services.camera_management import _load_go2rtc_context
+    from app.services.camera_management import (
+        _load_go2rtc_context,
+        apply_stream_online_status,
+    )
     from app.services.recording_schedule_store import recording_schedule
 
     stream_errors, live_rows = await _load_go2rtc_context()
+    apply_stream_online_status(cameras, live_rows)
+
+    online_filter = filters.get("online")
+    if online_filter is True:
+        cameras = [c for c in cameras if c.get("online")]
+    elif online_filter is False:
+        cameras = [c for c in cameras if not c.get("online")]
+
     schedule = dict(recording_schedule)
     for item in cameras:
         cid = str(item.get("_id") or item.get("id") or "")
         uid = item.get("camera_uid") or item.get("cameraUid") or ""
-        row = live_rows.get(cid) or {}
-        if item.get("is_active") is not False:
-            item["online"] = bool(item.get("online")) or bool(
-                row.get("subOnline") or row.get("mainOnline")
-            )
         item["recordingActive"] = bool(schedule.get(cid))
         item["lastError"] = stream_errors.get(cid) or stream_errors.get(uid)
         item["liveStatus"] = (
@@ -615,11 +629,13 @@ async def handle_update_camera(camera_id: str, camera_data: dict):
     except Exception as e:
         err_name = type(e).__name__
         if err_name == "DuplicateKeyError" or "duplicate key" in str(e).lower():
-            by_name = await camera_collection.find_one(
-                {"name": fields.get("name"), "_id": {"$ne": oid}}
-            )
-            if by_name:
-                return duplicate_conflict_response(by_name, "name", fields)
+            ip = (fields.get("ip_address") or "").strip()
+            if ip:
+                by_ip = await camera_collection.find_one(
+                    {"ip_address": ip, "_id": {"$ne": oid}}
+                )
+                if by_ip:
+                    return duplicate_conflict_response(by_ip, "ip_address", fields)
             return {"success": False, "error": "A camera with these details already exists."}, 409
         raise
     if needs_stream_refresh:

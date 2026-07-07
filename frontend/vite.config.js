@@ -10,7 +10,12 @@ function configureDevProxy(proxy, label) {
     proxy.on('error', (err, _req, res) => {
         const code = err && err.code;
         if (code && BENIGN_PROXY_CODES.has(code)) {
-            if (res && !res.headersSent && !res.writableEnded) {
+            if (
+                res &&
+                typeof res.writeHead === 'function' &&
+                !res.headersSent &&
+                !res.writableEnded
+            ) {
                 res.writeHead(503, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Backend unavailable — retry shortly' }));
             }

@@ -160,11 +160,7 @@ async def backfill_all_camera_rtsp_urls() -> int:
     async for cam in camera_collection.find({}):
         if not (cam.get("ip_address") or "").strip():
             continue
-        has_all = (
-            cam.get("sub_rtsp_url")
-            and cam.get("main_rtsp_url")
-            and cam.get("preview_rtsp_url")
-        )
+        has_all = cam.get("sub_rtsp_url") and cam.get("main_rtsp_url")
         stale = rtsp_url_credentials_stale(cam)
         if has_all and not stale:
             continue
@@ -178,13 +174,10 @@ async def backfill_all_camera_rtsp_urls() -> int:
             for k in (
                 "main_rtsp_url",
                 "sub_rtsp_url",
-                "preview_rtsp_url",
-                "rtsp_url",
                 "rtsp_url_source",
                 "main_channel",
                 "sub_channel",
                 "recording_channel",
-                "preview_channel",
             )
             if k in urls
         }
@@ -466,10 +459,23 @@ async def delete_camera(id: str):
     return False
 
 
+async def _drop_legacy_unique_camera_name_index() -> None:
+    """Remove unique index on cameras.name — names may repeat across sites/buildings."""
+    try:
+        async for idx in camera_collection.list_indexes():
+            key = idx.get("key") or {}
+            if list(key.keys()) == ["name"] and idx.get("unique"):
+                await camera_collection.drop_index(idx["name"])
+                logging.info("[DB] Dropped unique index on cameras.name: %s", idx["name"])
+    except Exception as exc:
+        logging.warning("[DB] Could not drop legacy unique name index: %s", exc)
+
+
 async def ensure_database_indexes() -> None:
     """Create indexes for camera and recording session lookups."""
     locations_collection = database.get_collection("locations")
     try:
+        await _drop_legacy_unique_camera_name_index()
         await camera_collection.create_index(
             "camera_uid",
             unique=True,
@@ -482,11 +488,16 @@ async def ensure_database_indexes() -> None:
             name="idx_ip_address_unique",
             partialFilterExpression={"ip_address": {"$type": "string", "$gt": ""}},
         )
+        await camera_collection.create_index("name", name="idx_camera_name")
+        await camera_collection.create_index("site", name="idx_camera_site")
         await camera_collection.create_index("building", name="idx_camera_building")
         await camera_collection.create_index("floor", name="idx_camera_floor")
         await camera_collection.create_index("camera_group", name="idx_camera_group")
         await camera_collection.create_index("is_active", name="idx_camera_is_active")
-        await camera_collection.create_index("online", name="idx_camera_online")
+        try:
+            await camera_collection.drop_index("idx_camera_online")
+        except Exception:
+            pass
         await recording_sessions_collection.create_index("camera_uid", name="idx_session_camera_uid")
         await recording_sessions_collection.create_index("ip_address", name="idx_session_ip_address")
         await recording_sessions_collection.create_index("started_at", name="idx_session_started_at")

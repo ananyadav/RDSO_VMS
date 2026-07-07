@@ -58,12 +58,9 @@ interface Camera {
   password?: string;
   main_channel?: string;
   sub_channel?: string;
-  preview_channel?: string;
   main_rtsp_url?: string;
   sub_rtsp_url?: string;
-  preview_rtsp_url?: string;
   rtsp_url_source?: string;
-  ptz?: boolean;
 }
 
 interface DuplicatePayload {
@@ -100,13 +97,10 @@ function cameraToForm(cam: Camera | null): Partial<CameraFormData> | null {
     location_path: cam.location_path || '',
     main_channel: cam.main_channel || '101',
     sub_channel: cam.sub_channel || '102',
-    preview_channel: cam.preview_channel || '103',
     main_rtsp_url: cam.main_rtsp_url || '',
     sub_rtsp_url: cam.sub_rtsp_url || '',
-    preview_rtsp_url: cam.preview_rtsp_url || '',
     rtsp_url_source: cam.rtsp_url_source || 'auto_hikvision',
     is_active: cam.is_active !== false,
-    ptz: Boolean(cam.ptz),
   };
 }
 
@@ -128,16 +122,13 @@ function formToPayload(data: CameraFormData): Record<string, unknown> {
     location_path: data.location_path,
     main_channel: data.main_channel,
     sub_channel: data.sub_channel,
-    preview_channel: data.preview_channel,
     rtsp_url_source: data.rtsp_url_source,
     is_active: data.is_active,
-    ptz: data.ptz,
     type: 'rtsp',
   };
   if (data.protocol === 'ONVIF' || data.protocol === 'CUSTOM') {
     payload.main_rtsp_url = data.main_rtsp_url;
     payload.sub_rtsp_url = data.sub_rtsp_url;
-    payload.preview_rtsp_url = data.preview_rtsp_url;
   }
   return payload;
 }

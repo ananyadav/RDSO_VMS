@@ -6,8 +6,6 @@ interface Camera {
   id: string;
   name: string;
   online: boolean;
-  ptz: boolean;
-  activity: boolean;
 }
 
 export const useWebRTC = (camera: Camera | null, isFullscreen: boolean = false) => {

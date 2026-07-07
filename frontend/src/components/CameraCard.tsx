@@ -1,15 +1,16 @@
 import React, { useRef } from 'react';
-import { Link } from 'react-router-dom';
-import { VideoOff, Move, Circle, Maximize, Loader2 } from 'lucide-react';
+import { VideoOff, Circle, Maximize, Loader2 } from 'lucide-react';
 import { useLiveStream } from '../hooks/useLiveStream';
 import { CodecBadge } from './CodecBadge';
+import { cameraTileLabel } from '../lib/cameraLabel';
 
 interface Camera {
   id: string;
   name: string;
+  displayName?: string;
+  ip_address?: string;
+  cameraUid?: string;
   online: boolean;
-  ptz: boolean;
-  activity: boolean;
 }
 
 interface CameraCardProps {
@@ -59,9 +60,7 @@ function CameraCard({
 
   return (
     <div
-      className={`group w-full h-full bg-white dark:bg-gray-900 overflow-hidden flex flex-col transition-all duration-300 relative ${
-        camera.activity ? 'ring-2 ring-yellow-400' : 'ring-1 ring-gray-300 dark:ring-gray-700'
-      }`}
+      className="group w-full h-full bg-white dark:bg-gray-900 overflow-hidden flex flex-col transition-all duration-300 relative ring-1 ring-gray-300 dark:ring-gray-700"
     >
       <div
         ref={tileRef}
@@ -138,7 +137,7 @@ function CameraCard({
                 <span>REC</span>
               </div>
             )}
-            <h3 className="font-bold text-white text-sm truncate">{camera.name}</h3>
+            <h3 className="font-bold text-white text-sm truncate">{cameraTileLabel(camera)}</h3>
             {camera.online && !isGo2Rtc && <CodecBadge badge={displayBadge} />}
           </div>
 
@@ -187,15 +186,6 @@ function CameraCard({
               <Circle size={12} className={isRecording ? 'fill-current' : ''} />
               <span>{isRecording ? 'Stop' : 'Record'}</span>
             </button>
-
-            {camera.ptz && (
-              <Link
-                to={`/ptz/${camera.id}`}
-                className="p-1.5 rounded text-gray-200 hover:bg-white/20 bg-black/30 backdrop-blur-sm transition-colors"
-              >
-                <Move size={14} />
-              </Link>
-            )}
           </div>
         </div>
       </div>

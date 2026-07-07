@@ -56,8 +56,6 @@ async def fix_camera_password(camera_id, new_password=None):
         for key in (
             "main_rtsp_url",
             "sub_rtsp_url",
-            "preview_rtsp_url",
-            "rtsp_url",
             "rtsp_url_source",
         ):
             if synced.get(key) is not None:

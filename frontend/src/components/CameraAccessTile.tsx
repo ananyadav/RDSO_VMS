@@ -41,8 +41,6 @@ export default function CameraAccessTile({
       id: camera.id,
       name: camera.name,
       online: camera.online,
-      ptz: false,
-      activity: false,
       cameraUid: camera.cameraUid,
     },
     {

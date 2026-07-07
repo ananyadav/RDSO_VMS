@@ -27,14 +27,10 @@ CORPORATE_DEFAULTS: Dict[str, Any] = {
     "type": "rtsp",
     "main_channel": "101",
     "sub_channel": "102",
-    "preview_channel": "103",
     "recording_channel": "102",
     "is_active": True,
     "worker_id": "worker-1",
     "live_provider": "go2rtc",
-    "ptz": False,
-    "online": False,
-    "activity": False,
 }
 
 REQUIRED_FIELDS = ("name", "ip_address", "username", "password", "protocol", "building", "floor")
@@ -141,12 +137,6 @@ async def find_duplicate_camera(
         if existing:
             return existing, "ip_address"
 
-    name = _str(fields.get("name"))
-    if name:
-        existing = await _find_camera_excluding({"name": name}, exclude_oid)
-        if existing:
-            return existing, "name"
-
     main_url = _str(fields.get("main_rtsp_url"))
     if main_url:
         existing = await _find_camera_excluding({"main_rtsp_url": main_url}, exclude_oid)
@@ -207,7 +197,6 @@ def prepare_camera_fields(
     for ch_key, legacy in (
         ("main_channel", "main_channel"),
         ("sub_channel", "recording_channel"),
-        ("preview_channel", "preview_channel"),
     ):
         val = camera_data.get(ch_key) or camera_data.get(legacy) or existing.get(ch_key) or existing.get(legacy)
         if val is not None:
@@ -222,18 +211,12 @@ def prepare_camera_fields(
 
     if "is_active" in camera_data:
         merged["is_active"] = camera_data.get("is_active") is not False
-    if "ptz" in camera_data:
-        merged["ptz"] = bool(camera_data.get("ptz"))
-    if "online" in camera_data:
-        merged["online"] = bool(camera_data.get("online"))
-    if "activity" in camera_data:
-        merged["activity"] = bool(camera_data.get("activity"))
 
     merged["camera_uid"] = make_camera_uid(ip_address) or ""
 
     manual_rtsp = protocol in ("ONVIF", "CUSTOM")
     if manual_rtsp:
-        for url_key in ("main_rtsp_url", "sub_rtsp_url", "preview_rtsp_url"):
+        for url_key in ("main_rtsp_url", "sub_rtsp_url"):
             if camera_data.get(url_key) is not None:
                 merged[url_key] = _str(camera_data.get(url_key))
             elif existing.get(url_key):
@@ -258,20 +241,7 @@ def duplicate_conflict_response(
     existing_name = existing.get("name") or "camera"
     existing_ip = resolved_ip_address(existing) or normalize_ip_address(fields.get("ip_address"))
 
-    if conflict == "name":
-        requested_name = _str(fields.get("name")) or existing_name
-        if active:
-            message = (
-                f"Camera name '{requested_name}' is already in use by "
-                f"{existing_name} ({existing_ip}) in {loc}."
-            )
-        else:
-            message = (
-                f"Camera name '{requested_name}' is already assigned to a disabled camera "
-                f"({existing_name}, {existing_ip}) in {loc}. "
-                f"Edit or reactivate that camera instead of reusing this name."
-            )
-    elif conflict in ("main_rtsp_url", "sub_rtsp_url"):
+    if conflict in ("main_rtsp_url", "sub_rtsp_url"):
         label = "main" if conflict == "main_rtsp_url" else "sub"
         if active:
             message = (
@@ -309,7 +279,7 @@ def public_camera_response(cam: dict) -> dict:
     out = dict(cam)
     if "password" in out and out["password"]:
         out["password"] = "***"
-    for url_key in ("main_rtsp_url", "sub_rtsp_url", "preview_rtsp_url", "rtsp_url"):
+    for url_key in ("main_rtsp_url", "sub_rtsp_url"):
         if out.get(url_key):
             out[f"{url_key}_masked"] = mask_rtsp_url(out[url_key])
     return out

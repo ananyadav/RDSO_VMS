@@ -101,7 +101,7 @@ async def _all_cameras() -> List[dict]:
         ]
     }
     cursor = camera_collection.find(query).sort("name", 1)
-    return await cursor.to_list(length=500)
+    return await cursor.to_list(length=None)
 
 
 async def build_all_streams_config() -> Dict[str, Any]:
@@ -257,59 +257,108 @@ async def sync_streams_to_go2rtc(streams: Dict[str, str]) -> Dict[str, Any]:
     while the UI requests {cameraObjectId}_sub.
     """
     if not streams:
-        return {"ok": False, "error": "no streams", "added": 0, "updated": 0, "removed": 0}
+        return {
+            "ok": False,
+            "error": "no streams",
+            "added": 0,
+            "updated": 0,
+            "removed": 0,
+            "missingCount": 0,
+        }
 
-    timeout = aiohttp.ClientTimeout(total=120.0)
+    desired = set(streams.keys())
+    total = len(streams)
+    # Scale timeout for large fleets (~1038 streams need more than 120s under load).
+    timeout_sec = max(120.0, min(600.0, 60.0 + total * 0.15))
+    timeout = aiohttp.ClientTimeout(total=timeout_sec)
     added = 0
     updated = 0
     removed = 0
     skipped = 0
     errors: List[str] = []
-
-    existing = await fetch_go2rtc_streams()
-    existing_names = set(existing.keys()) if isinstance(existing, dict) else set()
-    desired = set(streams.keys())
-
-    if existing_names == desired and all(
-        _producer_url_matches(existing.get(name) or {}, streams[name]) for name in desired
-    ):
-        return {
-            "ok": True,
-            "added": 0,
-            "updated": 0,
-            "removed": 0,
-            "skipped": len(streams),
-        }
-
     sem = asyncio.Semaphore(12)
 
-    async def _put_stream(session: aiohttp.ClientSession, name: str, src: str) -> None:
+    async def _put_batch(
+        session: aiohttp.ClientSession,
+        batch: Dict[str, str],
+        existing: Dict[str, Any],
+        existing_names: set[str],
+    ) -> None:
         nonlocal added, updated, skipped
-        info = existing.get(name) or {}
-        if name in existing_names and _producer_url_matches(info, src):
-            skipped += 1
-            return
-        async with sem:
-            try:
-                async with session.put(
-                    f"{GO2RTC_API_URL}/api/streams",
-                    params={"name": name, "src": src},
-                ) as resp:
-                    if resp.status in (200, 201):
-                        if name in existing_names:
-                            updated += 1
+
+        async def _put_one(name: str, src: str) -> None:
+            nonlocal added, updated, skipped
+            info = existing.get(name) or {}
+            if name in existing_names and _producer_url_matches(info, src):
+                skipped += 1
+                return
+            async with sem:
+                try:
+                    async with session.put(
+                        f"{GO2RTC_API_URL}/api/streams",
+                        params={"name": name, "src": src},
+                    ) as resp:
+                        if resp.status in (200, 201):
+                            if name in existing_names:
+                                updated += 1
+                            else:
+                                added += 1
                         else:
-                            added += 1
-                    else:
-                        body = await resp.text()
-                        errors.append(f"{name}: HTTP {resp.status} {body[:160]}")
-            except Exception as exc:
-                errors.append(f"{name}: {exc}")
+                            body = await resp.text()
+                            errors.append(f"{name}: HTTP {resp.status} {body[:160]}")
+                except Exception as exc:
+                    errors.append(f"{name}: {exc}")
+
+        await asyncio.gather(*[_put_one(name, src) for name, src in batch.items()])
 
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        await asyncio.gather(*[_put_stream(session, name, src) for name, src in streams.items()])
+        for attempt in range(3):
+            existing = await fetch_go2rtc_streams()
+            existing_names = set(existing.keys()) if isinstance(existing, dict) else set()
 
-        for name in sorted(existing_names - desired):
+            if existing_names == desired and all(
+                _producer_url_matches(existing.get(name) or {}, streams[name]) for name in desired
+            ):
+                return {
+                    "ok": len(errors) == 0,
+                    "added": added,
+                    "updated": updated,
+                    "removed": removed,
+                    "skipped": skipped,
+                    "missingCount": 0,
+                    "errors": errors,
+                }
+
+            pending = {
+                name: streams[name]
+                for name in sorted(desired)
+                if name not in existing_names
+                or not _producer_url_matches(existing.get(name) or {}, streams[name])
+            }
+            if pending:
+                if attempt:
+                    logger.warning(
+                        "[go2rtc] Retry %s: pushing %s missing/stale stream(s)",
+                        attempt + 1,
+                        len(pending),
+                    )
+                await _put_batch(session, pending, existing, existing_names)
+
+            post = await fetch_go2rtc_streams()
+            post_names = set(post.keys()) if isinstance(post, dict) else set()
+            still_missing = sorted(desired - post_names)
+            if not still_missing:
+                break
+            if attempt == 2:
+                logger.error(
+                    "[go2rtc] %s stream(s) still missing after sync: %s",
+                    len(still_missing),
+                    ", ".join(still_missing[:5]),
+                )
+
+        final = await fetch_go2rtc_streams()
+        final_names = set(final.keys()) if isinstance(final, dict) else set()
+        for name in sorted(final_names - desired):
             try:
                 async with session.delete(
                     f"{GO2RTC_API_URL}/api/streams",
@@ -323,26 +372,33 @@ async def sync_streams_to_go2rtc(streams: Dict[str, str]) -> Dict[str, Any]:
             except Exception as exc:
                 errors.append(f"delete {name}: {exc}")
 
+    post = await fetch_go2rtc_streams()
+    post_names = set(post.keys()) if isinstance(post, dict) else set()
+    missing = sorted(desired - post_names)
+
     if added or updated or removed:
         logger.info(
-            "[go2rtc] Stream sync added=%s updated=%s removed=%s skipped=%s",
+            "[go2rtc] Stream sync added=%s updated=%s removed=%s skipped=%s missing=%s",
             added,
             updated,
             removed,
             skipped,
+            len(missing),
         )
-    elif skipped:
+    elif skipped and not missing:
         logger.debug("[go2rtc] Stream sync skipped %s unchanged stream(s)", skipped)
 
     if errors:
         logger.warning("[go2rtc] Stream sync errors: %s", errors[:5])
 
     return {
-        "ok": len(errors) == 0,
+        "ok": len(errors) == 0 and not missing,
         "added": added,
         "updated": updated,
         "removed": removed,
         "skipped": skipped,
+        "missingCount": len(missing),
+        "missingStreams": missing[:50],
         "errors": errors,
     }
 
@@ -658,6 +714,125 @@ async def ensure_go2rtc_streams() -> Dict[str, Any]:
     return await start_go2rtc()
 
 
+async def start_go2rtc_quick() -> Dict[str, Any]:
+    """Write config and ensure go2rtc process is up (no API stream push — avoids blocking startup)."""
+    if not GO2RTC_ENABLED:
+        return {"ok": False, "error": "GO2RTC_ENABLED=false", "running": False}
+    if LIVE_PROVIDER != "go2rtc":
+        return {"ok": False, "skipped": True, "running": False}
+
+    built = await write_config_file()
+    if not built.get("ok"):
+        return {**built, "running": False}
+
+    if await is_api_healthy():
+        return {
+            "ok": True,
+            "running": True,
+            "reused": True,
+            "streamCount": built.get("streamCount"),
+            "cameraCount": built.get("cameraCount"),
+        }
+
+    global _proc
+    binary = go2rtc_bin()
+    if not binary.is_file():
+        return {
+            "ok": False,
+            "running": False,
+            "error": f"go2rtc binary not found: {binary}",
+        }
+
+    if _proc and _proc.returncode is None:
+        return {
+            "ok": True,
+            "running": True,
+            "reused": True,
+            "streamCount": built.get("streamCount"),
+            "cameraCount": built.get("cameraCount"),
+        }
+
+    try:
+        _proc = await asyncio.create_subprocess_exec(
+            str(binary),
+            "-config",
+            str(CONFIG_PATH),
+            cwd=str(GO2RTC_DIR),
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except Exception as exc:
+        logger.error("[go2rtc] Failed to start: %s", exc)
+        return {"ok": False, "running": False, "error": str(exc)}
+
+    for _ in range(40):
+        await asyncio.sleep(0.25)
+        if await is_api_healthy():
+            logger.info(
+                "[go2rtc] Started pid=%s streams=%s (config loaded from yaml)",
+                _proc.pid,
+                built.get("streamCount"),
+            )
+            return {
+                "ok": True,
+                "running": True,
+                "reused": False,
+                "streamCount": built.get("streamCount"),
+                "cameraCount": built.get("cameraCount"),
+            }
+        if _proc.returncode is not None:
+            err = ""
+            if _proc.stderr:
+                raw = await _proc.stderr.read()
+                err = raw.decode("utf-8", errors="ignore")[:500]
+            return {
+                "ok": False,
+                "running": False,
+                "error": f"go2rtc exited rc={_proc.returncode}",
+                "detail": err,
+            }
+
+    return {
+        "ok": False,
+        "running": False,
+        "error": "go2rtc API did not become ready within 10s",
+        "pid": _proc.pid if _proc else None,
+    }
+
+
+def schedule_go2rtc_stream_sync(*, reason: str = "startup") -> None:
+    """Background push of MongoDB streams into a running go2rtc instance."""
+
+    async def _run() -> None:
+        try:
+            result = await ensure_go2rtc_streams()
+            sync = result.get("sync") or {}
+            missing = sync.get("missingCount") or 0
+            if result.get("ok") and not missing:
+                logger.info(
+                    "[go2rtc] Background sync complete (%s): added=%s streams=%s",
+                    reason,
+                    sync.get("added"),
+                    result.get("streamCount"),
+                )
+            elif missing:
+                logger.warning(
+                    "[go2rtc] Background sync (%s): %s stream(s) still missing",
+                    reason,
+                    missing,
+                )
+            elif not result.get("ok"):
+                logger.warning(
+                    "[go2rtc] Background sync failed (%s): %s",
+                    reason,
+                    result.get("error") or sync.get("errors"),
+                )
+        except Exception as exc:
+            logger.warning("[go2rtc] Background sync error (%s): %s", reason, exc)
+
+    asyncio.create_task(_run())
+
+
 async def start_go2rtc_on_startup() -> None:
     if not GO2RTC_ENABLED:
         logger.info("[go2rtc] Disabled (GO2RTC_ENABLED=false)")
@@ -665,10 +840,10 @@ async def start_go2rtc_on_startup() -> None:
     if LIVE_PROVIDER != "go2rtc":
         logger.info("[go2rtc] LIVE_PROVIDER=%s — go2rtc not auto-started", LIVE_PROVIDER)
         return
-    result = await start_go2rtc()
+    result = await start_go2rtc_quick()
     if result.get("ok"):
         logger.info(
-            "[go2rtc] Ready api=%s cameras=%s streams=%s",
+            "[go2rtc] Process ready api=%s cameras=%s streams=%s (full sync scheduled)",
             GO2RTC_API_URL,
             result.get("cameraCount"),
             result.get("streamCount"),

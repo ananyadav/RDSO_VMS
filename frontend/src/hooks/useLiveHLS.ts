@@ -35,8 +35,6 @@ interface Camera {
   id: string;
   name: string;
   online: boolean;
-  ptz: boolean;
-  activity: boolean;
 }
 
 export type LiveStreamStatus = 'idle' | 'connecting' | 'playing' | 'fallback' | 'error';

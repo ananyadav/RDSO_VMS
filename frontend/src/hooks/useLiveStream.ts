@@ -6,10 +6,10 @@ import { useLiveHLS } from './useLiveHLS';
 interface Camera {
   id: string;
   name: string;
-  online: boolean;
-  ptz: boolean;
-  activity: boolean;
+  displayName?: string;
+  ip_address?: string;
   cameraUid?: string;
+  online: boolean;
 }
 
 interface UseLiveStreamOptions {

@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { X, ChevronLeft, ChevronRight, Move, Circle, Loader2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { X, ChevronLeft, ChevronRight, Circle, Loader2 } from 'lucide-react';
 import { useLiveStream } from '../hooks/useLiveStream';
 import type { FullscreenStartupPhase } from '../hooks/useLiveHLS';
 import { CodecBadge } from './CodecBadge';
 import CameraSelector from './CameraSelector';
+import { cameraTileLabel } from '../lib/cameraLabel';
 
 interface Camera {
   id: string;
   name: string;
+  displayName?: string;
+  ip_address?: string;
+  cameraUid?: string;
   online: boolean;
-  ptz: boolean;
-  activity: boolean;
 }
 
 interface FullscreenCameraModalProps {
@@ -227,7 +228,7 @@ export default function FullscreenCameraModal({
                   <span>REC</span>
                 </div>
               )}
-              <h2 className="font-bold text-white text-xl truncate">{camera.name}</h2>
+              <h2 className="font-bold text-white text-xl truncate">{cameraTileLabel(camera)}</h2>
             </div>
 
             <div className="flex items-center space-x-2 flex-wrap justify-end gap-y-1">
@@ -290,16 +291,6 @@ export default function FullscreenCameraModal({
                 <Circle size={16} className={isRecording ? 'fill-current' : ''} />
                 <span>{isRecording ? 'Stop' : 'Record'}</span>
               </button>
-
-              {camera.ptz && (
-                <Link
-                  to={`/ptz/${camera.id}`}
-                  className="flex items-center space-x-2 py-2 px-4 rounded bg-black/30 backdrop-blur-sm text-gray-200 hover:bg-white/20 transition-colors"
-                >
-                  <Move size={16} />
-                  <span>PTZ</span>
-                </Link>
-              )}
             </div>
           </div>
 

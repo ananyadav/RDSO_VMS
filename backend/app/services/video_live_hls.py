@@ -11,7 +11,7 @@ Registry (Phase 3 Step 2):
 
 Env:
   HLS_LIVE_STREAM — legacy; grid ignores non-sub values (grid is always 102)
-  HLS_FULLSCREEN_STREAM — main | preview | sub (default main → 101, fallback 102)
+  HLS_FULLSCREEN_STREAM — main | sub (default main → 101, fallback 102)
   HLS_KEEP_WARM_SECONDS / HLS_WARM_SECONDS — warm stop after unsubscribe (default 30)
   LIVE_BATCH_SIZE / HLS_BATCH_SIZE — grid batch start size (default 4)
   LIVE_BATCH_DELAY_MS / HLS_BATCH_DELAY_MS — delay between batches (default 750)
@@ -172,13 +172,9 @@ def _pick_fullscreen_urls(
     *,
     force_sub: bool = False,
 ) -> Tuple[Optional[str], str]:
-    """
-    Fullscreen: main/101 when stable (copy only), else fall back to sub/102.
-    Optional HLS_FULLSCREEN_STREAM=preview uses ch 103, then sub/102.
-    """
+    """Fullscreen: main/101 when available, else sub/102."""
     sub = cam.get("sub_rtsp_url")
     main = cam.get("main_rtsp_url")
-    preview = cam.get("preview_rtsp_url")
 
     if force_sub:
         return sub, "sub/102"
@@ -186,10 +182,6 @@ def _pick_fullscreen_urls(
     mode = FULLSCREEN_STREAM
     if mode == "sub":
         return sub, "sub/102"
-    if mode == "preview":
-        if preview:
-            return preview, "preview/103"
-        return sub, "sub/102 (no preview)"
     if main:
         return main, "main/101"
     return sub, "sub/102 (no main)"
@@ -210,10 +202,9 @@ async def _persist_rtsp_urls(camera_id: str, urls: dict) -> None:
     keys = (
         "main_rtsp_url",
         "sub_rtsp_url",
-        "preview_rtsp_url",
-        "preview_channel",
-        "rtsp_url",
         "recording_channel",
+        "main_channel",
+        "sub_channel",
     )
     try:
         await camera_collection.update_one(

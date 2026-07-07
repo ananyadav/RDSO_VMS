@@ -22,17 +22,18 @@ import {
   parseBuildingKey,
   type PublicCameraAccess,
 } from '../lib/cameraAccess';
+import { cameraTileLabel } from '../lib/cameraLabel';
 
 interface Camera {
   id: string;
   name: string;
   cameraUid?: string;
   displayName?: string;
+  ip_address?: string;
   online: boolean;
-  ptz: boolean;
-  activity: boolean;
   camera_group?: string;
   location_path?: string;
+  is_active?: boolean;
 }
 
 interface LiveViewProps {
@@ -235,13 +236,9 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
     );
   }
 
-  let sortedCameras = cameras;
-  if (cameras.length > 25) {
-    sortedCameras = [
-      ...cameras.filter((c) => c.activity),
-      ...cameras.filter((c) => !c.activity),
-    ];
-  }
+  const sortedCameras = [...cameras].sort((a, b) =>
+    cameraTileLabel(a).localeCompare(cameraTileLabel(b)),
+  );
 
   return (
     <>

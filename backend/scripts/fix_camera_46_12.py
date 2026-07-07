@@ -34,8 +34,6 @@ async def main() -> None:
         "model": "Sparsh",
         "main_rtsp_url": main_url,
         "sub_rtsp_url": sub_url,
-        "preview_rtsp_url": sub_url,
-        "rtsp_url": sub_url,
         "rtsp_url_source": "manual",
     }
     await camera_collection.update_one({"_id": cam["_id"]}, {"$set": fields})

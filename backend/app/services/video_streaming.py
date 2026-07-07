@@ -377,7 +377,7 @@ class FFmpegTrack(MediaStreamTrack):
                 cam_name = camera_doc.get("name", "Unknown Camera")
 
                 # Prefer pre-built RTSP URLs stored in the document
-                main_rtsp = camera_doc.get("main_rtsp_url") or camera_doc.get("rtsp_url")
+                main_rtsp = camera_doc.get("main_rtsp_url")
                 sub_rtsp = camera_doc.get("sub_rtsp_url") or main_rtsp
 
                 if main_rtsp:

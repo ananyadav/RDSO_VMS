@@ -32,13 +32,10 @@ export interface CameraFormData {
   location_path: string;
   main_channel: string;
   sub_channel: string;
-  preview_channel: string;
   main_rtsp_url: string;
   sub_rtsp_url: string;
-  preview_rtsp_url: string;
   rtsp_url_source: string;
   is_active: boolean;
-  ptz: boolean;
 }
 
 export const CORPORATE_CAMERA_DEFAULTS: CameraFormData = {
@@ -58,13 +55,10 @@ export const CORPORATE_CAMERA_DEFAULTS: CameraFormData = {
   location_path: 'RML - 6 / Corporate Office / Ground Floor',
   main_channel: '101',
   sub_channel: '102',
-  preview_channel: '103',
   main_rtsp_url: '',
   sub_rtsp_url: '',
-  preview_rtsp_url: '',
   rtsp_url_source: 'auto_hikvision',
   is_active: true,
-  ptz: false,
 };
 
 function defaultsForLocations(
@@ -493,10 +487,6 @@ export default function AddCameraModal({
                     <label className={labelClass}>Sub Channel</label>
                     <input className={inputClass} value={form.sub_channel} onChange={(e) => setField('sub_channel', e.target.value)} disabled={!isManualRtsp && form.protocol === 'HIKVISION'} />
                   </div>
-                  <div>
-                    <label className={labelClass}>Preview Channel</label>
-                    <input className={inputClass} value={form.preview_channel} onChange={(e) => setField('preview_channel', e.target.value)} disabled={!isManualRtsp && form.protocol === 'HIKVISION'} />
-                  </div>
                   {isManualRtsp ? (
                     <>
                       <div className="sm:col-span-3">
@@ -507,14 +497,10 @@ export default function AddCameraModal({
                         <label className={labelClass}>Sub RTSP URL</label>
                         <input className={inputClass} value={form.sub_rtsp_url} onChange={(e) => setField('sub_rtsp_url', e.target.value)} />
                       </div>
-                      <div className="sm:col-span-3">
-                        <label className={labelClass}>Preview RTSP URL</label>
-                        <input className={inputClass} value={form.preview_rtsp_url} onChange={(e) => setField('preview_rtsp_url', e.target.value)} />
-                      </div>
                     </>
                   ) : (
                     <p className="sm:col-span-3 text-xs text-gray-500">
-                      RTSP URLs are generated automatically from IP, credentials, and Hikvision channels (101/102/103).
+                      RTSP URLs are generated automatically from IP, credentials, and Hikvision channels (101 main, 102 sub).
                     </p>
                   )}
                   <div className="sm:col-span-3">
@@ -530,10 +516,6 @@ export default function AddCameraModal({
               <label className="flex items-center gap-2 text-sm text-gray-300">
                 <input type="checkbox" className="checkbox-style" checked={form.is_active} onChange={(e) => setField('is_active', e.target.checked)} />
                 Active (show in Live View and go2rtc)
-              </label>
-              <label className="flex items-center gap-2 text-sm text-gray-300 mt-2">
-                <input type="checkbox" className="checkbox-style" checked={form.ptz} onChange={(e) => setField('ptz', e.target.checked)} />
-                PTZ capable
               </label>
             </section>
           </div>
