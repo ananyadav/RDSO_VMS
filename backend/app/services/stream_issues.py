@@ -52,6 +52,7 @@ def stream_issue_from_row(
     sub_producers: List[dict],
     main_producers: List[dict],
     config_error: Optional[str] = None,
+    stream_registered: bool = False,
 ) -> tuple[str, str]:
     """Return (issue_category, issue_message)."""
     if config_error:
@@ -61,11 +62,14 @@ def stream_issue_from_row(
     if sub_online or main_online:
         return "online", ""
 
+    if stream_registered:
+        return "online", ""
+
     err = producer_error_text(sub_producers) or producer_error_text(main_producers)
     if err:
         return classify_stream_error(err), err
 
-    return "offline", "No active RTSP producer"
+    return "offline", "Stream not registered in go2rtc"
 
 
 def summarize_issues(rows: List[dict]) -> Dict[str, Any]:

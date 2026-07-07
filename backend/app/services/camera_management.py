@@ -43,15 +43,16 @@ def _camera_oid(camera_id: str) -> Optional[ObjectId]:
 
 
 def stream_online(cam: dict, live_row: dict) -> bool:
-    """Online when active and go2rtc reports sub or main stream up."""
+    """Ready for live view: active and stream registered in go2rtc (lazy — no producer required)."""
     if cam.get("is_active") is False:
         return False
-    cid = str(cam.get("_id") or cam.get("id") or "")
-    row = live_row or {}
-    return bool(row.get("subOnline") or row.get("mainOnline"))
+    return bool((live_row or {}).get("streamRegistered"))
 
 
-def apply_stream_online_status(items: List[dict], live_rows: Dict[str, dict]) -> None:
+def apply_stream_online_status(
+    items: List[dict],
+    live_rows: Dict[str, dict],
+) -> None:
     for item in items:
         cid = str(item.get("id") or item.get("_id") or "")
         row = live_rows.get(cid) or {}
@@ -105,7 +106,7 @@ def _group_cameras(cameras: List[dict]) -> Dict[str, List[dict]]:
 
 
 async def _load_go2rtc_context() -> tuple[Dict[str, str], Dict[str, dict]]:
-    """Map camera_uid/mongo id → stream error; mongo id → go2rtc row."""
+    """Map camera id → stream error; camera id → go2rtc row."""
     stream_errors: Dict[str, str] = {}
     live_rows: Dict[str, dict] = {}
     try:
@@ -115,8 +116,12 @@ async def _load_go2rtc_context() -> tuple[Dict[str, str], Dict[str, dict]]:
         for row in diag.get("streams") or []:
             cid = row.get("cameraId") or ""
             live_rows[cid] = row
-            if not row.get("subOnline") and not row.get("mainOnline"):
-                stream_errors[cid] = "Stream offline or auth failed"
+            if not row.get("streamRegistered"):
+                stream_errors[cid] = (
+                    row.get("issueMessage") or "Stream not registered in go2rtc"
+                )
+            elif (row.get("issueCategory") or "") not in ("", "online"):
+                stream_errors[cid] = row.get("issueMessage") or "Stream error"
     except Exception as exc:
         logger.debug("[MGMT] go2rtc diagnostics unavailable: %s", exc)
     return stream_errors, live_rows

@@ -162,7 +162,7 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
     const stream = go2rtcStreamName(camera.cameraUid || camera.id, profile);
     const session = ++sessionRef.current;
     let cancelled = false;
-    const modes: Array<'webrtc' | 'mse'> = ['mse', 'mse', 'webrtc'];
+    const modes: Array<'webrtc' | 'mse'> = ['mse'];
 
     const run = async () => {
       stopPlayer(true);

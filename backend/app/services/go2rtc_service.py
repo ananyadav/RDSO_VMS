@@ -171,13 +171,27 @@ async def build_all_streams_config() -> Dict[str, Any]:
     }
 
 
+def _webrtc_candidates() -> List[str]:
+    """ICE candidates for browser WebRTC — must be reachable from clients (not 127.0.0.1 on GPU server)."""
+    explicit = os.getenv("GO2RTC_WEBRTC_HOST", "").strip()
+    port = os.getenv("GO2RTC_WEBRTC_PORT", "8555").strip()
+    host = explicit or GO2RTC_API_HOST
+    if host in ("127.0.0.1", "localhost", "::1"):
+        logger.warning(
+            "[go2rtc] WebRTC candidates use %s — set GO2RTC_WEBRTC_HOST to the GPU server LAN IP "
+            "for remote browsers",
+            host,
+        )
+    return [f"{host}:{port}"]
+
+
 def _base_yaml(streams: Dict[str, str]) -> dict:
     return {
         "api": {"listen": f"{GO2RTC_API_HOST}:{GO2RTC_API_PORT}"},
         "rtsp": {"listen": "127.0.0.1:8554"},
         "webrtc": {
             "listen": ":8555",
-            "candidates": [f"{GO2RTC_API_HOST}:8555"],
+            "candidates": _webrtc_candidates(),
             "ice_servers": [
                 {
                     "urls": [
@@ -605,7 +619,10 @@ async def get_go2rtc_diagnostics() -> Dict[str, Any]:
 
         sub_online = len(sub_producers) > 0
         main_online = len(main_producers) > 0
-        if sub_online or main_online:
+        sub_registered = sub in api_names
+        main_registered = main in api_names
+        stream_registered = sub_registered or main_registered
+        if stream_registered or sub_online or main_online:
             online_count += 1
         else:
             offline_count += 1
@@ -623,6 +640,7 @@ async def get_go2rtc_diagnostics() -> Dict[str, Any]:
             sub_producers=sub_producers,
             main_producers=main_producers,
             config_error=cfg_err,
+            stream_registered=stream_registered,
         )
 
         rows.append(
@@ -635,6 +653,9 @@ async def get_go2rtc_diagnostics() -> Dict[str, Any]:
                 "camera_group": cam.get("camera_group") or "",
                 "subStream": sub,
                 "mainStream": main,
+                "subRegistered": sub_registered,
+                "mainRegistered": main_registered,
+                "streamRegistered": stream_registered,
                 "subOnline": sub_online,
                 "mainOnline": main_online,
                 "subConsumers": sub_consumers,

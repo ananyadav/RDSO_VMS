@@ -56,27 +56,42 @@ async function preflightGo2RtcAssets(): Promise<void> {
   }
 }
 
+async function loadGo2RtcModule(): Promise<void> {
+  if (isPlayerRegistered()) return;
+
+  const existing = document.querySelector(`script[data-go2rtc="${GO2RTC_PLAYER_MODULE}"]`);
+  if (existing) {
+    if (!(await waitForPlayerRegistration(REGISTER_WAIT_MS))) {
+      throw new Error('go2rtc player script loaded but video-stream element never registered');
+    }
+    return;
+  }
+
+  await preflightGo2RtcAssets();
+
+  await new Promise<void>((resolve, reject) => {
+    const script = document.createElement('script');
+    script.type = 'module';
+    script.src = GO2RTC_PLAYER_MODULE;
+    script.dataset.go2rtc = GO2RTC_PLAYER_MODULE;
+    script.onload = () => {
+      void waitForPlayerRegistration(REGISTER_WAIT_MS).then((ok) => {
+        if (ok) resolve();
+        else reject(new Error('Failed to register go2rtc video-stream custom element'));
+      });
+    };
+    script.onerror = () => reject(new Error(`Failed to load ${GO2RTC_PLAYER_MODULE}`));
+    document.head.appendChild(script);
+  });
+}
+
 export function ensureGo2RtcPlayer(): Promise<void> {
   if (isPlayerRegistered()) {
     return Promise.resolve();
   }
   if (loadPromise) return loadPromise;
 
-  loadPromise = (async () => {
-    // index.html preloads the module; wait for custom element registration first.
-    if (await waitForPlayerRegistration(2_000)) return;
-
-    await preflightGo2RtcAssets();
-
-    // No query string — relative import ./video-rtc.js must resolve under /go2rtc/.
-    await import(/* @vite-ignore */ GO2RTC_PLAYER_MODULE);
-
-    if (await waitForPlayerRegistration(REGISTER_WAIT_MS)) return;
-
-    throw new Error(
-      'Failed to load go2rtc player — check /go2rtc/video-stream.js and /go2rtc/video-rtc.js',
-    );
-  })().catch((err) => {
+  loadPromise = loadGo2RtcModule().catch((err) => {
     loadPromise = null;
     throw err;
   });
@@ -153,7 +168,8 @@ export async function mountGo2RtcPlayer(
 
   const el = document.createElement('video-stream') as VideoStreamEl;
 
-  el.mode = options.mode;
+  el.mode = 'mse,webrtc,mjpeg';
+  // mode option kept for API compatibility; VideoRTC picks/falls back internally.
   // We manage lifecycle in useGo2RtcLive — never use background=true (it blocks DOM teardown).
   el.background = false;
   el.visibilityCheck = false;
@@ -181,13 +197,14 @@ export async function mountGo2RtcPlayer(
   const modeObserver = window.setInterval(() => {
     if (!active) return;
     const modeEl = el.querySelector('.mode');
-    const label = modeEl?.textContent?.trim();
-    if (label && label !== 'loading') {
-      options.onModeLabel?.(label);
+    const modeLabel = modeEl?.textContent?.trim();
+    if (modeLabel && modeLabel !== 'loading' && modeLabel !== 'error') {
+      options.onModeLabel?.(modeLabel);
     }
-    const errEl = el.querySelector('.status');
-    const err = errEl?.textContent?.trim();
-    if (err) options.onError?.(err);
+    if (modeLabel === 'error') {
+      const err = el.querySelector('.status')?.textContent?.trim();
+      if (err) options.onError?.(err);
+    }
   }, 500);
 
   const onElError = () => options.onError?.('Player error');
