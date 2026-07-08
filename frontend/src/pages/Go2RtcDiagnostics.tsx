@@ -1,4 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  useUrlHydration,
+  useUrlSync,
+  initialStringParam,
+} from '../hooks/useUrlSearchState';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import { apiFetch } from '../lib/api';
@@ -49,11 +54,23 @@ interface IssueSummary {
   totalWithIssues: number;
 }
 
+interface WorkerRow {
+  workerId: number;
+  pm2Name?: string;
+  baseUrl: string;
+  assignedCameraCount?: number;
+  liveStreamCount?: number;
+  running: boolean;
+}
+
 interface Diagnostics {
   enabled: boolean;
   running: boolean;
+  workersEnabled?: boolean;
+  workers?: WorkerRow[];
   liveProvider: string;
   apiUrl: string;
+  proxyBase?: string;
   binaryFound: boolean;
   pid: number | null;
   streamCount: number;
@@ -134,15 +151,37 @@ const selectClass =
   'bg-gray-800 text-gray-200 border border-gray-600 rounded px-2 py-1.5 text-sm min-w-[10rem]';
 
 export default function Go2RtcDiagnostics(): React.ReactElement {
+  const { setParams, initialParams, hydratedRef, markHydrated } = useUrlHydration();
+
   const [data, setData] = useState<Diagnostics | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
-  const [selectedSite, setSelectedSite] = useState('');
-  const [selectedBuilding, setSelectedBuilding] = useState('');
-  const [selectedFloor, setSelectedFloor] = useState('');
+  const [selectedSite, setSelectedSite] = useState(() =>
+    initialStringParam(initialParams, 'site'),
+  );
+  const [selectedBuilding, setSelectedBuilding] = useState(() =>
+    initialStringParam(initialParams, 'building'),
+  );
+  const [selectedFloor, setSelectedFloor] = useState(() =>
+    initialStringParam(initialParams, 'floor'),
+  );
+
+  useEffect(() => {
+    markHydrated();
+  }, [markHydrated]);
+
+  const urlValues = useMemo(
+    () => ({
+      site: selectedSite || null,
+      building: selectedBuilding || null,
+      floor: selectedFloor || null,
+    }),
+    [selectedSite, selectedBuilding, selectedFloor],
+  );
+  useUrlSync(hydratedRef, setParams, urlValues);
 
   const fetchDiagnostics = useCallback(async (initial = false) => {
     if (initial) setLoading(true);
@@ -357,7 +396,7 @@ export default function Go2RtcDiagnostics(): React.ReactElement {
                 <StatusPill ok={data.running} label={data.running ? 'go2rtc running' : 'go2rtc stopped'} />
                 <p className="text-sm text-gray-300">Provider: {data.liveProvider}</p>
                 <p className="text-xs text-gray-500">PID: {data.pid ?? '—'}</p>
-                <p className="text-xs text-gray-500 break-all">{data.apiUrl}</p>
+                <p className="text-xs text-gray-500 break-all">Proxy: {data.proxyBase ?? data.apiUrl}</p>
               </div>
             </Card>
 
@@ -401,6 +440,14 @@ export default function Go2RtcDiagnostics(): React.ReactElement {
                 </button>
                 <button
                   type="button"
+                  onClick={() => void runAction('/api/go2rtc/workers/heal', 'Heal workers')}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded bg-indigo-800 text-indigo-100 hover:bg-indigo-700 text-sm"
+                >
+                  <Zap size={14} />
+                  Heal workers
+                </button>
+                <button
+                  type="button"
                   onClick={() => void runAction('/api/go2rtc/stop', 'Stop')}
                   className="flex items-center gap-1 px-3 py-1.5 rounded bg-red-900 text-red-100 hover:bg-red-800 text-sm"
                 >
@@ -414,6 +461,32 @@ export default function Go2RtcDiagnostics(): React.ReactElement {
               )}
             </Card>
           </div>
+
+          {data.workersEnabled && (data.workers?.length ?? 0) > 0 && (
+            <Card>
+              <div className="text-gray-400 text-sm mb-3">go2rtc workers</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {(data.workers ?? []).map((w) => (
+                  <div
+                    key={w.workerId}
+                    className="rounded-lg border border-gray-700 bg-gray-900/50 px-4 py-3"
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="font-medium text-white">Worker {w.workerId}</span>
+                      <StatusPill ok={w.running} label={w.running ? 'running' : 'down'} />
+                    </div>
+                    <p className="text-xs text-gray-500 break-all">{w.baseUrl}</p>
+                    <p className="text-sm text-gray-400 mt-1">
+                      {w.assignedCameraCount ?? '—'} cameras · {w.liveStreamCount ?? '—'} live streams
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Worker 2 serves overflow cameras (~278). Click Heal workers if worker 2 streams drop.
+              </p>
+            </Card>
+          )}
 
           {(data.configErrors?.length ?? 0) > 0 && (
             <Card>

@@ -1,5 +1,5 @@
 """
-go2rtc relay — default live view engine (HLS V1 remains env fallback).
+go2rtc relay — live view engine (WebRTC/MSE via go2rtc proxy).
 
 Grid:   {camera_uid}_sub  → RTSP channel 102
 Fullscreen: {camera_uid}_main → RTSP channel 101
@@ -34,13 +34,55 @@ GO2RTC_ENABLED = os.getenv("GO2RTC_ENABLED", "true").strip().lower() in (
     "true",
     "yes",
 )
-LIVE_PROVIDER = os.getenv("LIVE_PROVIDER", "go2rtc").strip().lower()
 GO2RTC_API_HOST = os.getenv("GO2RTC_API_HOST", "127.0.0.1").strip()
 GO2RTC_API_PORT = int(os.getenv("GO2RTC_API_PORT", "1984"))
 GO2RTC_API_URL = f"http://{GO2RTC_API_HOST}:{GO2RTC_API_PORT}"
 
 _proc: Optional[asyncio.subprocess.Process] = None
 _consumer_counts: Dict[str, int] = {}
+_webrtc_host_resolved: Optional[str] = None
+_webrtc_host_logged = False
+
+
+def _guess_lan_ip() -> Optional[str]:
+    """Best-effort LAN IP for WebRTC when GO2RTC_WEBRTC_HOST is unset."""
+    import socket
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            ip = sock.getsockname()[0]
+            if ip and not ip.startswith("127."):
+                return ip
+    except OSError:
+        pass
+    return None
+
+
+def resolve_webrtc_host() -> str:
+    """WebRTC ICE host — env override, else auto-detected LAN IP, else API host."""
+    global _webrtc_host_resolved, _webrtc_host_logged
+    if _webrtc_host_resolved:
+        return _webrtc_host_resolved
+
+    explicit = os.getenv("GO2RTC_WEBRTC_HOST", "").strip()
+    if explicit:
+        host = explicit
+    else:
+        host = _guess_lan_ip() or GO2RTC_API_HOST
+
+    _webrtc_host_resolved = host
+    if not _webrtc_host_logged:
+        _webrtc_host_logged = True
+        if host in ("127.0.0.1", "localhost", "::1"):
+            logger.warning(
+                "[go2rtc] WebRTC candidates use %s — set GO2RTC_WEBRTC_HOST to the server LAN IP "
+                "for remote browsers",
+                host,
+            )
+        elif not explicit:
+            logger.info("[go2rtc] WebRTC candidates use auto-detected LAN IP %s", host)
+    return host
 
 
 def go2rtc_bin() -> Path:
@@ -60,11 +102,22 @@ def stream_name(camera_id: str, profile: str) -> str:
     return f"{camera_id}_{p}"
 
 
-def local_recording_rtsp_url(camera_uid: str, stream: str = "main") -> str:
+def local_recording_rtsp_url(
+    camera_uid: str,
+    stream: str = "main",
+    *,
+    worker_id: Optional[int] = None,
+) -> str:
     """RTSP URL via go2rtc relay — avoids extra direct connections to the camera."""
     host = os.getenv("GO2RTC_RTSP_HOST", "127.0.0.1").strip()
-    port = os.getenv("GO2RTC_RTSP_PORT", "8554").strip()
     profile = "main" if (stream or "main").strip().lower() == "main" else "sub"
+    if worker_id is not None:
+        from app.services.go2rtc_workers import worker_ports
+
+        _, rtsp_port, _ = worker_ports(int(worker_id))
+        port = str(rtsp_port)
+    else:
+        port = os.getenv("GO2RTC_RTSP_PORT", "8554").strip()
     return f"rtsp://{host}:{port}/{stream_name(camera_uid, profile)}"
 
 
@@ -93,20 +146,36 @@ def _rtsp_with_tcp(url: str) -> str:
     return f"{base}#{query}" if query else base
 
 
-async def _all_cameras() -> List[dict]:
-    query = {
+async def _all_cameras(worker_id: Optional[int] = None) -> List[dict]:
+    query: Dict[str, Any] = {
         "$or": [
             {"is_active": True},
             {"is_active": {"$exists": False}},
         ]
     }
+    if worker_id is not None:
+        from app.services.go2rtc_workers import normalize_worker_id
+
+        wid = int(worker_id)
+        query = {
+            "$and": [
+                query,
+                {
+                    "$or": [
+                        {"worker_id": wid},
+                        {"worker_id": str(wid)},
+                        {"worker_id": f"worker-{wid}"},
+                    ]
+                },
+            ]
+        }
     cursor = camera_collection.find(query).sort("name", 1)
     return await cursor.to_list(length=None)
 
 
-async def build_all_streams_config() -> Dict[str, Any]:
-    """Build go2rtc stream map for every camera in MongoDB."""
-    cameras = await _all_cameras()
+async def build_all_streams_config(worker_id: Optional[int] = None) -> Dict[str, Any]:
+    """Build go2rtc stream map for every camera (optionally filtered by worker)."""
+    cameras = await _all_cameras(worker_id)
     streams: Dict[str, str] = {}
     masked: Dict[str, str] = {}
     cameras_meta: List[dict] = []
@@ -140,6 +209,7 @@ async def build_all_streams_config() -> Dict[str, Any]:
                 "cameraId": camera_id,
                 "cameraUid": camera_uid,
                 "cameraName": name,
+                "workerId": cam.get("worker_id"),
                 "site": (cam.get("site") or "").strip(),
                 "building": (cam.get("building") or "").strip(),
                 "floor": (cam.get("floor_group") or cam.get("floor") or "").strip(),
@@ -171,27 +241,24 @@ async def build_all_streams_config() -> Dict[str, Any]:
     }
 
 
-def _webrtc_candidates() -> List[str]:
+def _webrtc_candidates(webrtc_port: int) -> List[str]:
     """ICE candidates for browser WebRTC — must be reachable from clients (not 127.0.0.1 on GPU server)."""
-    explicit = os.getenv("GO2RTC_WEBRTC_HOST", "").strip()
-    port = os.getenv("GO2RTC_WEBRTC_PORT", "8555").strip()
-    host = explicit or GO2RTC_API_HOST
-    if host in ("127.0.0.1", "localhost", "::1"):
-        logger.warning(
-            "[go2rtc] WebRTC candidates use %s — set GO2RTC_WEBRTC_HOST to the GPU server LAN IP "
-            "for remote browsers",
-            host,
-        )
-    return [f"{host}:{port}"]
+    return [f"{resolve_webrtc_host()}:{webrtc_port}"]
 
 
-def _base_yaml(streams: Dict[str, str]) -> dict:
+def _base_yaml(
+    streams: Dict[str, str],
+    *,
+    api_port: int,
+    rtsp_port: int,
+    webrtc_port: int,
+) -> dict:
     return {
-        "api": {"listen": f"{GO2RTC_API_HOST}:{GO2RTC_API_PORT}"},
-        "rtsp": {"listen": "127.0.0.1:8554"},
+        "api": {"listen": f"{GO2RTC_API_HOST}:{api_port}"},
+        "rtsp": {"listen": f"127.0.0.1:{rtsp_port}"},
         "webrtc": {
-            "listen": ":8555",
-            "candidates": _webrtc_candidates(),
+            "listen": f":{webrtc_port}",
+            "candidates": _webrtc_candidates(webrtc_port),
             "ice_servers": [
                 {
                     "urls": [
@@ -206,14 +273,83 @@ def _base_yaml(streams: Dict[str, str]) -> dict:
     }
 
 
+async def write_worker_config_file(worker_id: int) -> Dict[str, Any]:
+    from app.services.go2rtc_workers import worker_config_path, worker_ports
+
+    built = await build_all_streams_config(worker_id)
+    if not built.get("ok"):
+        return built
+
+    api_port, rtsp_port, webrtc_port = worker_ports(worker_id)
+    config_path = worker_config_path(worker_id)
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        yaml.safe_dump(
+            _base_yaml(
+                built["streams"],
+                api_port=api_port,
+                rtsp_port=rtsp_port,
+                webrtc_port=webrtc_port,
+            ),
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    logger.info(
+        "[go2rtc] Wrote worker %s config %s cameras=%s streams=%s",
+        worker_id,
+        config_path,
+        built.get("cameraCount"),
+        built.get("streamCount"),
+    )
+    built["workerId"] = worker_id
+    built["configPath"] = str(config_path)
+    return built
+
+
 async def write_config_file() -> Dict[str, Any]:
+    from app.services.go2rtc_workers import WORKERS_ENABLED, list_active_workers, write_worker_config_file
+
+    if WORKERS_ENABLED:
+        workers = await list_active_workers()
+        if not workers:
+            return await write_worker_config_file(1)
+        combined: Dict[str, Any] = {
+            "ok": True,
+            "streamCount": 0,
+            "cameraCount": 0,
+            "streams": {},
+            "masked": {},
+            "cameras": [],
+            "errors": [],
+        }
+        for row in workers:
+            wid = int(row["worker_id"])
+            built = await write_worker_config_file(wid)
+            if not built.get("ok"):
+                return built
+            combined["streamCount"] += int(built.get("streamCount") or 0)
+            combined["cameraCount"] += int(built.get("cameraCount") or 0)
+            combined["streams"].update(built.get("streams") or {})
+            combined["masked"].update(built.get("masked") or {})
+            combined["cameras"].extend(built.get("cameras") or [])
+            combined["errors"].extend(built.get("errors") or [])
+        return combined
     built = await build_all_streams_config()
     if not built.get("ok"):
         return built
 
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     CONFIG_PATH.write_text(
-        yaml.safe_dump(_base_yaml(built["streams"]), sort_keys=False),
+        yaml.safe_dump(
+            _base_yaml(
+                built["streams"],
+                api_port=GO2RTC_API_PORT,
+                rtsp_port=int(os.getenv("GO2RTC_RTSP_PORT", "8554")),
+                webrtc_port=int(os.getenv("GO2RTC_WEBRTC_PORT", "8555")),
+            ),
+            sort_keys=False,
+        ),
         encoding="utf-8",
     )
     logger.info(
@@ -225,27 +361,43 @@ async def write_config_file() -> Dict[str, Any]:
     return built
 
 
-async def is_api_healthy() -> bool:
+async def is_api_healthy(api_url: Optional[str] = None, *, timeout_sec: float = 4.0) -> bool:
+    base = (api_url or GO2RTC_API_URL).rstrip("/")
     try:
-        timeout = aiohttp.ClientTimeout(total=2.0)
+        timeout = aiohttp.ClientTimeout(total=timeout_sec)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(f"{GO2RTC_API_URL}/api") as resp:
+            async with session.get(f"{base}/api") as resp:
                 return resp.status == 200
     except Exception:
         return False
 
 
-async def fetch_go2rtc_streams() -> Dict[str, Any]:
+async def is_api_healthy_retry(
+    api_url: str,
+    *,
+    attempts: int = 3,
+    delay_sec: float = 1.0,
+) -> bool:
+    for attempt in range(max(1, attempts)):
+        if await is_api_healthy(api_url):
+            return True
+        if attempt + 1 < attempts:
+            await asyncio.sleep(delay_sec)
+    return False
+
+
+async def fetch_go2rtc_streams(api_url: Optional[str] = None) -> Dict[str, Any]:
     """GET go2rtc /api/streams — producers/consumers per stream."""
+    base = (api_url or GO2RTC_API_URL).rstrip("/")
     try:
         timeout = aiohttp.ClientTimeout(total=15.0)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(f"{GO2RTC_API_URL}/api/streams") as resp:
+            async with session.get(f"{base}/api/streams") as resp:
                 if resp.status != 200:
                     return {}
                 return await resp.json()
     except Exception as exc:
-        logger.debug("[go2rtc] streams API: %s", exc)
+        logger.debug("[go2rtc] streams API %s: %s", base, exc)
         return {}
 
 
@@ -263,7 +415,11 @@ def _producer_url_matches(existing_info: dict, desired_src: str) -> bool:
     return cur.split("#", 1)[0] == want.split("#", 1)[0]
 
 
-async def sync_streams_to_go2rtc(streams: Dict[str, str]) -> Dict[str, Any]:
+async def sync_streams_to_go2rtc(
+    streams: Dict[str, str],
+    *,
+    api_url: Optional[str] = None,
+) -> Dict[str, Any]:
     """
     Push MongoDB stream map into a running go2rtc instance.
 
@@ -280,6 +436,7 @@ async def sync_streams_to_go2rtc(streams: Dict[str, str]) -> Dict[str, Any]:
             "missingCount": 0,
         }
 
+    base = (api_url or GO2RTC_API_URL).rstrip("/")
     desired = set(streams.keys())
     total = len(streams)
     # Scale timeout for large fleets (~1038 streams need more than 120s under load).
@@ -309,7 +466,7 @@ async def sync_streams_to_go2rtc(streams: Dict[str, str]) -> Dict[str, Any]:
             async with sem:
                 try:
                     async with session.put(
-                        f"{GO2RTC_API_URL}/api/streams",
+                        f"{base}/api/streams",
                         params={"name": name, "src": src},
                     ) as resp:
                         if resp.status in (200, 201):
@@ -327,7 +484,7 @@ async def sync_streams_to_go2rtc(streams: Dict[str, str]) -> Dict[str, Any]:
 
     async with aiohttp.ClientSession(timeout=timeout) as session:
         for attempt in range(3):
-            existing = await fetch_go2rtc_streams()
+            existing = await fetch_go2rtc_streams(base)
             existing_names = set(existing.keys()) if isinstance(existing, dict) else set()
 
             if existing_names == desired and all(
@@ -358,7 +515,7 @@ async def sync_streams_to_go2rtc(streams: Dict[str, str]) -> Dict[str, Any]:
                     )
                 await _put_batch(session, pending, existing, existing_names)
 
-            post = await fetch_go2rtc_streams()
+            post = await fetch_go2rtc_streams(base)
             post_names = set(post.keys()) if isinstance(post, dict) else set()
             still_missing = sorted(desired - post_names)
             if not still_missing:
@@ -370,12 +527,12 @@ async def sync_streams_to_go2rtc(streams: Dict[str, str]) -> Dict[str, Any]:
                     ", ".join(still_missing[:5]),
                 )
 
-        final = await fetch_go2rtc_streams()
+        final = await fetch_go2rtc_streams(base)
         final_names = set(final.keys()) if isinstance(final, dict) else set()
         for name in sorted(final_names - desired):
             try:
                 async with session.delete(
-                    f"{GO2RTC_API_URL}/api/streams",
+                    f"{base}/api/streams",
                     params={"src": name},
                 ) as resp:
                     if resp.status in (200, 204):
@@ -386,7 +543,7 @@ async def sync_streams_to_go2rtc(streams: Dict[str, str]) -> Dict[str, Any]:
             except Exception as exc:
                 errors.append(f"delete {name}: {exc}")
 
-    post = await fetch_go2rtc_streams()
+    post = await fetch_go2rtc_streams(base)
     post_names = set(post.keys()) if isinstance(post, dict) else set()
     missing = sorted(desired - post_names)
 
@@ -418,7 +575,11 @@ async def sync_streams_to_go2rtc(streams: Dict[str, str]) -> Dict[str, Any]:
 
 
 async def _restart_go2rtc_api() -> bool:
-    """Ask running go2rtc to restart (drops active viewers)."""
+    """Ask running go2rtc to restart (drops active viewers). Legacy monolithic mode only."""
+    from app.services.go2rtc_workers import WORKERS_ENABLED
+
+    if WORKERS_ENABLED:
+        return False
     try:
         timeout = aiohttp.ClientTimeout(total=15.0)
         async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -461,6 +622,20 @@ async def start_go2rtc(*, reload: bool = False) -> Dict[str, Any]:
 
     if not GO2RTC_ENABLED:
         return {"ok": False, "error": "GO2RTC_ENABLED=false", "running": False}
+
+    from app.services.go2rtc_workers import WORKERS_ENABLED, list_active_workers, reload_worker_process, sync_all_workers
+
+    if WORKERS_ENABLED:
+        if reload:
+            results = []
+            for row in await list_active_workers():
+                wid = int(row["worker_id"])
+                results.append(await reload_worker_process(wid, reason="admin_reload"))
+            return {
+                "ok": all(r.get("ok") for r in results) if results else False,
+                "workers": results,
+            }
+        return await sync_all_workers()
 
     built = await write_config_file()
     if not built.get("ok"):
@@ -537,7 +712,29 @@ async def start_go2rtc(*, reload: bool = False) -> Dict[str, Any]:
     }
 
 
+async def stop_legacy_go2rtc_subprocess() -> None:
+    """Stop only the legacy single-process go2rtc (runtime/go2rtc.yaml), not PM2 workers."""
+    global _proc
+    proc = _proc
+    _proc = None
+    if proc and proc.returncode is None:
+        try:
+            proc.terminate()
+            await asyncio.wait_for(proc.wait(), timeout=3.0)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+        logger.info("[go2rtc] Stopped legacy subprocess pid=%s", proc.pid)
+
+
 async def stop_go2rtc() -> None:
+    from app.services.go2rtc_workers import WORKERS_ENABLED, stop_all_worker_subprocesses
+
+    if WORKERS_ENABLED:
+        await stop_all_worker_subprocesses()
+
     global _proc
     proc = _proc
     _proc = None
@@ -553,13 +750,83 @@ async def stop_go2rtc() -> None:
         logger.info("[go2rtc] Stopped pid=%s", proc.pid)
 
 
+async def _streams_by_worker() -> Dict[int, Dict[str, Any]]:
+    from app.services.go2rtc_workers import WORKERS_ENABLED, list_active_workers, worker_base_url
+
+    if not WORKERS_ENABLED:
+        return {1: await fetch_go2rtc_streams()}
+
+    out: Dict[int, Dict[str, Any]] = {}
+    for row in await list_active_workers():
+        wid = int(row["worker_id"])
+        part = await fetch_go2rtc_streams(worker_base_url(wid))
+        out[wid] = part if isinstance(part, dict) else {}
+    return out
+
+
+async def _merged_worker_streams() -> Dict[str, Any]:
+    merged: Dict[str, Any] = {}
+    for part in (await _streams_by_worker()).values():
+        merged.update(part)
+    return merged
+
+
 async def get_go2rtc_status() -> Dict[str, Any]:
+    from app.services.go2rtc_workers import (
+        WORKERS_ENABLED,
+        list_active_workers,
+        worker_base_url,
+        worker_config_path,
+    )
+
     built = await build_all_streams_config()
+    if WORKERS_ENABLED:
+        workers = await list_active_workers()
+        worker_rows = []
+        running_any = False
+        streams_by_worker = await _streams_by_worker()
+        for row in workers:
+            wid = int(row["worker_id"])
+            url = worker_base_url(wid)
+            healthy = await is_api_healthy(url)
+            running_any = running_any or healthy
+            live_count = len(streams_by_worker.get(wid) or {})
+            worker_rows.append(
+                {
+                    "workerId": wid,
+                    "pm2Name": row.get("pm2_name"),
+                    "baseUrl": url,
+                    "apiPort": row.get("api_port"),
+                    "rtspPort": row.get("rtsp_port"),
+                    "webrtcPort": row.get("webrtc_port"),
+                    "assignedCameraCount": row.get("assigned_camera_count"),
+                    "maxCameras": row.get("max_cameras", MAX_CAMERAS_PER_WORKER),
+                    "running": healthy,
+                    "liveStreamCount": live_count,
+                    "configPath": str(worker_config_path(wid)),
+                }
+            )
+        return {
+            "enabled": GO2RTC_ENABLED,
+            "running": running_any,
+            "workersEnabled": True,
+            "liveProvider": "go2rtc",
+            "apiUrl": "/go2rtc",
+            "proxyBase": "/go2rtc",
+            "binary": str(go2rtc_bin()),
+            "binaryFound": go2rtc_bin().is_file(),
+            "streamCount": built.get("streamCount", 0) if built.get("ok") else 0,
+            "cameraCount": built.get("cameraCount", 0) if built.get("ok") else 0,
+            "workers": worker_rows,
+            "errors": built.get("errors", []) if built.get("ok") else [built.get("error")],
+        }
+
     healthy = await is_api_healthy()
     return {
         "enabled": GO2RTC_ENABLED,
         "running": healthy,
-        "liveProvider": LIVE_PROVIDER,
+        "workersEnabled": False,
+        "liveProvider": "go2rtc",
         "apiUrl": GO2RTC_API_URL,
         "proxyBase": "/go2rtc",
         "binary": str(go2rtc_bin()),
@@ -570,6 +837,9 @@ async def get_go2rtc_status() -> Dict[str, Any]:
         "pid": _proc.pid if _proc and _proc.returncode is None else None,
         "errors": built.get("errors", []) if built.get("ok") else [built.get("error")],
     }
+
+
+MAX_CAMERAS_PER_WORKER = int(os.getenv("GO2RTC_MAX_CAMERAS_PER_WORKER", "300"))
 
 
 async def get_go2rtc_diagnostics() -> Dict[str, Any]:
@@ -583,7 +853,15 @@ async def get_go2rtc_diagnostics() -> Dict[str, Any]:
 
     built = await build_all_streams_config()
     status = await get_go2rtc_status()
-    api_streams = await fetch_go2rtc_streams()
+    streams_by_worker = await _streams_by_worker()
+    api_streams = await _merged_worker_streams()
+    worker_health = {
+        int(w["workerId"]): bool(w.get("running"))
+        for w in (status.get("workers") or [])
+        if w.get("workerId") is not None
+    }
+    from app.services.go2rtc_workers import normalize_worker_id
+
     configured_names = {
         s
         for cam in (built.get("cameras") or [])
@@ -607,8 +885,12 @@ async def get_go2rtc_diagnostics() -> Dict[str, Any]:
     for cam in built.get("cameras") or []:
         sub = cam["subStream"]
         main = cam["mainStream"]
-        sub_info = api_streams.get(sub) or {}
-        main_info = api_streams.get(main) or {}
+        cam_worker = normalize_worker_id(cam.get("workerId")) or 1
+        worker_streams = streams_by_worker.get(cam_worker) or {}
+        worker_running = worker_health.get(cam_worker, False)
+
+        sub_info = worker_streams.get(sub) or {}
+        main_info = worker_streams.get(main) or {}
 
         sub_producers = sub_info.get("producers") or []
         main_producers = main_info.get("producers") or []
@@ -619,8 +901,8 @@ async def get_go2rtc_diagnostics() -> Dict[str, Any]:
 
         sub_online = len(sub_producers) > 0
         main_online = len(main_producers) > 0
-        sub_registered = sub in api_names
-        main_registered = main in api_names
+        sub_registered = sub in worker_streams
+        main_registered = main in worker_streams
         stream_registered = sub_registered or main_registered
         if stream_registered or sub_online or main_online:
             online_count += 1
@@ -634,19 +916,24 @@ async def get_go2rtc_diagnostics() -> Dict[str, Any]:
 
         cam_name = cam["cameraName"]
         cfg_err = config_errors_by_name.get(cam_name)
-        issue_cat, issue_msg = stream_issue_from_row(
-            sub_online=sub_online,
-            main_online=main_online,
-            sub_producers=sub_producers,
-            main_producers=main_producers,
-            config_error=cfg_err,
-            stream_registered=stream_registered,
-        )
+        if not worker_running and not stream_registered:
+            issue_cat, issue_msg = "offline", f"go2rtc worker {cam_worker} not running"
+        else:
+            issue_cat, issue_msg = stream_issue_from_row(
+                sub_online=sub_online,
+                main_online=main_online,
+                sub_producers=sub_producers,
+                main_producers=main_producers,
+                config_error=cfg_err,
+                stream_registered=stream_registered,
+            )
 
         rows.append(
             {
                 "cameraId": cam["cameraId"],
                 "cameraName": cam_name,
+                "workerId": cam_worker,
+                "workerRunning": worker_running,
                 "site": cam.get("site") or "",
                 "building": cam.get("building") or "",
                 "floor": cam.get("floor") or "",
@@ -723,6 +1010,11 @@ async def ensure_go2rtc_streams() -> Dict[str, Any]:
     if not GO2RTC_ENABLED:
         return {"ok": False, "error": "GO2RTC_ENABLED=false", "running": False}
 
+    from app.services.go2rtc_workers import WORKERS_ENABLED, sync_all_workers
+
+    if WORKERS_ENABLED:
+        return await sync_all_workers()
+
     built = await write_config_file()
     if not built.get("ok"):
         return {**built, "running": False}
@@ -739,8 +1031,6 @@ async def start_go2rtc_quick() -> Dict[str, Any]:
     """Write config and ensure go2rtc process is up (no API stream push — avoids blocking startup)."""
     if not GO2RTC_ENABLED:
         return {"ok": False, "error": "GO2RTC_ENABLED=false", "running": False}
-    if LIVE_PROVIDER != "go2rtc":
-        return {"ok": False, "skipped": True, "running": False}
 
     built = await write_config_file()
     if not built.get("ok"):
@@ -858,9 +1148,20 @@ async def start_go2rtc_on_startup() -> None:
     if not GO2RTC_ENABLED:
         logger.info("[go2rtc] Disabled (GO2RTC_ENABLED=false)")
         return
-    if LIVE_PROVIDER != "go2rtc":
-        logger.info("[go2rtc] LIVE_PROVIDER=%s — go2rtc not auto-started", LIVE_PROVIDER)
+
+    from app.services.go2rtc_workers import WORKERS_ENABLED, startup_workers
+
+    if WORKERS_ENABLED:
+        result = await startup_workers()
+        if result.get("ok"):
+            logger.info(
+                "[go2rtc] Worker fleet ready: %s worker(s)",
+                len(result.get("workers") or []),
+            )
+        else:
+            logger.warning("[go2rtc] Worker startup issues: %s", result)
         return
+
     result = await start_go2rtc_quick()
     if result.get("ok"):
         logger.info(
@@ -874,9 +1175,10 @@ async def start_go2rtc_on_startup() -> None:
 
 
 def get_live_config() -> Dict[str, Any]:
+    from app.services.go2rtc_workers import WORKERS_ENABLED
+
     return {
-        "provider": LIVE_PROVIDER,
-        "hlsFallback": os.getenv("HLS_FALLBACK_ENABLED", "true").strip().lower()
-        in ("1", "true", "yes"),
+        "provider": "go2rtc",
         "go2rtcEnabled": GO2RTC_ENABLED,
+        "go2rtcWorkersEnabled": WORKERS_ENABLED,
     }

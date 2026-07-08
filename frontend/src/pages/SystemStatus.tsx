@@ -1,7 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import PageHeader from '../components/PageHeader';
 import { Server, HardDrive, Cpu, MemoryStick, Thermometer, ShieldCheck, Loader2 } from 'lucide-react';
 import Card from '../components/Card';
+import { apiFetch } from '../lib/api';
+import {
+  useUrlHydration,
+  useUrlSync,
+  paramFlag,
+  flagParam,
+} from '../hooks/useUrlSearchState';
 
 // --- The Reusable Toggle Switch Component ---
 interface ToggleSwitchProps {
@@ -52,32 +59,56 @@ interface SystemStats {
   cpu_percent: number | null;
   memory_percent: number | null;
   disk_percent: number | null;
+  video_decode?: { description?: string };
 }
 
 export default function SystemStatus(): React.ReactElement {
-  const [autoReboot, setAutoReboot] = useState(true);
-  const [smartDetection, setSmartDetection] = useState(true);
-  const [firmwareUpdates, setFirmwareUpdates] = useState(false);
+  const { setParams, initialParams, hydratedRef, markHydrated } = useUrlHydration();
+  const [autoReboot, setAutoReboot] = useState(() =>
+    paramFlag(initialParams.current?.get('autoReboot') ?? null, true),
+  );
+  const [smartDetection, setSmartDetection] = useState(() =>
+    paramFlag(initialParams.current?.get('smartDetect') ?? null, true),
+  );
+  const [firmwareUpdates, setFirmwareUpdates] = useState(() =>
+    paramFlag(initialParams.current?.get('firmware') ?? null, false),
+  );
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  useEffect(() => {
+    markHydrated();
+  }, [markHydrated]);
+
+  const urlValues = useMemo(
+    () => ({
+      autoReboot: flagParam(autoReboot),
+      smartDetect: flagParam(smartDetection),
+      firmware: flagParam(firmwareUpdates),
+    }),
+    [autoReboot, smartDetection, firmwareUpdates],
+  );
+  useUrlSync(hydratedRef, setParams, urlValues);
 
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const res = await fetch('/api/status');
+        const res = await apiFetch('/api/status');
         if (res.ok) {
-          const data = await res.json();
-          setStats(data);
+          setStats(await res.json());
+          setFetchError(null);
+        } else {
+          setFetchError(`Status API returned ${res.status}`);
         }
       } catch {
-        // ignore — show fallback values
+        setFetchError('Could not reach status API');
       } finally {
         setLoading(false);
       }
     };
-    fetchStatus();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchStatus, 30000);
+    void fetchStatus();
+    const interval = setInterval(() => void fetchStatus(), 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -91,6 +122,10 @@ export default function SystemStatus(): React.ReactElement {
         subtitle="Monitor system health and performance"
       />
 
+      {fetchError && (
+        <p className="text-sm text-amber-400 px-1">{fetchError}</p>
+      )}
+
       {loading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="animate-spin text-gray-400" size={32} />
@@ -102,11 +137,10 @@ export default function SystemStatus(): React.ReactElement {
           <InfoCard icon={<MemoryStick size={24} />} title="Memory Usage" value={fmt(stats?.memory_percent, '%')} colorClass="bg-yellow-500/20 text-yellow-300" />
           <InfoCard icon={<HardDrive size={24} />} title="Storage Used" value={fmt(stats?.disk_percent, '%')} colorClass="bg-purple-500/20 text-purple-300" />
           <InfoCard icon={<Thermometer size={24} />} title="Temperature" value="N/A" colorClass="bg-orange-500/20 text-orange-300" />
-          <InfoCard icon={<ShieldCheck size={24} />} title="API Status" value="Online" colorClass="bg-gray-500/20 text-gray-300" />
+          <InfoCard icon={<ShieldCheck size={24} />} title="Video Decode" value={stats?.video_decode?.description ?? '—'} colorClass="bg-gray-500/20 text-gray-300" />
         </div>
       )}
 
-      {/* --- System Toggles Section --- */}
       <Card>
         <h3 className="text-lg font-bold text-white mb-2">System Automation</h3>
         <div className="divide-y divide-gray-700">

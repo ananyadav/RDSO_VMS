@@ -63,7 +63,7 @@ npm install
 npm run dev
 ```
 
-Dev UI: `http://localhost:3000` (proxies `/api` and `/ws` to the backend).
+Dev UI: `http://localhost:3000` (proxies `/api` and `/go2rtc` to the backend).
 
 ## Production (single port)
 
@@ -99,9 +99,9 @@ This builds `frontend/`, copies assets to `backend/static/`, and starts the back
 - `GET/POST /api/cameras` — camera CRUD and scan
 - `POST /api/login` — authentication
 - `GET/POST /api/recordings/*` — recording schedule and HLS segments
-- `POST/GET /api/live/{id}/*` — live HLS streams
+- `GET/POST /api/go2rtc/*` — go2rtc worker status, sync, diagnostics
+- `GET /go2rtc/api/ws` — WebRTC/MSE live view (all workers, per-camera routing)
 - `GET /api/status` — system health
-- `WS /ws` — WebRTC (legacy PTZ path)
 
 More detail: [docs/RUNNING.md](docs/RUNNING.md)  
 Live streaming baseline: [docs/STREAMING_BASELINE.md](docs/STREAMING_BASELINE.md)  

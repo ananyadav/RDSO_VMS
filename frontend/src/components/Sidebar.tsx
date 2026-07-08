@@ -27,7 +27,6 @@ const configNav: NavItem[] = [
 const systemNav: NavItem[] = [
   { label: 'Status', href: '/system-status', icon: Activity, permission: PERMISSIONS.SYSTEM },
   { label: 'go2rtc', href: '/go2rtc-diagnostics', icon: Radio, permission: PERMISSIONS.SYSTEM, adminOnly: true },
-  { label: 'HLS Diag', href: '/live-diagnostics', icon: Zap, permission: PERMISSIONS.SYSTEM },
   { label: 'Maintain', href: '/maintenance', icon: Wrench, permission: PERMISSIONS.SYSTEM },
 ];
 

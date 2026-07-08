@@ -2,17 +2,12 @@ import { useEffect, useState } from 'react';
 
 import { apiFetch } from './api';
 
-export type LiveProvider = 'go2rtc' | 'hls';
-
 export interface LiveConfig {
-  provider: LiveProvider;
-  hlsFallback: boolean;
   go2rtcEnabled: boolean;
+  go2rtcWorkersEnabled?: boolean;
 }
 
 const DEFAULT: LiveConfig = {
-  provider: 'go2rtc',
-  hlsFallback: true,
   go2rtcEnabled: true,
 };
 
@@ -24,13 +19,12 @@ export async function fetchLiveConfig(): Promise<LiveConfig> {
   if (pending) return pending;
   pending = (async () => {
     try {
-      const res = await apiFetch('/api/live/config', { cache: 'no-store' });
+      const res = await apiFetch('/api/go2rtc/live-config', { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         cached = {
-          provider: data.provider === 'hls' ? 'hls' : 'go2rtc',
-          hlsFallback: Boolean(data.hlsFallback),
           go2rtcEnabled: Boolean(data.go2rtcEnabled),
+          go2rtcWorkersEnabled: Boolean(data.go2rtcWorkersEnabled),
         };
         return cached;
       }

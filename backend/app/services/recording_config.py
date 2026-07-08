@@ -83,14 +83,10 @@ def resolve_recording_rtsp_url(camera_doc: dict, urls: dict) -> tuple[str | None
         "yes",
     )
     if via_go2rtc:
-        from app.services.go2rtc_service import (
-            GO2RTC_ENABLED,
-            LIVE_PROVIDER,
-            local_recording_rtsp_url,
-        )
+        from app.services.go2rtc_service import GO2RTC_ENABLED, local_recording_rtsp_url
         from app.services.camera_uid import make_camera_uid
 
-        if GO2RTC_ENABLED and LIVE_PROVIDER == "go2rtc":
+        if GO2RTC_ENABLED:
             uid = (
                 camera_doc.get("camera_uid")
                 or make_camera_uid(camera_doc.get("ip_address") or "")
@@ -99,7 +95,12 @@ def resolve_recording_rtsp_url(camera_doc: dict, urls: dict) -> tuple[str | None
             if uid:
                 stream = "main" if RECORDING_STREAM == "main" else "sub"
                 label = "main/101 via go2rtc" if stream == "main" else "sub/102 via go2rtc"
-                return local_recording_rtsp_url(uid, stream), label
+                worker_id = None
+                from app.services.go2rtc_workers import WORKERS_ENABLED, normalize_worker_id
+
+                if WORKERS_ENABLED:
+                    worker_id = normalize_worker_id(camera_doc.get("worker_id")) or 1
+                return local_recording_rtsp_url(uid, stream, worker_id=worker_id), label
 
     if RECORDING_STREAM == "main":
         url = camera_doc.get("main_rtsp_url") or urls.get("main_rtsp_url")

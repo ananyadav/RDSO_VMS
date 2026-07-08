@@ -283,60 +283,35 @@ async def list_recording_sessions(camera_id: str | None = None, limit: int = 50)
 PILOT_DOC_ID = "phase1"
 
 
-def pilot_recording_helper(doc) -> Optional[dict]:
-    if not doc:
-        return None
-    return {
-        "id": doc.get("_id"),
-        "camera_ids": doc.get("camera_ids", []),
-        "camera_names": doc.get("camera_names", []),
-        "status": doc.get("status"),
-        "hours": doc.get("hours"),
-        "started_at": doc.get("started_at"),
-        "ends_at": doc.get("ends_at"),
-        "stream_profile": doc.get("stream_profile"),
-        "stopped_at": doc.get("stopped_at"),
-    }
+async def cleanup_legacy_pilot_recording() -> None:
+    """Retire Phase-1 pilot recording — stop any active pilot FFmpeg and mark removed."""
+    from datetime import datetime, timezone
 
-
-async def get_pilot_recording() -> Optional[dict]:
     doc = await pilot_recording_collection.find_one({"_id": PILOT_DOC_ID})
-    return pilot_recording_helper(doc)
+    if not doc:
+        return
+    if doc.get("status") == "active":
+        from app.services.video_recording import is_camera_recording, stop_camera_recording
 
-
-async def save_pilot_recording(data: dict) -> dict:
-    data = {**data, "_id": PILOT_DOC_ID}
-    await pilot_recording_collection.replace_one({"_id": PILOT_DOC_ID}, data, upsert=True)
-    return pilot_recording_helper(data)
-
-
-async def list_cameras_for_pilot(limit: int = 2) -> list:
-    """Pilot cameras from PILOT_CAMERA_NAMES (default Cam10,Cam8), else first N by name."""
-    names_env = os.getenv("PILOT_CAMERA_NAMES", "Cam10,Cam8").strip()
-    if names_env:
-        wanted = [n.strip() for n in names_env.split(",") if n.strip()]
-        picked = []
-        for name in wanted[:limit]:
-            doc = await camera_collection.find_one({"name": name})
-            if doc:
-                picked.append({
-                    "id": str(doc["_id"]),
-                    "name": doc.get("name", name),
-                    "online": True,
-                })
-            else:
-                logging.warning(f"[PILOT] Camera '{name}' not found in DB")
-        if picked:
-            return picked
-
-    cameras = []
-    async for doc in camera_collection.find({}).sort("name", 1):
-        cameras.append({
-            "id": str(doc["_id"]),
-            "name": doc.get("name", "Camera"),
-            "online": True,
-        })
-    return cameras[:limit]
+        for cid in doc.get("camera_ids") or []:
+            try:
+                cid_str = str(cid)
+                if await is_camera_recording(cid_str):
+                    await stop_camera_recording(cid_str)
+            except Exception as exc:
+                logging.warning("[RECORDING] Pilot cleanup stop %s: %s", cid, exc)
+    await pilot_recording_collection.update_one(
+        {"_id": PILOT_DOC_ID},
+        {
+            "$set": {
+                "status": "removed",
+                "stopped_at": datetime.now(timezone.utc).isoformat(),
+                "stopped_reason": "pilot_feature_removed",
+            }
+        },
+        upsert=False,
+    )
+    logging.info("[RECORDING] Legacy pilot recording retired (no auto-start)")
 
 
 async def create_camera(camera_data: dict) -> dict:
@@ -397,6 +372,12 @@ async def upsert_camera_by_ip(camera_data: dict) -> dict:
 
     if "registered_at" not in fields:
         fields["registered_at"] = datetime.now(timezone.utc).isoformat()
+
+    from app.services.go2rtc_workers import WORKERS_ENABLED, ensure_camera_worker_assigned
+
+    if WORKERS_ENABLED:
+        fields = await ensure_camera_worker_assigned(fields, existing=None)
+
     ins = await camera_collection.insert_one(fields)
     created = await camera_collection.find_one({"_id": ins.inserted_id})
     created["_id"] = str(created["_id"])
@@ -471,6 +452,21 @@ async def _drop_legacy_unique_camera_name_index() -> None:
         logging.warning("[DB] Could not drop legacy unique name index: %s", exc)
 
 
+async def _drop_legacy_worker_id_indexes(collection) -> None:
+    """Drop old worker_id indexes (e.g. worker_id_1) before creating idx_* names."""
+    try:
+        async for idx in collection.list_indexes():
+            key = idx.get("key") or {}
+            if list(key.keys()) != ["worker_id"]:
+                continue
+            name = idx.get("name")
+            if name and not str(name).startswith("idx_"):
+                await collection.drop_index(name)
+                logging.info("[DB] Dropped legacy worker_id index %s on %s", name, collection.name)
+    except Exception as exc:
+        logging.debug("[DB] worker_id index cleanup on %s: %s", collection.name, exc)
+
+
 async def ensure_database_indexes() -> None:
     """Create indexes for camera and recording session lookups."""
     locations_collection = database.get_collection("locations")
@@ -494,6 +490,11 @@ async def ensure_database_indexes() -> None:
         await camera_collection.create_index("floor", name="idx_camera_floor")
         await camera_collection.create_index("camera_group", name="idx_camera_group")
         await camera_collection.create_index("is_active", name="idx_camera_is_active")
+        await _drop_legacy_worker_id_indexes(camera_collection)
+        await camera_collection.create_index("worker_id", name="idx_camera_worker_id")
+        from app.services.go2rtc_workers import ensure_workers_indexes
+
+        await ensure_workers_indexes()
         try:
             await camera_collection.drop_index("idx_camera_online")
         except Exception:

@@ -91,7 +91,7 @@ def _requires_authentication(path: str) -> bool:
         return False
     if path.startswith("/api/"):
         return not any(path.startswith(prefix) for prefix in _PUBLIC_API_PREFIXES)
-    if path.startswith("/go2rtc/") or path == "/ws":
+    if path.startswith("/go2rtc/"):
         return True
     return False
 

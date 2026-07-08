@@ -16,7 +16,6 @@ from app.services.camera_access import (
     user_can_access_stream,
 )
 from app.services.go2rtc_service import (
-    GO2RTC_API_URL,
     ensure_go2rtc_streams,
     get_go2rtc_diagnostics,
     get_go2rtc_status,
@@ -24,6 +23,14 @@ from app.services.go2rtc_service import (
     report_consumer,
     start_go2rtc,
     stop_go2rtc,
+)
+from app.services.go2rtc_workers import (
+    get_api_url_for_camera_doc,
+    get_api_url_for_stream,
+    get_default_player_api_url,
+    heal_all_workers,
+    list_active_workers,
+    sync_worker,
 )
 
 logger = logging.getLogger(__name__)
@@ -84,6 +91,9 @@ async def go2rtc_reload(request: web.Request) -> web.Response:
 
 
 async def go2rtc_sync(request: web.Request) -> web.Response:
+    denied = await _admin_only(request)
+    if denied is not None:
+        return denied
     try:
         await require_user(request)
     except web.HTTPUnauthorized:
@@ -171,11 +181,60 @@ async def _authorize_go2rtc_proxy(request: web.Request, path: str) -> None:
     raise web.HTTPForbidden(text="Camera access denied")
 
 
-async def _proxy_to_go2rtc(request: web.Request, path: str) -> web.StreamResponse:
-    """HTTP reverse proxy to go2rtc API (single-origin browser access)."""
-    await _authorize_go2rtc_proxy(request, path)
+async def go2rtc_workers_list(request: web.Request) -> web.Response:
+    denied = await _admin_only(request)
+    if denied is not None:
+        return denied
+    workers = await list_active_workers()
+    return web.json_response({"workers": workers})
 
-    target = f"{GO2RTC_API_URL}/{path}"
+
+async def go2rtc_worker_sync(request: web.Request) -> web.Response:
+    denied = await _admin_only(request)
+    if denied is not None:
+        return denied
+    try:
+        worker_id = int(request.match_info.get("worker_id", "0"))
+    except ValueError:
+        return web.json_response({"ok": False, "error": "invalid worker_id"}, status=400)
+    if worker_id < 1:
+        return web.json_response({"ok": False, "error": "invalid worker_id"}, status=400)
+    return web.json_response(await sync_worker(worker_id))
+
+
+async def go2rtc_workers_heal(request: web.Request) -> web.Response:
+    """POST /api/go2rtc/workers/heal — restart/resync any unhealthy worker."""
+    denied = await _admin_only(request)
+    if denied is not None:
+        return denied
+    return web.json_response(await heal_all_workers())
+
+
+async def _resolve_go2rtc_api_url(
+    request: web.Request,
+    path: str,
+    cam_doc: dict | None = None,
+) -> str:
+    basename = path.rsplit("/", 1)[-1].lower()
+    if basename in _GO2RTC_PLAYER_ASSETS or basename.endswith(".js"):
+        return await get_default_player_api_url()
+
+    src = (request.query.get("src") or "").strip()
+    if src:
+        return await get_api_url_for_stream(src, cam_doc)
+    if cam_doc is not None:
+        return await get_api_url_for_camera_doc(cam_doc)
+    return await get_default_player_api_url()
+
+
+async def _proxy_to_go2rtc(
+    request: web.Request,
+    path: str,
+    *,
+    api_url: str,
+) -> web.StreamResponse:
+    """HTTP reverse proxy to a go2rtc worker API (single-origin browser access)."""
+    target = f"{api_url.rstrip('/')}/{path}"
     if request.query_string:
         target = f"{target}?{request.query_string}"
 
@@ -205,7 +264,17 @@ async def _proxy_to_go2rtc(request: web.Request, path: str) -> web.StreamRespons
 
 async def go2rtc_proxy(request: web.Request) -> web.StreamResponse:
     path = request.match_info.get("path", "")
-    return await _proxy_to_go2rtc(request, path)
+    await _authorize_go2rtc_proxy(request, path)
+
+    cam_doc = None
+    src = (request.query.get("src") or "").strip()
+    if src:
+        stream_ref = parse_stream_camera_id(src)
+        if stream_ref:
+            cam_doc = await get_camera_by_ref(stream_ref)
+
+    api_url = await _resolve_go2rtc_api_url(request, path, cam_doc)
+    return await _proxy_to_go2rtc(request, path, api_url=api_url)
 
 
 async def go2rtc_ws_proxy(request: web.Request) -> web.WebSocketResponse:
@@ -227,7 +296,8 @@ async def go2rtc_ws_proxy(request: web.Request) -> web.WebSocketResponse:
     if not user_can_access_stream(user, src, cam_doc):
         raise web.HTTPForbidden(text="Camera access denied")
 
-    ws_base = GO2RTC_API_URL.replace("http://", "ws://", 1)
+    api_url = await get_api_url_for_camera_doc(cam_doc)
+    ws_base = api_url.replace("http://", "ws://", 1).replace("https://", "wss://", 1)
     target = (
         f"{ws_base}/api/ws?{request.query_string}"
         if request.query_string
@@ -291,7 +361,7 @@ async def go2rtc_ws_proxy(request: web.Request) -> web.WebSocketResponse:
 
 
 def setup_go2rtc_routes(app: web.Application) -> None:
-    app.router.add_get("/api/live/config", live_config)
+    app.router.add_get("/api/go2rtc/live-config", live_config)
     app.router.add_get("/api/go2rtc/status", go2rtc_status)
     app.router.add_get("/api/go2rtc/diagnostics", go2rtc_diagnostics)
     app.router.add_post("/api/go2rtc/start", go2rtc_start)
@@ -300,6 +370,9 @@ def setup_go2rtc_routes(app: web.Application) -> None:
     app.router.add_post("/api/go2rtc/sync", go2rtc_sync)
     app.router.add_get("/api/go2rtc/sync", go2rtc_sync)
     app.router.add_post("/api/go2rtc/consumer", go2rtc_consumer)
+    app.router.add_get("/api/go2rtc/workers", go2rtc_workers_list)
+    app.router.add_post("/api/go2rtc/workers/heal", go2rtc_workers_heal)
+    app.router.add_post("/api/go2rtc/workers/{worker_id}/sync", go2rtc_worker_sync)
     app.router.add_get("/go2rtc/api/ws", go2rtc_ws_proxy)
     for method in ("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"):
         app.router.add_route(method, "/go2rtc/{path:.*}", go2rtc_proxy)

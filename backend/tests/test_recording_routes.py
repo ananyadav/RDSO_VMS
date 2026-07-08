@@ -12,8 +12,10 @@ from app.routes.recording import (
 
 
 class TestRecordingRoutes(unittest.IsolatedAsyncioTestCase):
+    @patch("app.routes.recording.recording_sched.save_recording_settings", new_callable=AsyncMock)
+    @patch("app.routes.recording.deny_unless_admin_or_system", new_callable=AsyncMock, return_value=None)
     @patch("app.routes.recording.start_camera_recording", new_callable=AsyncMock)
-    async def test_start_recording(self, mock_start):
+    async def test_start_recording(self, mock_start, _mock_auth, _mock_save):
         mock_start.return_value = {
             "id": "sess1",
             "camera_id": "cam1",
@@ -28,8 +30,10 @@ class TestRecordingRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["status"], "recording")
         mock_start.assert_awaited_once_with("cam1")
 
+    @patch("app.routes.recording.recording_sched.save_recording_settings", new_callable=AsyncMock)
+    @patch("app.routes.recording.deny_unless_admin_or_system", new_callable=AsyncMock, return_value=None)
     @patch("app.routes.recording.stop_camera_recording", new_callable=AsyncMock)
-    async def test_stop_recording(self, mock_stop):
+    async def test_stop_recording(self, mock_stop, _mock_auth, _mock_save):
         mock_stop.return_value = {"id": "sess1", "status": "stopped"}
         request = make_mocked_request(
             "POST", "/api/recordings/cam1/stop", match_info={"cameraId": "cam1"}
@@ -38,8 +42,10 @@ class TestRecordingRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 200)
         mock_stop.assert_awaited_once_with("cam1")
 
+    @patch("app.routes.recording.deny_unless_camera_access", new_callable=AsyncMock, return_value=None)
+    @patch("app.routes.recording.deny_unless_playback_permission", new_callable=AsyncMock, return_value=None)
     @patch("app.routes.recording.list_recording_sessions", new_callable=AsyncMock)
-    async def test_list_sessions(self, mock_list):
+    async def test_list_sessions(self, mock_list, _mock_pb, _mock_cam):
         mock_list.return_value = [{"id": "sess1"}]
         request = make_mocked_request(
             "GET", "/api/recordings/cam1/sessions", match_info={"cameraId": "cam1"}

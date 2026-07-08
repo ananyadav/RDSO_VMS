@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Diagnose specific camera IPs: DB, RTSP reachability, go2rtc."""
+"""Diagnose specific camera IPs: DB, RTSP reachability, go2rtc (per-worker)."""
 import asyncio
 import re
 import sys
@@ -14,7 +14,8 @@ load_dotenv(ROOT / ".env")
 
 from app.core.database import camera_collection
 from app.services.camera_uid import make_camera_uid
-from app.services.go2rtc_service import GO2RTC_API_URL, stream_name
+from app.services.go2rtc_service import stream_name
+from app.services.go2rtc_workers import get_api_url_for_camera_doc, normalize_worker_id
 from app.services.rtsp_utils import mask_rtsp_url, rtsp_url_credentials_stale, sync_camera_rtsp_urls
 
 IPS = sys.argv[1:] or ["192.168.46.7", "192.168.46.8", "192.168.46.9"]
@@ -35,8 +36,8 @@ async def ping_tcp(ip: str, port: int = 554, timeout: float = 3) -> tuple[bool, 
         return False, str(exc)
 
 
-async def go2rtc_probe(session: aiohttp.ClientSession, stream: str) -> tuple:
-    url = f"{GO2RTC_API_URL}/api/frame.jpeg?src={stream}"
+async def go2rtc_probe(session: aiohttp.ClientSession, base_url: str, stream: str) -> tuple:
+    url = f"{base_url.rstrip('/')}/api/frame.jpeg?src={stream}"
     try:
         async with session.get(url, timeout=aiohttp.ClientTimeout(total=20)) as resp:
             body = await resp.read()
@@ -45,18 +46,19 @@ async def go2rtc_probe(session: aiohttp.ClientSession, stream: str) -> tuple:
         return None, 0, str(exc)
 
 
+async def fetch_streams(session: aiohttp.ClientSession, base_url: str) -> dict:
+    try:
+        async with session.get(
+            f"{base_url.rstrip('/')}/api/streams",
+            timeout=aiohttp.ClientTimeout(total=15),
+        ) as resp:
+            return await resp.json() if resp.status == 200 else {}
+    except Exception:
+        return {}
+
+
 async def main() -> None:
     async with aiohttp.ClientSession() as session:
-        try:
-            async with session.get(
-                f"{GO2RTC_API_URL}/api/streams",
-                timeout=aiohttp.ClientTimeout(total=15),
-            ) as resp:
-                streams_data = await resp.json() if resp.status == 200 else {}
-        except Exception as exc:
-            streams_data = {}
-            print("go2rtc unreachable:", exc)
-
         for ip in IPS:
             print("=" * 60)
             print("IP", ip)
@@ -75,11 +77,15 @@ async def main() -> None:
             active = cam.get("is_active") is not False
             protocol = cam.get("protocol")
             uid = cam.get("camera_uid") or make_camera_uid(ip)
+            wid = normalize_worker_id(cam.get("worker_id")) or 1
+            api_url = await get_api_url_for_camera_doc(cam)
             sub_key = stream_name(uid, "sub")
             main_key = stream_name(uid, "main")
+            streams_data = await fetch_streams(session, api_url)
+
             print(f"  name: {name}")
-            print(f"  active: {active}  protocol: {protocol}  uid: {uid}")
-            print(f"  go2rtc keys: {sub_key}, {main_key}")
+            print(f"  active: {active}  protocol: {protocol}  uid: {uid}  worker: {wid}")
+            print(f"  go2rtc api: {api_url}")
             print(f"  sub registered: {sub_key in streams_data}")
             print(f"  main registered: {main_key in streams_data}")
 
@@ -99,9 +105,9 @@ async def main() -> None:
 
             for label, sk in [("sub", sub_key), ("main", main_key)]:
                 if sk not in streams_data:
-                    print(f"  frame probe {label}: stream not in go2rtc config")
+                    print(f"  frame probe {label}: stream not in worker {wid} config")
                     continue
-                status, nbytes, ctype = await go2rtc_probe(session, sk)
+                status, nbytes, ctype = await go2rtc_probe(session, api_url, sk)
                 print(f"  frame probe {label}: status={status} bytes={nbytes} type={ctype}")
 
 

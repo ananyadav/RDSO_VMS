@@ -3,19 +3,22 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Dict, Optional, Set
 
 from app.core.database import camera_collection, get_active_recording_session
 from app.services.recording_config import RECORDING_SEGMENT_SECONDS
-from app.services.camera_identity import resolve_camera_uid, storage_folder_keys_for_uid
+from app.services.camera_identity import make_camera_uid, storage_folder_keys_for_uid
 from app.services.storage_dashboard import _camera_filesystem_stats
-from app.services.video_recording import ACTIVE_RECORDINGS, is_camera_recording
+from app.services.video_recording import ACTIVE_RECORDINGS
 
 logger = logging.getLogger(__name__)
 
 # Segment considered stale after 2× segment length + 2 min buffer
 _STALE_BUFFER_SEC = 120
+_CACHE_TTL_SEC = 12.0
+_cache: Dict[str, Any] = {"expires_at": 0.0, "payload": None}
 
 
 def _parse_iso(ts: str) -> Optional[datetime]:
@@ -77,36 +80,77 @@ def _classify_health(
     return "offline", "Offline"
 
 
-async def get_recording_health(scheduled_camera_ids: Optional[set] = None) -> dict:
-    """Build health row per camera for monitoring UI."""
+def _folder_keys_from_cam(cam: dict) -> list[str]:
+    """Derive storage folders from an already-loaded camera doc (no extra Mongo round-trips)."""
+    camera_id = str(cam["_id"])
+    uid = cam.get("camera_uid") or make_camera_uid((cam.get("ip_address") or "").strip()) or camera_id
+    keys = [str(uid), camera_id]
+    stored = cam.get("recording_storage_id")
+    if stored and str(stored) not in keys:
+        keys.append(str(stored))
+    return list(dict.fromkeys(keys))
+
+
+async def get_recording_health(
+    scheduled_camera_ids: Optional[Set[str]] = None,
+    *,
+    force: bool = False,
+) -> dict:
+    """Build health row per camera for monitoring UI.
+
+    Fast path: when nothing is recording/scheduled, skip filesystem walks.
+    Cached for a few seconds so Storage UI polling at 15s stays responsive with 575+ cameras.
+    """
+    now_mono = time.monotonic()
+    if not force and _cache["payload"] is not None and now_mono < float(_cache["expires_at"]):
+        return _cache["payload"]
+
     now = datetime.now(timezone.utc)
     scheduled = scheduled_camera_ids or set()
+    active_ids = set(ACTIVE_RECORDINGS.keys())
+    interesting = scheduled | active_ids
+    scan_disk = bool(interesting)
 
     cameras = []
     counts = {"healthy": 0, "warning": 0, "reconnecting": 0, "offline": 0, "idle": 0}
 
-    async for cam in camera_collection.find({}).sort("name", 1):
+    projection = {
+        "name": 1,
+        "camera_uid": 1,
+        "ip_address": 1,
+        "recording_storage_id": 1,
+    }
+
+    async for cam in camera_collection.find({}, projection):
         camera_id = str(cam["_id"])
         name = cam.get("name") or camera_id
-        recording = await is_camera_recording(camera_id)
-        ff_alive = _ffmpeg_alive(camera_id) if recording else False
-        uid = await resolve_camera_uid(camera_id)
-        folders = await storage_folder_keys_for_uid(uid or camera_id)
-        disk_stats = {"segment_count": 0, "latest_segment_time": None}
-        for folder in folders:
-            stats = _camera_filesystem_stats(folder)
-            if stats.get("segment_count", 0) > disk_stats.get("segment_count", 0):
-                disk_stats = stats
-        latest_seg = disk_stats.get("latest_segment_time")
+        entry = ACTIVE_RECORDINGS.get(camera_id)
+        recording = bool(entry and entry["recorder"].is_recording)
+        ff_alive = False
+        if entry:
+            proc = entry["recorder"].recording_process
+            ff_alive = proc is not None and proc.returncode is None
 
-        active_session = await get_active_recording_session(camera_id)
-        last_recording = latest_seg
-        if active_session:
-            last_recording = (
-                active_session.get("latest_segment_time")
-                or active_session.get("last_stats_at")
-                or active_session.get("started_at")
-            )
+        disk_stats = {"segment_count": 0, "latest_segment_time": None}
+        latest_seg = None
+        active_session = None
+        last_recording = None
+
+        if scan_disk and (camera_id in interesting or recording):
+            folders = _folder_keys_from_cam(cam)
+            for folder in folders:
+                stats = _camera_filesystem_stats(folder)
+                if stats.get("segment_count", 0) > disk_stats.get("segment_count", 0):
+                    disk_stats = stats
+            latest_seg = disk_stats.get("latest_segment_time")
+            active_session = await get_active_recording_session(camera_id)
+            last_recording = latest_seg
+            if active_session:
+                last_recording = (
+                    active_session.get("latest_segment_time")
+                    or active_session.get("last_stats_at")
+                    or active_session.get("started_at")
+                )
 
         on_schedule = camera_id in scheduled or recording
         health, label = _classify_health(
@@ -132,7 +176,7 @@ async def get_recording_health(scheduled_camera_ids: Optional[set] = None) -> di
             }
         )
 
-    return {
+    payload = {
         "updated_at": now.isoformat(),
         "summary": {
             "total": len(cameras),
@@ -141,3 +185,6 @@ async def get_recording_health(scheduled_camera_ids: Optional[set] = None) -> di
         },
         "cameras": cameras,
     }
+    _cache["payload"] = payload
+    _cache["expires_at"] = now_mono + _CACHE_TTL_SEC
+    return payload

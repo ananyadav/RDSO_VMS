@@ -259,14 +259,6 @@ async def _projected_gb_per_day(growth: Dict[str, float], camera_rows: list) -> 
     if total > 0:
         return round(total, 2)
 
-    from app.core.database import get_pilot_recording
-
-    pilot = await get_pilot_recording()
-    if pilot and pilot.get("status") == "active":
-        n = len(pilot.get("camera_ids", []))
-        if n:
-            return round(n * _DEFAULT_GB_PER_DAY_PER_CAMERA, 2)
-
     recording_count = sum(1 for c in camera_rows if c.get("is_recording"))
     if recording_count:
         return round(recording_count * _DEFAULT_GB_PER_DAY_PER_CAMERA, 2)

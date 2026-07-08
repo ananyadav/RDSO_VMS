@@ -1,3 +1,4 @@
+import json
 import unittest
 from unittest.mock import AsyncMock, patch
 from app.routes.cameras import get_camera_list
@@ -26,7 +27,7 @@ class TestCameraRoutes(unittest.IsolatedAsyncioTestCase):
 
         # Assert response is correct
         self.assertEqual(response.status, 200)
-        response_data = response.json()
+        response_data = json.loads(response.text)
         self.assertEqual(len(response_data), 1)
         self.assertEqual(response_data[0]['name'], 'Test Camera')
 

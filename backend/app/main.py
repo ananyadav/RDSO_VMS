@@ -19,15 +19,14 @@ from app.routes.users import (
 )
 from app.routes.auth import login_endpoint, session_endpoint
 
-# ✅ Only import setup_recording_routes now (HLS-based)
 from app.routes.recording import setup_recording_routes
-from app.routes.live import setup_live_routes
 from app.routes.playback import setup_playback_routes
 from app.routes.locations import setup_location_routes
 from app.routes.go2rtc import setup_go2rtc_routes
+from app.routes.ptz import setup_ptz_routes
 
 from app.core.auth_context import session_middleware
-from app.services.video_streaming import websocket_handler, performance_monitor, get_video_decode_mode
+from app.services.video_streaming import performance_monitor, get_video_decode_mode
 
 # --- Log configuration ---
 logging.basicConfig(
@@ -43,20 +42,14 @@ async def create_app():
     """Application factory function."""
     app = web.Application(middlewares=[session_middleware])
 
-    # ✅ Register HLS recording routes + monitor task (startup/cleanup handled inside)
     setup_recording_routes(app)
-
-    # ✅ Register live HLS streaming routes
-    setup_live_routes(app)
-
-    # ✅ Playback search (Phase 2)
     setup_playback_routes(app)
 
     # Site / building / floor configuration
     setup_location_routes(app)
 
-    # ✅ go2rtc realtime live engine (Phase 1 pilot — HLS V1 unchanged)
     setup_go2rtc_routes(app)
+    setup_ptz_routes(app)
 
     # --- Register routes ---
     app.router.add_get("/api/cameras", get_camera_list)
@@ -112,9 +105,6 @@ async def create_app():
 
     app.router.add_get("/api/status", status_handler)
 
-    # --- WebSocket for WebRTC video streaming (same port as API) ---
-    app.router.add_get("/ws", websocket_handler)
-
     # --- Serve static frontend (SPA) — assets at /assets/*, fallback to index.html ---
     from pathlib import Path
 
@@ -131,7 +121,7 @@ async def create_app():
     async def spa_handler(request: web.Request) -> web.StreamResponse:
         path = request.path
 
-        if path.startswith('/api') or path.startswith('/go2rtc/') or path == '/ws':
+        if path.startswith('/api') or path.startswith('/go2rtc/'):
             raise web.HTTPNotFound()
 
         # Mis-resolved relative assets from deep SPA routes → /assets/...
@@ -153,7 +143,7 @@ async def create_app():
     app.router.add_get('/{path:.*}', spa_handler)
 
     # --- CORS setup ---
-    cors = aiohttp_cors.setup(app, defaults={
+    cors_defaults = {
         "http://localhost:3000": aiohttp_cors.ResourceOptions(
             allow_credentials=True, expose_headers="*", allow_headers="*",
             allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -162,23 +152,14 @@ async def create_app():
             allow_credentials=True, expose_headers="*", allow_headers="*",
             allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         ),
-        "http://localhost:5174": aiohttp_cors.ResourceOptions(
+    }
+    extra_origins = os.getenv("CORS_ORIGINS", "").strip()
+    for origin in (o.strip() for o in extra_origins.split(",") if o.strip()):
+        cors_defaults[origin] = aiohttp_cors.ResourceOptions(
             allow_credentials=True, expose_headers="*", allow_headers="*",
             allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        ),
-        "http://192.168.17.150:10000": aiohttp_cors.ResourceOptions(
-            allow_credentials=True, expose_headers="*", allow_headers="*",
-            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        ),
-        "http://192.168.17.150": aiohttp_cors.ResourceOptions(
-            allow_credentials=True, expose_headers="*", allow_headers="*",
-            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        ),
-        "http://192.168.17.150:80": aiohttp_cors.ResourceOptions(
-            allow_credentials=True, expose_headers="*", allow_headers="*",
-            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        ),
-    })
+        )
+    cors = aiohttp_cors.setup(app, defaults=cors_defaults)
 
     for route in list(app.router.routes()):
         cors.add(route)
@@ -216,38 +197,44 @@ async def main():
         )
 
         await ensure_database_indexes()
-        await bootstrap_location_config()
-        hc_n = await consolidate_healthcare_into_rml6()
-        if hc_n:
-            print(f"[OK] Locations: Moved {hc_n} clinic camera(s) to RML - 6 / Healthcare Clinic")
-        migrated = await migrate_corporate_office_cameras()
-        if migrated:
-            print(f"[OK] Locations: Migrated {migrated} Corporate Office camera(s) to RML - 6 paths")
-        synced = await sync_all_camera_groups()
-        if synced:
-            print(f"[OK] Locations: Canonicalized camera_group for {synced} camera(s)")
-        await sync_locations_catalog()
-        print("[OK] Locations: Site/building/floor config ready")
-        n = await backfill_all_camera_rtsp_urls()
-        if n:
-            print(f"[OK] Cameras: Backfilled RTSP URLs for {n} camera(s)")
-        uid_n = await backfill_camera_uids()
-        if uid_n:
-            print(f"[OK] Cameras: Backfilled camera_uid for {uid_n} camera(s)")
-        loc_n = await backfill_camera_locations()
-        if loc_n:
-            print(f"[OK] Cameras: Backfilled location fields for {loc_n} camera(s)")
-        rec_n = await backfill_recording_storage_ids()
-        if rec_n:
-            print(f"[OK] Recordings: Mapped legacy storage folders for {rec_n} camera(s)")
-        sess_n = await backfill_recording_sessions_identity()
-        if sess_n:
-            print(f"[OK] Recordings: Backfilled session identity for {sess_n} session(s)")
-        u_n = await backfill_usernames()
-        if u_n:
-            print(f"[OK] Users: Backfilled username for {u_n} user(s)")
+        skip_migrations = os.getenv("SKIP_STARTUP_MIGRATIONS", "").strip().lower() in (
+            "1", "true", "yes",
+        )
+        if skip_migrations:
+            print("[OK] Startup migrations skipped (SKIP_STARTUP_MIGRATIONS=1)")
+        else:
+            await bootstrap_location_config()
+            hc_n = await consolidate_healthcare_into_rml6()
+            if hc_n:
+                print(f"[OK] Locations: Moved {hc_n} clinic camera(s) to RML - 6 / Healthcare Clinic")
+            migrated = await migrate_corporate_office_cameras()
+            if migrated:
+                print(f"[OK] Locations: Migrated {migrated} Corporate Office camera(s) to RML - 6 paths")
+            synced = await sync_all_camera_groups()
+            if synced:
+                print(f"[OK] Locations: Canonicalized camera_group for {synced} camera(s)")
+            await sync_locations_catalog()
+            print("[OK] Locations: Site/building/floor config ready")
+            n = await backfill_all_camera_rtsp_urls()
+            if n:
+                print(f"[OK] Cameras: Backfilled RTSP URLs for {n} camera(s)")
+            uid_n = await backfill_camera_uids()
+            if uid_n:
+                print(f"[OK] Cameras: Backfilled camera_uid for {uid_n} camera(s)")
+            loc_n = await backfill_camera_locations()
+            if loc_n:
+                print(f"[OK] Cameras: Backfilled location fields for {loc_n} camera(s)")
+            rec_n = await backfill_recording_storage_ids()
+            if rec_n:
+                print(f"[OK] Recordings: Mapped legacy storage folders for {rec_n} camera(s)")
+            sess_n = await backfill_recording_sessions_identity()
+            if sess_n:
+                print(f"[OK] Recordings: Backfilled session identity for {sess_n} session(s)")
+            u_n = await backfill_usernames()
+            if u_n:
+                print(f"[OK] Users: Backfilled username for {u_n} user(s)")
         from app.services.ffmpeg_util import ffmpeg_bin
-        print(f"[OK] Live HLS: ffmpeg={ffmpeg_bin()}")
+        print(f"[OK] FFmpeg: {ffmpeg_bin()}")
         from app.services.ffmpeg_orphan_cleanup import cleanup_orphan_ffmpeg_on_startup
 
         killed = cleanup_orphan_ffmpeg_on_startup()
@@ -258,7 +245,6 @@ async def main():
         from app.services.go2rtc_service import schedule_go2rtc_stream_sync, start_go2rtc_on_startup
 
         await start_go2rtc_on_startup()
-        # Do not wipe live HLS dirs on startup — races with batch-start and causes frozen tiles
     except Exception as e:
         print(f"[ERROR] MongoDB: Connection failed - {e}")
         logging.error(f"MongoDB connection error: {e}")
@@ -283,16 +269,16 @@ async def main():
 
     print(f"[OK] Server: Running on http://localhost:{args.api_port}")
     print(f"    API: http://localhost:{args.api_port}/api/*")
-    print(f"    WebSocket (video): ws://localhost:{args.api_port}/ws")
+    print(f"    WebSocket (go2rtc): ws://localhost:{args.api_port}/go2rtc/api/ws")
     print("=" * 60)
     print("Server is ready and waiting for requests...")
     print("Press Ctrl+C to stop the server")
     print("=" * 60 + "\n")
     logging.info(f"Server running on http://0.0.0.0:{args.api_port} (API + WebSocket)")
 
-    from app.services.go2rtc_service import GO2RTC_ENABLED, LIVE_PROVIDER, schedule_go2rtc_stream_sync
+    from app.services.go2rtc_service import GO2RTC_ENABLED, schedule_go2rtc_stream_sync
 
-    if GO2RTC_ENABLED and LIVE_PROVIDER == "go2rtc":
+    if GO2RTC_ENABLED:
         schedule_go2rtc_stream_sync(reason="startup")
 
     try:
@@ -312,12 +298,9 @@ async def main():
         except Exception as e:
             logging.debug(f"Error during recording cleanup (expected): {e}")
 
-        # Stop live HLS FFmpeg and sweep orphan children
         try:
-            from app.services.video_live_hls import cleanup_all
             from app.services.ffmpeg_orphan_cleanup import shutdown_all_nvr_ffmpeg
 
-            await cleanup_all()
             killed = await shutdown_all_nvr_ffmpeg()
             if killed:
                 logging.info("[FFMPEG-CLEANUP] shutdown killed PIDs: %s", killed)

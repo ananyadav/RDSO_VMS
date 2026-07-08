@@ -3,6 +3,13 @@ import logging
 from datetime import datetime
 from aiohttp import web
 
+from app.core.access_control import (
+    deny_unless_admin,
+    deny_unless_admin_or_system,
+    deny_unless_camera_access,
+    deny_unless_playback_permission,
+    require_user,
+)
 from app.core.database import (
     get_active_recording_session,
     get_recording_session,
@@ -14,13 +21,6 @@ from app.services.video_recording import (
     is_camera_recording,
     get_camera_hls_info,
     finalize_orphaned_recording_sessions,
-)
-from app.services.recording_pilot import (
-    start_pilot,
-    stop_pilot,
-    check_pilot_expiry,
-    resume_pilot_on_startup,
-    pilot_status,
 )
 from app.services.recording_metrics import (
     log_active_recording_stats,
@@ -63,8 +63,6 @@ async def monitor_recording_schedule():
     while True:
         try:
             await asyncio.sleep(5)  # Check every 5 seconds
-
-            await check_pilot_expiry()
 
             global _metrics_tick, _retention_tick
             _metrics_tick += 5
@@ -119,9 +117,11 @@ async def monitor_recording_schedule():
 # Schedule endpoints
 # ----------------------------
 async def get_recording_schedule_endpoint(request: web.Request):
-    """Get current recording schedule and status.
-    Returns a flat {camera_id: bool} schedule so the frontend can consume it directly.
-    """
+    """Get current recording schedule and status."""
+    try:
+        await require_user(request)
+    except web.HTTPUnauthorized:
+        return web.json_response({"error": "Authentication required"}, status=401)
     # Flat boolean map — matches what App.tsx expects
     flat_schedule = {
         camera_id: bool(enabled)
@@ -136,6 +136,9 @@ async def get_recording_schedule_endpoint(request: web.Request):
 
 async def update_recording_schedule_endpoint(request: web.Request):
     """Update recording schedule."""
+    denied = await deny_unless_admin_or_system(request)
+    if denied is not None:
+        return denied
     data = await request.json()
     incoming = {str(k): bool(v) for k, v in (data.get("schedule") or {}).items()}
     await recording_sched.apply_schedule_update(incoming)
@@ -152,6 +155,9 @@ async def update_recording_schedule_endpoint(request: web.Request):
 async def toggle_recording_endpoint(request: web.Request):
     """Toggle recording for a specific camera."""
     camera_id = request.match_info.get("cameraId")
+    denied = await deny_unless_camera_access(request, camera_id or "")
+    if denied is not None:
+        return denied
     current = recording_sched.recording_schedule.get(camera_id, False)
     next_state = not current
     recording_sched.set_camera_recording(camera_id, next_state)
@@ -163,58 +169,28 @@ async def toggle_recording_endpoint(request: web.Request):
     return web.json_response({"id": camera_id, "recording": next_state})
 
 
-async def pilot_start_endpoint(request: web.Request):
-    """POST /api/recordings/pilot/start — Phase 1: record 2 cameras (default 4 days)."""
-    try:
-        data = await request.json()
-    except Exception:
-        data = {}
-    camera_ids = data.get("cameraIds") or data.get("camera_ids")
-    hours = float(data.get("hours", 24))
-    try:
-        recording_sched.master_enabled = True
-        result = await start_pilot(camera_ids=camera_ids, hours=hours)
-        for cid in result.get("camera_ids", []):
-            recording_sched.recording_schedule[cid] = True
-        await recording_sched.save_recording_settings()
-        return web.json_response({"status": "ok", **result})
-    except ValueError as e:
-        return web.json_response({"error": str(e)}, status=400)
-    except Exception as e:
-        logging.error(f"[PILOT] Start failed: {e}", exc_info=True)
-        return web.json_response({"error": str(e)}, status=500)
-
-
-async def pilot_stop_endpoint(request: web.Request):
-    """POST /api/recordings/pilot/stop"""
-    result = await stop_pilot(reason="api")
-    if result:
-        for cid in result.get("camera_ids", []):
-            recording_sched.recording_schedule[cid] = False
-        await recording_sched.save_recording_settings()
-    return web.json_response({"status": "ok", "pilot": result})
-
-
-async def pilot_status_endpoint(_request: web.Request):
-    """GET /api/recordings/pilot/status"""
-    status = await pilot_status()
-    status["disk"] = await get_disk_summary()
-    return web.json_response(status)
-
-
-async def recording_metrics_endpoint(_request: web.Request):
+async def recording_metrics_endpoint(request: web.Request):
     """GET /api/recordings/metrics — disk growth per hour for active recordings."""
+    denied = await deny_unless_admin_or_system(request)
+    if denied is not None:
+        return denied
     return web.json_response(await get_disk_summary())
 
 
-async def backfill_recording_stats_endpoint(_request: web.Request):
+async def backfill_recording_stats_endpoint(request: web.Request):
     """POST /api/recordings/stats/backfill — sync all session stats from filesystem to MongoDB."""
+    denied = await deny_unless_admin(request)
+    if denied is not None:
+        return denied
     count = await backfill_all_session_stats_from_disk()
     return web.json_response({"status": "ok", "sessions_updated": count})
 
 
 async def storage_dashboard_endpoint(request: web.Request):
     """GET /api/storage/dashboard — recordings usage, disk free space, per-camera breakdown."""
+    denied = await deny_unless_admin_or_system(request)
+    if denied is not None:
+        return denied
     summary_only = request.rel_url.query.get("summary") == "1"
     data = await get_storage_dashboard(summary_only=summary_only)
     data["retention"] = get_retention_policy()
@@ -222,8 +198,11 @@ async def storage_dashboard_endpoint(request: web.Request):
     return web.json_response(data)
 
 
-async def retention_policy_endpoint(_request: web.Request):
+async def retention_policy_endpoint(request: web.Request):
     """GET /api/storage/retention — configured retention window."""
+    denied = await deny_unless_admin_or_system(request)
+    if denied is not None:
+        return denied
     return web.json_response(
         {
             "policy": get_retention_policy(),
@@ -232,11 +211,17 @@ async def retention_policy_endpoint(_request: web.Request):
     )
 
 
-async def storage_settings_get_endpoint(_request: web.Request):
+async def storage_settings_get_endpoint(request: web.Request):
+    denied = await deny_unless_admin_or_system(request)
+    if denied is not None:
+        return denied
     return web.json_response(get_storage_settings_public())
 
 
 async def storage_settings_update_endpoint(request: web.Request):
+    denied = await deny_unless_admin(request)
+    if denied is not None:
+        return denied
     try:
         body = await request.json()
     except Exception:
@@ -268,20 +253,29 @@ async def storage_settings_update_endpoint(request: web.Request):
         return web.json_response({"error": "Failed to update storage settings"}, status=500)
 
 
-async def retention_run_endpoint(_request: web.Request):
+async def retention_run_endpoint(request: web.Request):
     """POST /api/storage/retention/run — manually trigger retention cleanup."""
+    denied = await deny_unless_admin(request)
+    if denied is not None:
+        return denied
     result = await run_retention_pass()
     return web.json_response({"status": "ok", **result})
 
 
-async def recording_health_endpoint(_request: web.Request):
+async def recording_health_endpoint(request: web.Request):
     """GET /api/recordings/health — per-camera recording + FFmpeg health."""
+    denied = await deny_unless_admin_or_system(request)
+    if denied is not None:
+        return denied
     scheduled = {cid for cid, on in recording_sched.recording_schedule.items() if on}
     return web.json_response(await get_recording_health(scheduled))
 
 
 async def set_master_recording_endpoint(request: web.Request):
     """Enable/disable master recording switch (stops FFmpeg when off; keeps schedule)."""
+    denied = await deny_unless_admin_or_system(request)
+    if denied is not None:
+        return denied
     data = await request.json()
     enabled = bool(data.get("enabled", False))
     if enabled:
@@ -304,8 +298,11 @@ async def set_master_recording_endpoint(request: web.Request):
     return web.json_response({"status": "ok", "master_enabled": recording_sched.master_enabled})
 
 
-async def stop_all_recording_endpoint(_request: web.Request):
+async def stop_all_recording_endpoint(request: web.Request):
     """POST /api/recordings/stop-all — stop every camera immediately."""
+    denied = await deny_unless_admin(request)
+    if denied is not None:
+        return denied
     result = await recording_sched.stop_all_scheduled_recording(persist=True)
     return web.json_response({"status": "ok", **result})
 
@@ -316,6 +313,9 @@ async def stop_all_recording_endpoint(_request: web.Request):
 async def start_recording_endpoint(request: web.Request):
     """POST /api/recordings/{cameraId}/start — begin RTSP recording session."""
     camera_id = request.match_info.get("cameraId")
+    denied = await deny_unless_admin_or_system(request)
+    if denied is not None:
+        return denied
     try:
         session = await start_camera_recording(camera_id)
         recording_sched.set_camera_recording(camera_id, True)
@@ -334,6 +334,9 @@ async def start_recording_endpoint(request: web.Request):
 async def stop_recording_endpoint(request: web.Request):
     """POST /api/recordings/{cameraId}/stop — end session and save metadata."""
     camera_id = request.match_info.get("cameraId")
+    denied = await deny_unless_admin_or_system(request)
+    if denied is not None:
+        return denied
     try:
         session = await stop_camera_recording(camera_id)
         recording_sched.set_camera_recording(camera_id, False)
@@ -350,6 +353,12 @@ async def stop_recording_endpoint(request: web.Request):
 async def list_camera_sessions_endpoint(request: web.Request):
     """GET /api/recordings/{cameraId}/sessions"""
     camera_id = request.match_info.get("cameraId")
+    denied = await deny_unless_playback_permission(request)
+    if denied is not None:
+        return denied
+    denied = await deny_unless_camera_access(request, camera_id or "")
+    if denied is not None:
+        return denied
     limit = int(request.rel_url.query.get("limit", "50"))
     sessions = await list_recording_sessions(camera_id=camera_id, limit=limit)
     return web.json_response({"camera_id": camera_id, "sessions": sessions})
@@ -357,6 +366,9 @@ async def list_camera_sessions_endpoint(request: web.Request):
 
 async def list_all_sessions_endpoint(request: web.Request):
     """GET /api/recordings/sessions"""
+    denied = await deny_unless_admin_or_system(request)
+    if denied is not None:
+        return denied
     limit = int(request.rel_url.query.get("limit", "50"))
     sessions = await list_recording_sessions(camera_id=None, limit=limit)
     return web.json_response({"sessions": sessions})
@@ -364,6 +376,9 @@ async def list_all_sessions_endpoint(request: web.Request):
 
 async def get_session_endpoint(request: web.Request):
     """GET /api/recordings/sessions/{sessionId}"""
+    denied = await deny_unless_playback_permission(request)
+    if denied is not None:
+        return denied
     session_id = request.match_info.get("sessionId")
     session = await get_recording_session(session_id)
     if not session:
@@ -380,6 +395,12 @@ async def list_recording_segments_endpoint(request: web.Request):
     Query: sessionId (required) — session under Recordings/{cameraId}/sessions/{sessionId}/
     """
     camera_id = request.match_info.get("cameraId")
+    denied = await deny_unless_playback_permission(request)
+    if denied is not None:
+        return denied
+    denied = await deny_unless_camera_access(request, camera_id or "")
+    if denied is not None:
+        return denied
     session_id = request.rel_url.query.get("sessionId", "").strip()
 
     if not session_id:
@@ -418,6 +439,12 @@ async def play_recording_file_endpoint(request: web.Request):
     Prefer GET /api/playback/{cameraId}/{sessionId}/media/{filename}
     """
     camera_id = request.match_info.get("cameraId")
+    denied = await deny_unless_playback_permission(request)
+    if denied is not None:
+        return denied
+    denied = await deny_unless_camera_access(request, camera_id or "")
+    if denied is not None:
+        return denied
     filename = request.match_info.get("filename")
     session_id = request.rel_url.query.get("sessionId", "").strip()
 
@@ -433,6 +460,9 @@ async def play_recording_file_endpoint(request: web.Request):
 async def get_recording_status_endpoint(request: web.Request):
     """Returns HLS playlist info, active session, and recording status."""
     camera_id = request.match_info.get("cameraId")
+    denied = await deny_unless_admin_or_system(request)
+    if denied is not None:
+        return denied
     info = await get_camera_hls_info(camera_id)
     info["is_recording"] = await is_camera_recording(camera_id)
     active = await get_active_recording_session(camera_id)
@@ -448,6 +478,12 @@ async def serve_hls_file_endpoint(request: web.Request):
     Prefer GET /api/playback/{cameraId}/{sessionId}/media/{filename}
     """
     camera_id = request.match_info.get("cameraId")
+    denied = await deny_unless_playback_permission(request)
+    if denied is not None:
+        return denied
+    denied = await deny_unless_camera_access(request, camera_id or "")
+    if denied is not None:
+        return denied
     filename = request.match_info.get("filename")
     session_id = request.rel_url.query.get("sessionId", "").strip()
 
@@ -478,9 +514,6 @@ def setup_recording_routes(app: web.Application):
     app.router.add_post("/api/recordings/{cameraId}/stop", stop_recording_endpoint)
     app.router.add_post("/api/recordings/master", set_master_recording_endpoint)
     app.router.add_post("/api/recordings/stop-all", stop_all_recording_endpoint)
-    app.router.add_post("/api/recordings/pilot/start", pilot_start_endpoint)
-    app.router.add_post("/api/recordings/pilot/stop", pilot_stop_endpoint)
-    app.router.add_get("/api/recordings/pilot/status", pilot_status_endpoint)
     app.router.add_get("/api/recordings/metrics", recording_metrics_endpoint)
     app.router.add_post("/api/recordings/stats/backfill", backfill_recording_stats_endpoint)
     app.router.add_get("/api/storage/dashboard", storage_dashboard_endpoint)
@@ -516,7 +549,9 @@ def setup_recording_routes(app: web.Application):
             )
         except Exception as e:
             logging.error(f"[RECORDING] Startup retention failed: {e}", exc_info=True)
-        asyncio.create_task(resume_pilot_on_startup(recording_sched.recording_schedule))
+        from app.core.database import cleanup_legacy_pilot_recording
+
+        await cleanup_legacy_pilot_recording()
         if monitoring_task is None or monitoring_task.done():
             monitoring_task = asyncio.create_task(monitor_recording_schedule())
             logging.info("[RECORDING] Monitor task scheduled")

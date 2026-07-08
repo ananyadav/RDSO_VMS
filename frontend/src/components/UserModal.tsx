@@ -13,8 +13,6 @@ interface UserModalProps {
 const allPermissions = ['Live View', 'Playback', 'Events', 'Cameras', 'System', 'Users'];
 
 export default function UserModal({ isOpen, onClose, onSave, user }: UserModalProps): React.ReactElement | null {
-  console.log("Rendering the NEW UserModal with Toggle Switches!"); // For debugging cache issues
-
   const [formData, setFormData] = useState<Partial<User>>({});
   const [newPassword, setNewPassword] = useState('');
   const [activeTab, setActiveTab] = useState('info');

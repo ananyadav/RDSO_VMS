@@ -38,9 +38,7 @@ export const ROUTE_PERMISSIONS: Record<string, Permission> = {
   '/user-management': PERMISSIONS.USERS,
   '/notifications': PERMISSIONS.SYSTEM,
   '/system-status': PERMISSIONS.SYSTEM,
-  '/live-diagnostics': PERMISSIONS.SYSTEM,
   '/go2rtc-diagnostics': PERMISSIONS.SYSTEM,
-  '/live-realtime-test': PERMISSIONS.SYSTEM,
   '/maintenance': PERMISSIONS.SYSTEM,
 };
 
@@ -56,7 +54,6 @@ const ORDERED_PATHS = [
   '/notifications',
   '/system-status',
   '/go2rtc-diagnostics',
-  '/live-diagnostics',
   '/maintenance',
 ] as const;
 

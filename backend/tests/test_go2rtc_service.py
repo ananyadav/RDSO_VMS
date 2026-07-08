@@ -21,7 +21,12 @@ class TestGo2RtcService(unittest.TestCase):
         self.assertEqual(stream_name("ip_192_168_41_50", "main"), "ip_192_168_41_50_main")
 
     def test_base_yaml_has_streams(self):
-        y = _base_yaml({"Cam18_sub": "rtsp://x", "Cam18_main": "rtsp://y"})
+        y = _base_yaml(
+            {"Cam18_sub": "rtsp://x", "Cam18_main": "rtsp://y"},
+            api_port=1984,
+            rtsp_port=8554,
+            webrtc_port=8555,
+        )
         self.assertEqual(y["streams"]["Cam18_sub"], "rtsp://x")
         self.assertIn("webrtc", y)
         self.assertIn("api", y)
@@ -42,7 +47,7 @@ class TestBuildAllStreamsConfig(unittest.IsolatedAsyncioTestCase):
         result = await build_all_streams_config()
         self.assertFalse(result["ok"])
 
-    @patch("app.services.go2rtc_service.build_camera_rtsp_urls")
+    @patch("app.services.go2rtc_service.effective_camera_rtsp_urls")
     @patch("app.services.go2rtc_service.camera_collection")
     async def test_all_camera_streams(self, mock_coll, mock_urls):
         mock_cursor = MagicMock()

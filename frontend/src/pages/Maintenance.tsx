@@ -2,11 +2,12 @@ import React from "react";
 import PageHeader from "../components/PageHeader";
 import Card from "../components/Card";
 import toast from "react-hot-toast";
+import { apiFetch } from "../lib/api";
 
 export default function Maintenance(): React.ReactElement {
   const handleBackup = async () => {
     try {
-      const res = await fetch('/api/maintenance/backup', { method: 'POST' });
+      const res = await apiFetch('/api/maintenance/backup', { method: 'POST' });
       if (res.ok) toast.success('Backup started successfully');
       else toast.error('Backup request failed');
     } catch {
@@ -16,7 +17,7 @@ export default function Maintenance(): React.ReactElement {
 
   const handleExportLogs = async () => {
     try {
-      const res = await fetch('/api/maintenance/logs');
+      const res = await apiFetch('/api/maintenance/logs');
       if (res.ok) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
@@ -35,7 +36,7 @@ export default function Maintenance(): React.ReactElement {
 
   const handleFirmwareUpdate = async () => {
     try {
-      const res = await fetch('/api/maintenance/firmware-update', { method: 'POST' });
+      const res = await apiFetch('/api/maintenance/firmware-update', { method: 'POST' });
       if (res.ok) toast.success('Firmware update initiated');
       else toast.error('Firmware update request failed');
     } catch {

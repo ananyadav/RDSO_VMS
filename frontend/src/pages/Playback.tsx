@@ -20,6 +20,14 @@ import { usePlaybackHLS } from '../hooks/usePlaybackHLS';
 import { usePlaybackDates } from '../hooks/usePlaybackDates';
 import LocationSelector, { type BuildingGroup } from '../components/LocationSelector';
 import PageHeader from '../components/PageHeader';
+import {
+  useUrlHydration,
+  useUrlSync,
+  parseUrlDate,
+  formatUrlDate,
+  initialStringParam,
+} from '../hooks/useUrlSearchState';
+import { resolvePlaybackFromUrl } from '../lib/urlViewState';
 
 interface Camera {
   id: string;
@@ -122,6 +130,9 @@ const CustomDay: React.FC<{
 );
 
 export default function Playback(): React.ReactElement {
+  const { params, setParams, initialParams, hydratedRef, markHydrated } = useUrlHydration();
+  const autoSearchRef = useRef(false);
+
   const [buildings, setBuildings] = useState<BuildingGroup[]>([]);
   const [cameraAccess, setCameraAccess] = useState<PublicCameraAccess | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<string | null>(null);
@@ -129,14 +140,20 @@ export default function Playback(): React.ReactElement {
   const [groupsLoading, setGroupsLoading] = useState(true);
   const [camerasLoading, setCamerasLoading] = useState(false);
   const [cameras, setCameras] = useState<Camera[]>([]);
-  const [cameraFilter, setCameraFilter] = useState('');
+  const [cameraFilter, setCameraFilter] = useState(() =>
+    initialStringParam(initialParams, 'q'),
+  );
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isSearching, setIsSearching] = useState(false);
   const [recordings, setRecordings] = useState<PlaybackRecording[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [seekOnLoad, setSeekOnLoad] = useState<number | null>(null);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [playbackSpeed, setPlaybackSpeed] = useState(() => {
+    const raw = initialParams.current?.get('speed');
+    const n = raw ? Number(raw) : 1;
+    return Number.isFinite(n) && n > 0 ? n : 1;
+  });
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [gapNotice, setGapNotice] = useState<string | null>(null);
   const videoContainerRef = useRef<HTMLDivElement>(null);
@@ -226,11 +243,23 @@ export default function Playback(): React.ReactElement {
         const access: PublicCameraAccess = data.cameraAccess ?? { all: true };
         setBuildings(list);
         setCameraAccess(access);
-        const initial = initialPlaybackSelection(list, access);
-        if (initial) {
-          setSelectedBuilding(initial.building);
-          setSelectedGroup(initial.group);
+
+        const fromUrl = resolvePlaybackFromUrl(initialParams.current!, list);
+        if (fromUrl?.building && fromUrl.group) {
+          setSelectedBuilding(fromUrl.building);
+          setSelectedGroup(fromUrl.group);
+        } else {
+          const initial = initialPlaybackSelection(list, access);
+          if (initial) {
+            setSelectedBuilding(initial.building);
+            setSelectedGroup(initial.group);
+          }
         }
+
+        const dateParam = parseUrlDate(initialParams.current!.get('date'));
+        if (dateParam) setSelectedDate(dateParam);
+
+        markHydrated();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to load locations');
       } finally {
@@ -239,6 +268,37 @@ export default function Playback(): React.ReactElement {
     };
     void loadGroups();
   }, []);
+
+  const urlValues = useMemo(
+    () => ({
+      building: selectedBuilding,
+      group: selectedGroup,
+      camera: selectedCamera?.id ?? null,
+      date: selectedCamera ? formatUrlDate(selectedDate) : null,
+      session: activeSessionId,
+      q: cameraFilter.trim() || null,
+      speed: playbackSpeed !== 1 ? String(playbackSpeed) : null,
+    }),
+    [
+      selectedBuilding,
+      selectedGroup,
+      selectedCamera?.id,
+      selectedDate,
+      activeSessionId,
+      cameraFilter,
+      playbackSpeed,
+    ],
+  );
+
+  useUrlSync(hydratedRef, setParams, urlValues);
+
+  useEffect(() => {
+    if (!cameras.length) return;
+    const cameraId = params.get('camera');
+    if (!cameraId) return;
+    const cam = cameras.find((c) => c.id === cameraId);
+    if (cam) setSelectedCamera(cam);
+  }, [cameras, params]);
 
   const loadCameras = useCallback(async (group: string | null) => {
     if (!group && hasUnrestrictedCameraAccess(cameraAccess)) {
@@ -350,11 +410,17 @@ export default function Playback(): React.ReactElement {
       const list: PlaybackRecording[] = data.recordings || [];
       const playable = list.filter(isPlayableRecording);
       setRecordings(playable);
+      const sessionFromUrl = initialParams.current?.get('session');
+      if (sessionFromUrl && playable.some((r) => r.sessionId === sessionFromUrl)) {
+        setActiveSessionId(sessionFromUrl);
+      }
       if (playable.length > 0) {
-        toast.success(`Found ${playable.length} recording session(s)`);
+        if (!autoSearchRef.current) {
+          toast.success(`Found ${playable.length} recording session(s)`);
+        }
       } else if (list.length > 0) {
         toast('Sessions exist but files are missing on disk', { icon: '⚠️' });
-      } else {
+      } else if (!autoSearchRef.current) {
         toast('No recordings for this date', { icon: '📭' });
       }
     } catch (e) {
@@ -363,6 +429,13 @@ export default function Playback(): React.ReactElement {
       setIsSearching(false);
     }
   };
+
+  useEffect(() => {
+    if (!hydratedRef.current || autoSearchRef.current || !selectedCamera) return;
+    if (!initialParams.current?.get('date')) return;
+    autoSearchRef.current = true;
+    void handleSearch();
+  }, [selectedCamera]);
 
   const handleGapSelection = (dayPct: number) => {
     const hit = findRecordingAtDayPercent(recordings, selectedDate, dayPct);

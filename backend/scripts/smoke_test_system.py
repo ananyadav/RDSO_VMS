@@ -31,13 +31,12 @@ async def main() -> int:
 
     async with aiohttp.ClientSession() as session:
         endpoints = [
-            "/api/health",
+            "/api/status",
             "/api/cameras",
             "/api/storage/dashboard?summary=1",
             "/api/recordings/health",
-            "/api/live/diagnostics",
             "/api/go2rtc/diagnostics",
-            "/api/recording/schedule",
+            "/api/recordings/schedule",
         ]
         for path in endpoints:
             try:

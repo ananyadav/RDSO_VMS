@@ -13,6 +13,7 @@ from app.services.camera_access import user_can_access_camera
 
 PERMISSION_PLAYBACK = "Playback"
 PERMISSION_LIVE_VIEW = "Live View"
+PERMISSION_SYSTEM = "System"
 
 
 def _json_error(message: str, status: int) -> web.Response:
@@ -51,6 +52,28 @@ async def deny_unless_playback_permission(request: web.Request) -> web.Response 
         return None
     if not has_permission(user, PERMISSION_PLAYBACK):
         return _json_error("Playback permission required", 403)
+    return None
+
+
+async def deny_unless_admin(request: web.Request) -> web.Response | None:
+    try:
+        await require_admin(request)
+    except web.HTTPUnauthorized:
+        return _json_error("Authentication required", 401)
+    except web.HTTPForbidden:
+        return _json_error("Admin only", 403)
+    return None
+
+
+async def deny_unless_admin_or_system(request: web.Request) -> web.Response | None:
+    """Admin or users with System permission (Storage / recording management UI)."""
+    user = await get_effective_user(request)
+    if user is None:
+        return _json_error("Authentication required", 401)
+    if is_admin(user):
+        return None
+    if not has_permission(user, PERMISSION_SYSTEM):
+        return _json_error("System permission required", 403)
     return None
 
 

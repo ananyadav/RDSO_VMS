@@ -1,7 +1,6 @@
 import React, { useRef } from 'react';
 import { VideoOff, Circle, Maximize, Loader2 } from 'lucide-react';
-import { useLiveStream } from '../hooks/useLiveStream';
-import { CodecBadge } from './CodecBadge';
+import { useGo2RtcLive } from '../hooks/useGo2RtcLive';
 import { cameraTileLabel } from '../lib/cameraLabel';
 
 interface Camera {
@@ -33,26 +32,15 @@ function CameraCard({
   const tileRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<HTMLDivElement>(null);
 
-  const {
-    provider,
-    videoRef,
-    playerContainerRef,
-    isConnecting,
-    error,
-    inView,
-    tileBadge,
-    jumpingToLive,
-  } = useLiveStream(camera, {
+  const { isConnecting, error, inView } = useGo2RtcLive(camera, {
+    containerRef: playerRef,
     observeRef: tileRef,
-    playerContainerRef: playerRef,
-    eager: eagerLive,
     profile: 'sub',
+    eager: eagerLive,
     streamsReady,
   });
 
   const showStreamMessage = Boolean(error);
-  const displayBadge = tileBadge === 'none' && error ? 'error' : tileBadge;
-  const isGo2Rtc = provider === 'go2rtc';
 
   const handleDoubleClick = () => {
     if (onFullscreen) onFullscreen(camera);
@@ -76,25 +64,12 @@ function CameraCard({
                 </div>
               )}
 
-              {isGo2Rtc ? (
-                <div
-                  ref={playerContainerRef as React.RefObject<HTMLDivElement>}
-                  className={`live-monitor-player absolute inset-0 ${
-                    showStreamMessage ? 'opacity-0 pointer-events-none' : ''
-                  }`}
-                />
-              ) : videoRef ? (
-                <video
-                  ref={videoRef as React.RefObject<HTMLVideoElement>}
-                  autoPlay
-                  playsInline
-                  muted
-                  controls={false}
-                  className={`live-monitor-player absolute inset-0 w-full h-full object-cover ${
-                    showStreamMessage ? 'opacity-0 pointer-events-none' : ''
-                  }`}
-                />
-              ) : null}
+              <div
+                ref={playerRef}
+                className={`live-monitor-player absolute inset-0 ${
+                  showStreamMessage ? 'opacity-0 pointer-events-none' : ''
+                }`}
+              />
 
               {isConnecting && !showStreamMessage && (
                 <div className="absolute inset-0 animate-pulse bg-gray-800/60 z-10">
@@ -104,14 +79,6 @@ function CameraCard({
                       <span>Connecting…</span>
                     </div>
                   </div>
-                </div>
-              )}
-
-              {jumpingToLive && !showStreamMessage && !isGo2Rtc && (
-                <div className="absolute inset-x-0 bottom-2 flex justify-center z-20 pointer-events-none">
-                  <span className="px-2 py-1 rounded bg-black/70 text-amber-200 text-xs font-medium">
-                    Jumping to live
-                  </span>
                 </div>
               )}
 
@@ -138,7 +105,6 @@ function CameraCard({
               </div>
             )}
             <h3 className="font-bold text-white text-sm truncate">{cameraTileLabel(camera)}</h3>
-            {camera.online && !isGo2Rtc && <CodecBadge badge={displayBadge} />}
           </div>
 
           <span

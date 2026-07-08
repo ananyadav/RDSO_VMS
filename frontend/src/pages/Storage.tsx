@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { HardDrive, Video, Settings, RefreshCw, Loader2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
@@ -8,6 +8,11 @@ import StorageSettingsTab from '../components/storage/StorageSettingsTab';
 import { useStorageDashboard } from '../hooks/useStorageDashboard';
 import { apiFetch } from '../lib/api';
 import Card from '../components/Card';
+import {
+  useUrlHydration,
+  useUrlSync,
+  initialEnumParam,
+} from '../hooks/useUrlSearchState';
 
 type StorageTab = 'storage' | 'recording' | 'settings';
 
@@ -30,7 +35,10 @@ export default function Storage({
   onScheduleChange,
   onToggleMasterRecording,
 }: StorageProps): React.ReactElement {
-  const [activeTab, setActiveTab] = useState<StorageTab>('storage');
+  const { setParams, initialParams, hydratedRef, markHydrated } = useUrlHydration();
+  const [activeTab, setActiveTab] = useState<StorageTab>(() =>
+    initialEnumParam(initialParams, 'tab', ['storage', 'recording', 'settings'] as const, 'storage'),
+  );
   const [allCameras, setAllCameras] = useState<
     { id: string; name: string; site?: string; building?: string; floor?: string }[]
   >([]);
@@ -48,6 +56,16 @@ export default function Storage({
     };
     fetchCameras();
   }, []);
+
+  useEffect(() => {
+    markHydrated();
+  }, [markHydrated]);
+
+  const urlValues = useMemo(
+    () => ({ tab: activeTab === 'storage' ? null : activeTab }),
+    [activeTab],
+  );
+  useUrlSync(hydratedRef, setParams, urlValues);
 
   return (
     <div className="flex flex-col h-full">

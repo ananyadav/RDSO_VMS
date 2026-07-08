@@ -1,34 +1,44 @@
-# go2rtc Phase 1 — Realtime Live Pilot
+# go2rtc — multi-worker live streaming
 
-HLS V1 (`video_live_hls.py`) remains the production fallback. This folder adds a **go2rtc** relay for low-latency WebRTC/MSE trials.
+Live View uses **go2rtc workers** (not a single monolithic process).
 
-## Setup
+## Architecture
 
-1. Download [go2rtc release](https://github.com/AlexxIT/go2rtc/releases) for your OS.
-2. Place binary in `go2rtc/bin/go2rtc.exe` (Windows) or `go2rtc/bin/go2rtc` (Linux).
-3. Ensure **Cam18** exists in MongoDB with valid RTSP credentials.
-4. Set in `.env` (optional):
-   ```env
-   GO2RTC_ENABLED=true
-   GO2RTC_PILOT_CAMERA=Cam18
-   ```
-5. Restart backend — it writes `go2rtc/runtime/go2rtc.yaml` and starts go2rtc on **:1984**.
+- **Worker 1**: `go2rtc/workers/1/go2rtc.yaml` → API `:1984`, WebRTC `:8555`
+- **Worker 2**: `go2rtc/workers/2/go2rtc.yaml` → API `:1985`, WebRTC `:8557`
+- **Worker 3**: `go2rtc/workers/3/go2rtc.yaml` → API `:1986`, WebRTC `:8559`
+- **Do not** start `go2rtc/runtime/go2rtc.yaml` — it conflicts with worker 1 on port 1984.
 
-## Streams (one RTSP each inside go2rtc)
+## Production (PM2)
 
-| Name | Channel | Use (future) |
-|------|---------|----------------|
-| `Cam18_sub` | 102 | Grid |
-| `Cam18_main` | 101 | Fullscreen |
+```bash
+./deploy_production.sh
+# or
+pm2 start ecosystem.config.cjs
+python backend/scripts/ensure_go2rtc_workers.py
+```
 
-## Test
+## Local dev
 
-- UI: **Sidebar → RT Live** → `/live-realtime-test`
-- API: `GET /api/go2rtc/status`, `POST /api/go2rtc/start`
-- Direct go2rtc UI: `http://127.0.0.1:1984` (when running)
+Backend starts workers as subprocesses when PM2 is unavailable:
 
-## Architecture notes
+```bash
+python -m backend.app.main --api-port 10000
+python backend/scripts/ensure_go2rtc_workers.py
+```
 
-- Recording / playback unchanged (main 101, copy-only).
-- go2rtc holds **one RTSP session per stream name** — avoids duplicate pulls for WebRTC + MSE viewers.
-- Hikvision browser live (port 7681 / F1vPlayer) is the reference; we use go2rtc as the Frigate-style relay.
+## Diagnostics
+
+- UI: **Sidebar → go2rtc Diagnostics** (`/go2rtc-diagnostics`)
+- CLI: `python backend/scripts/ensure_go2rtc_workers.py`
+- Per-IP: `python backend/scripts/diagnose_ips.py 192.168.x.x`
+- Unreachable list: `python backend/scripts/list_unreachable_cameras.py`
+
+## Env (see `.env.example`)
+
+- `GO2RTC_WORKERS_ENABLED=true`
+- `GO2RTC_MAX_CAMERAS_PER_WORKER=300`
+- `GO2RTC_WEBRTC_HOST=<server LAN IP>` (auto-detected if unset)
+- `GO2RTC_ENABLED=true`
+
+Download binary: [AlexxIT/go2rtc releases](https://github.com/AlexxIT/go2rtc/releases) → `go2rtc/bin/`

@@ -36,6 +36,7 @@ export interface CameraFormData {
   sub_rtsp_url: string;
   rtsp_url_source: string;
   is_active: boolean;
+  ptz: boolean;
 }
 
 export const CORPORATE_CAMERA_DEFAULTS: CameraFormData = {
@@ -59,6 +60,7 @@ export const CORPORATE_CAMERA_DEFAULTS: CameraFormData = {
   sub_rtsp_url: '',
   rtsp_url_source: 'auto_hikvision',
   is_active: true,
+  ptz: false,
 };
 
 function defaultsForLocations(
@@ -513,9 +515,13 @@ export default function AddCameraModal({
 
             <section>
               <h4 className="text-sm font-semibold text-gray-300 mb-3 uppercase tracking-wide">Status</h4>
-              <label className="flex items-center gap-2 text-sm text-gray-300">
+              <label className="flex items-center gap-2 text-sm text-gray-300 mb-2">
                 <input type="checkbox" className="checkbox-style" checked={form.is_active} onChange={(e) => setField('is_active', e.target.checked)} />
                 Active (show in Live View and go2rtc)
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-300">
+                <input type="checkbox" className="checkbox-style" checked={form.ptz} onChange={(e) => setField('ptz', e.target.checked)} />
+                PTZ camera (pan/tilt/zoom via Hikvision ISAPI)
               </label>
             </section>
           </div>

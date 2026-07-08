@@ -23,19 +23,17 @@ import NetworkSettings from "./pages/NetworkSettings";
 import UserManagement from "./pages/UserManagement";
 import Notifications from "./pages/Notifications";
 import SystemStatus from "./pages/SystemStatus";
-import LiveDiagnostics from "./pages/LiveDiagnostics";
 import Go2RtcDiagnostics from "./pages/Go2RtcDiagnostics";
-import LiveRealtimeTest from "./pages/LiveRealtimeTest";
 import Maintenance from "./pages/Maintenance";
 import type { User } from './services/authService';
 import { authService } from './services/authService';
 import { apiFetch } from './lib/api';
 import { LocationsProvider } from './context/LocationsContext';
+import ErrorBoundary from './components/ErrorBoundary';
 
 type RecordingScheduleType = Record<string, boolean>;
 
 export default function App(): React.ReactElement {
-  console.log('App rendered');
   // --- State Management ---
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
@@ -226,6 +224,7 @@ export default function App(): React.ReactElement {
             />
             <main className="flex-1 min-h-0 overflow-hidden bg-gray-200 dark:bg-gray-900 flex flex-col">
               <div className="flex-1 min-h-0 overflow-hidden">
+              <ErrorBoundary>
               <Switch>
                 <Route exact path="/" render={() => renderHome(currentUser, liveView)} />
                 <Route path="/live" render={() => renderProtected(currentUser, PERMISSIONS.LIVE_VIEW, liveView)} />
@@ -241,12 +240,11 @@ export default function App(): React.ReactElement {
                 <Route path="/user-management" render={() => renderProtected(currentUser, PERMISSIONS.USERS, <UserManagement />, 'User Management')} />
                 <Route path="/notifications" render={() => renderProtected(currentUser, PERMISSIONS.SYSTEM, <Notifications />, 'Alerts')} />
                 <Route path="/system-status" render={() => renderProtected(currentUser, PERMISSIONS.SYSTEM, <SystemStatus />, 'System Status')} />
-                <Route path="/live-diagnostics" render={() => renderProtected(currentUser, PERMISSIONS.SYSTEM, <LiveDiagnostics />, 'HLS Diagnostics')} />
                 <Route path="/go2rtc-diagnostics" render={() => renderProtected(currentUser, PERMISSIONS.SYSTEM, <Go2RtcDiagnostics />, 'go2rtc Diagnostics')} />
-                <Route path="/live-realtime-test" render={() => renderProtected(currentUser, PERMISSIONS.SYSTEM, <LiveRealtimeTest />)} />
                 <Route path="/maintenance" render={() => renderProtected(currentUser, PERMISSIONS.SYSTEM, <Maintenance />, 'Maintenance')} />
                 <Route><div className="text-center text-xl p-8">Page Not Found</div></Route>
               </Switch>
+              </ErrorBoundary>
               </div>
             </main>
           </div>

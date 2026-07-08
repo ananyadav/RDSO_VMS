@@ -65,17 +65,15 @@ class TestFfmpegOrphanHelpers(unittest.TestCase):
 
 
 class TestTrackedPids(unittest.TestCase):
-    @patch("app.services.ffmpeg_orphan_cleanup.REGISTRY")
-    def test_tracked_from_registry(self, mock_registry):
+    def test_tracked_from_recording(self):
         proc = MagicMock()
         proc.returncode = None
         proc.pid = 4242
-        record = MagicMock()
-        record.proc = proc
-        mock_registry.all_records.return_value = [record]
+        recorder = MagicMock()
+        recorder.recording_process = proc
         with patch.dict(
             "app.services.video_recording.ACTIVE_RECORDINGS",
-            {},
+            {"cam1": {"recorder": recorder}},
             clear=True,
         ):
             pids = get_tracked_ffmpeg_pids()

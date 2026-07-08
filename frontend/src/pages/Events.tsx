@@ -1,6 +1,16 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Download } from 'lucide-react';
+import {
+  useUrlHydration,
+  useUrlSync,
+  paramFlag,
+  flagParam,
+  joinList,
+  splitList,
+  parseUrlDate,
+  formatUrlDate,
+} from '../hooks/useUrlSearchState';
 
 // --- Component Imports ---
 import PageHeader from '../components/PageHeader';
@@ -27,10 +37,58 @@ const initialFilters = {
 };
 
 export default function Events() {
+  const { params, setParams, initialParams, hydratedRef, markHydrated } = useUrlHydration();
+
   const [events, setEvents] = useState(allEvents);
-  const [filters, setFilters] = useState(initialFilters);
-  const [selectedEventIds, setSelectedEventIds] = useState(new Set());
-  const [playingEvent, setPlayingEvent] = useState<typeof allEvents[0] | null>(null); // State for the modal
+  const [filters, setFilters] = useState(() => {
+    const dateRaw = initialParams.current?.get('date');
+    const dateParsed = dateRaw ? parseUrlDate(dateRaw) : null;
+    const camerasRaw = splitList(initialParams.current?.get('cameras') ?? null);
+    const typesRaw = splitList(initialParams.current?.get('types') ?? null);
+    return {
+      date: dateParsed ? formatUrlDate(dateParsed) : initialFilters.date,
+      showFavoritesOnly: paramFlag(initialParams.current?.get('favorites') ?? null, false),
+      cameras: camerasRaw.length ? camerasRaw : availableCameras,
+      eventTypes: typesRaw.length ? typesRaw : availableEventTypes,
+    };
+  });
+  const [selectedEventIds, setSelectedEventIds] = useState(new Set<number>());
+  const [playingEvent, setPlayingEvent] = useState<(typeof allEvents)[0] | null>(() => {
+    const id = initialParams.current?.get('event');
+    if (!id) return null;
+    return allEvents.find((e) => String(e.id) === id) ?? null;
+  });
+
+  useEffect(() => {
+    markHydrated();
+  }, [markHydrated]);
+
+  const urlValues = useMemo(
+    () => ({
+      date: filters.date !== initialFilters.date ? filters.date : null,
+      favorites: flagParam(filters.showFavoritesOnly),
+      cameras:
+        filters.cameras.length !== availableCameras.length
+          ? joinList(filters.cameras)
+          : null,
+      types:
+        filters.eventTypes.length !== availableEventTypes.length
+          ? joinList(filters.eventTypes)
+          : null,
+      event: playingEvent ? String(playingEvent.id) : null,
+    }),
+    [filters, playingEvent],
+  );
+  useUrlSync(hydratedRef, setParams, urlValues);
+
+  useEffect(() => {
+    const eventId = params.get('event');
+    if (!eventId) {
+      setPlayingEvent(null);
+      return;
+    }
+    setPlayingEvent(allEvents.find((e) => String(e.id) === eventId) ?? null);
+  }, [params]);
 
   const filteredEvents = useMemo(() => {
     return events.filter(event => {

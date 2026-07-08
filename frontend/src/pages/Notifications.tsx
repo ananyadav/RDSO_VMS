@@ -1,6 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { AlertTriangle, Info, ShieldAlert, X, Trash2 } from "lucide-react";
 import PageHeader from "../components/PageHeader";
+import {
+  useUrlHydration,
+  useUrlSync,
+  initialEnumParam,
+} from "../hooks/useUrlSearchState";
 
 interface Notification {
   id: number;
@@ -9,6 +14,8 @@ interface Notification {
   time: string;
 }
 
+type NotificationFilter = "all" | "info" | "warning" | "error";
+
 const initialNotifications: Notification[] = [
   { id: 1, type: "info", message: "System update v2.5.1 installed successfully.", time: "10:15 AM" },
   { id: 2, type: "warning", message: "Camera 'Driveway' has disconnected.", time: "10:25 AM" },
@@ -16,15 +23,34 @@ const initialNotifications: Notification[] = [
   { id: 4, type: "info", message: "User 'admin' logged in from 192.168.1.50.", time: "11:02 AM" },
 ];
 
-// A map for icon and color styles to keep the code clean
 const notificationStyles = {
   info: { icon: Info, color: "text-blue-400" },
   warning: { icon: AlertTriangle, color: "text-yellow-400" },
   error: { icon: ShieldAlert, color: "text-red-400" },
 };
 
+const FILTER_OPTIONS: NotificationFilter[] = ["all", "info", "warning", "error"];
+
 export default function Notifications(): React.ReactElement {
+  const { setParams, initialParams, hydratedRef, markHydrated } = useUrlHydration();
   const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
+  const [filter, setFilter] = useState<NotificationFilter>(() =>
+    initialEnumParam(initialParams, "filter", FILTER_OPTIONS, "all"),
+  );
+
+  useEffect(() => {
+    markHydrated();
+  }, [markHydrated]);
+
+  const urlValues = useMemo(
+    () => ({ filter: filter === "all" ? null : filter }),
+    [filter],
+  );
+  useUrlSync(hydratedRef, setParams, urlValues);
+
+  const visible = filter === "all"
+    ? notifications
+    : notifications.filter((n) => n.type === filter);
 
   const dismiss = (id: number) => setNotifications((n) => n.filter((x) => x.id !== id));
   const clearAll = () => setNotifications([]);
@@ -45,13 +71,30 @@ export default function Notifications(): React.ReactElement {
           </button>
         }
       />
+
+      <div className="flex gap-2 px-1">
+        {FILTER_OPTIONS.map((option) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => setFilter(option)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md capitalize ${
+              filter === option
+                ? "bg-blue-600 text-white"
+                : "bg-gray-800 text-gray-400 hover:text-white"
+            }`}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
       
       <div className="bg-gray-800 border border-gray-700 rounded-lg">
-        {notifications.length === 0 ? (
-          <p className="text-gray-500 text-center py-16">🎉 No new notifications</p>
+        {visible.length === 0 ? (
+          <p className="text-gray-500 text-center py-16">No notifications in this filter</p>
         ) : (
           <div className="divide-y divide-gray-700">
-            {notifications.map((n) => {
+            {visible.map((n) => {
               const Style = notificationStyles[n.type];
               return (
                 <div

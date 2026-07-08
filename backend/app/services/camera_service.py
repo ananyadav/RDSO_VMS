@@ -98,6 +98,8 @@ def _camera_list_item(cam: dict, *, admin: bool = False) -> dict:
         "location_path": cam.get("location_path", ""),
         "ip_address": ip,
         "is_active": bool(is_active),
+        "ptz": bool(cam.get("ptz")),
+        "activity": bool(cam.get("activity")),
     }
     if admin:
         item["ip_address"] = ip
@@ -125,6 +127,9 @@ def _camera_management_item(cam: dict) -> dict:
         "rtsp_url_source": cam.get("rtsp_url_source", ""),
         "worker_id": cam.get("worker_id", ""),
         "live_provider": cam.get("live_provider", "go2rtc"),
+        "ptz": bool(cam.get("ptz")),
+        "http_port": cam.get("http_port", 80),
+        "ptz_channel": cam.get("ptz_channel", 1),
         "online": False,
         "status": "Disabled" if cam.get("is_active") is False else "Active",
     })
@@ -555,6 +560,9 @@ async def handle_add_camera(camera_data):
     try:
         fields = prepare_camera_fields(camera_data)
         fields = finalize_camera_fields(None, fields)
+        from app.services.go2rtc_workers import ensure_camera_worker_assigned
+
+        fields = await ensure_camera_worker_assigned(fields, existing=None)
     except ValueError as e:
         return {"success": False, "error": str(e)}, 400
 
@@ -691,6 +699,7 @@ async def handle_import_cameras(payload: dict):
     if mark_missing_inactive and active_ips:
         inactive = await mark_cameras_inactive_not_in_ips(active_ips)
 
+    # Always refresh go2rtc when import changed fleet membership (add/update/deactivate).
     if created or updated or inactive:
         await apply_bulk_camera_side_effects(reason="camera_import")
 

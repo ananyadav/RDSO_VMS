@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import {
+  useUrlHydration,
+  useUrlSync,
+  initialStringParam,
+  initialEnumParam,
+} from '../hooks/useUrlSearchState';
 import toast from 'react-hot-toast';
-import LocationTreePanel, { type BuildingNode } from '../components/camera-management/LocationTreePanel';
+import LocationTreePanel, { type BuildingNode, type LocationStats } from '../components/camera-management/LocationTreePanel';
 import FloorSummaryCards from '../components/camera-management/FloorSummaryCards';
 import StatusBadge from '../components/camera-management/StatusBadge';
 import { Link } from 'react-router-dom';
@@ -24,7 +30,6 @@ import PageHeader from '../components/PageHeader';
 import AddCameraModal, { type CameraFormData, CORPORATE_CAMERA_DEFAULTS } from '../components/AddCameraModal';
 import DuplicateCameraDialog, { type ExistingCameraInfo } from '../components/DuplicateCameraDialog';
 import ManageLocationsModal from '../components/ManageLocationsModal';
-import { preferredBuilding, preferredFloorGroup } from '../constants/corporateFloors';
 import { useLocationsContext } from '../context/LocationsContext';
 import { apiFetch, cameraQuery } from '../lib/api';
 import { authService } from '../services/authService';
@@ -61,6 +66,7 @@ interface Camera {
   main_rtsp_url?: string;
   sub_rtsp_url?: string;
   rtsp_url_source?: string;
+  ptz?: boolean;
 }
 
 interface DuplicatePayload {
@@ -101,6 +107,7 @@ function cameraToForm(cam: Camera | null): Partial<CameraFormData> | null {
     sub_rtsp_url: cam.sub_rtsp_url || '',
     rtsp_url_source: cam.rtsp_url_source || 'auto_hikvision',
     is_active: cam.is_active !== false,
+    ptz: Boolean(cam.ptz),
   };
 }
 
@@ -124,6 +131,7 @@ function formToPayload(data: CameraFormData): Record<string, unknown> {
     sub_channel: data.sub_channel,
     rtsp_url_source: data.rtsp_url_source,
     is_active: data.is_active,
+    ptz: data.ptz,
     type: 'rtsp',
   };
   if (data.protocol === 'ONVIF' || data.protocol === 'CUSTOM') {
@@ -134,6 +142,8 @@ function formToPayload(data: CameraFormData): Record<string, unknown> {
 }
 
 export default function CameraManagement() {
+  const { setParams, initialParams, hydratedRef, markHydrated } = useUrlHydration();
+
   const [configuredCameras, setConfiguredCameras] = useState<Camera[]>([]);
   const [discoveredCameras, setDiscoveredCameras] = useState<Camera[]>([]);
   const [isScanning, setIsScanning] = useState(false);
@@ -144,16 +154,29 @@ export default function CameraManagement() {
   const [replaceLoading, setReplaceLoading] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
 
-  const [protocolFilter, setProtocolFilter] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'disabled'>('all');
-  const [search, setSearch] = useState('');
+  const [protocolFilter, setProtocolFilter] = useState(() =>
+    initialStringParam(initialParams, 'protocol'),
+  );
+  const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'disabled'>(() =>
+    initialEnumParam(initialParams, 'status', ['all', 'active', 'disabled'] as const, 'all'),
+  );
+  const [search, setSearch] = useState(() => initialStringParam(initialParams, 'q'));
   const [manageLocationsOpen, setManageLocationsOpen] = useState(false);
   const [groupTree, setGroupTree] = useState<BuildingNode[]>([]);
+  const [plantTotals, setPlantTotals] = useState<LocationStats | null>(null);
   const [groupsLoading, setGroupsLoading] = useState(true);
-  const [selectedBuilding, setSelectedBuilding] = useState<string | null>(null);
-  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
-  const [onlineFilter, setOnlineFilter] = useState<'all' | 'online' | 'offline'>('all');
-  const [mainTab, setMainTab] = useState<'cameras' | 'scan'>('cameras');
+  const [selectedBuilding, setSelectedBuilding] = useState<string | null>(() =>
+    initialParams.current?.get('building') || null,
+  );
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(() =>
+    initialParams.current?.get('group') || null,
+  );
+  const [onlineFilter, setOnlineFilter] = useState<'all' | 'online' | 'offline'>(() =>
+    initialEnumParam(initialParams, 'online', ['all', 'online', 'offline'] as const, 'all'),
+  );
+  const [mainTab, setMainTab] = useState<'cameras' | 'scan'>(() =>
+    initialEnumParam(initialParams, 'tab', ['cameras', 'scan'] as const, 'cameras'),
+  );
   const { sites: locationSites, buildings: locationBuildings, reload: reloadLocations } = useLocationsContext();
   const importInputRef = useRef<HTMLInputElement>(null);
   const isAdmin = isAdminUser(authService.getCurrentUser());
@@ -166,12 +189,19 @@ export default function CameraManagement() {
       const data = await res.json();
       const list: BuildingNode[] = data.buildings ?? [];
       setGroupTree(list);
-      if (!selectedBuilding && list.length > 0) {
-        const b = preferredBuilding(list) ?? list[0];
-        setSelectedBuilding(b.building);
-        const fg = preferredFloorGroup(b.floorGroups);
-        if (fg) setSelectedGroup(fg.camera_group);
+      setPlantTotals(data.totals ?? null);
+      const urlBuilding = initialParams.current?.get('building');
+      const urlGroup = initialParams.current?.get('group');
+      if (urlBuilding && list.some((b) => b.building === urlBuilding)) {
+        setSelectedBuilding(urlBuilding);
+        if (urlGroup) {
+          const node = list.find((b) => b.building === urlBuilding);
+          if (node?.floorGroups.some((f) => f.camera_group === urlGroup)) {
+            setSelectedGroup(urlGroup);
+          }
+        }
       }
+      markHydrated();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to load locations');
     } finally {
@@ -183,6 +213,25 @@ export default function CameraManagement() {
     void fetchGroupTree();
   }, []);
 
+  const urlValues = useMemo(
+    () => ({
+      tab: mainTab === 'cameras' ? null : mainTab,
+      building: selectedBuilding,
+      group: selectedGroup,
+      q: search.trim() || null,
+      status: activeFilter === 'all' ? null : activeFilter,
+      online: onlineFilter === 'all' ? null : onlineFilter,
+      protocol: protocolFilter || null,
+    }),
+    [mainTab, selectedBuilding, selectedGroup, search, activeFilter, onlineFilter, protocolFilter],
+  );
+  useUrlSync(hydratedRef, setParams, urlValues);
+
+  const defaultSite = useMemo(() => {
+    const sites = [...new Set(groupTree.map((b) => b.site).filter(Boolean))];
+    return sites.length === 1 ? sites[0] : null;
+  }, [groupTree]);
+
   const selectedFloorNode = useMemo(() => {
     if (!selectedBuilding || !selectedGroup) return null;
     const b = groupTree.find((x) => x.building === selectedBuilding);
@@ -190,16 +239,16 @@ export default function CameraManagement() {
   }, [groupTree, selectedBuilding, selectedGroup]);
 
   const fetchConfiguredCameras = async () => {
-    if (!selectedGroup) {
-      setConfiguredCameras([]);
-      return;
-    }
     try {
       const params: Record<string, string> = {
         includeInactive: 'true',
-        camera_group: selectedGroup,
       };
-      if (selectedFloorNode?.floor) params.floor = selectedFloorNode.floor;
+      if (selectedGroup) {
+        params.camera_group = selectedGroup;
+        if (selectedFloorNode?.floor) params.floor = selectedFloorNode.floor;
+      } else if (defaultSite) {
+        params.site = defaultSite;
+      }
       if (protocolFilter) params.protocol = protocolFilter;
       if (search.trim()) params.search = search.trim();
       if (activeFilter === 'active') params.activeOnly = 'true';
@@ -220,7 +269,7 @@ export default function CameraManagement() {
 
   useEffect(() => {
     void fetchConfiguredCameras();
-  }, [protocolFilter, activeFilter, search, onlineFilter, selectedBuilding, selectedGroup]);
+  }, [protocolFilter, activeFilter, search, onlineFilter, selectedBuilding, selectedGroup, defaultSite, selectedFloorNode?.floor]);
 
   const handleTreeSelect = (building: string, cameraGroup: string) => {
     setSelectedBuilding(building);
@@ -324,6 +373,14 @@ export default function CameraManagement() {
     const fg = b?.floorGroups.find((f) => f.camera_group === selectedGroup);
     return fg?.location_path ?? selectedBuilding;
   }, [groupTree, selectedBuilding, selectedGroup]);
+
+  const summaryStats = selectedGroup ? selectedFloorNode?.stats : plantTotals;
+  const summaryLabel = selectedGroup
+    ? selectedFloorLabel
+    : defaultSite
+      ? `All cameras — ${defaultSite}`
+      : 'All cameras';
+  const listScopeLabel = selectedGroup ? selectedFloorLabel : summaryLabel;
 
   const protocols = useMemo(
     () => [...new Set(configuredCameras.map((c) => c.protocol || 'HIKVISION').filter(Boolean))].sort(),
@@ -510,7 +567,7 @@ export default function CameraManagement() {
       <div className="shrink-0 px-4 pt-3 pb-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
         <PageHeader
           title="Camera Management"
-          subtitle={mainTab === 'cameras' ? selectedFloorLabel : 'Network discovery utility'}
+          subtitle={mainTab === 'cameras' ? listScopeLabel : 'Network discovery utility'}
         />
         <div className="flex flex-wrap items-center gap-1.5 mt-2">
           <button type="button" onClick={handleRefresh} className={TOOLBAR_BTN}>
@@ -655,9 +712,9 @@ export default function CameraManagement() {
               </span>
             </div>
 
-            {selectedGroup && (
+            {summaryStats && (
               <div className="shrink-0 px-3 py-2 border-b border-gray-200 dark:border-gray-700">
-                <FloorSummaryCards stats={selectedFloorNode?.stats} floorLabel={selectedFloorLabel} />
+                <FloorSummaryCards stats={summaryStats} floorLabel={summaryLabel} />
               </div>
             )}
 
@@ -676,14 +733,7 @@ export default function CameraManagement() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-gray-700/80">
-                    {!selectedGroup && (
-                      <tr>
-                        <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
-                          Select a floor in the location tree.
-                        </td>
-                      </tr>
-                    )}
-                    {selectedGroup && configuredCameras.length === 0 && (
+                    {configuredCameras.length === 0 && (
                       <tr>
                         <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
                           No cameras match the current filters.

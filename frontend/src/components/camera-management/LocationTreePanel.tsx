@@ -79,17 +79,6 @@ export default function LocationTreePanel({
     }));
   }, [buildings]);
 
-  React.useEffect(() => {
-    const init: Record<string, boolean> = {};
-    for (const { site, buildings: bs } of sites) {
-      init[site] = true;
-      for (const b of bs) {
-        init[`${site}::${b.building}`] = true;
-      }
-    }
-    setExpanded((prev) => ({ ...init, ...prev }));
-  }, [sites]);
-
   if (loading) {
     return <div className="p-3 text-xs text-gray-500">Loading locations…</div>;
   }
@@ -105,7 +94,7 @@ export default function LocationTreePanel({
   return (
     <div className="overflow-y-auto p-1.5 space-y-0.5 text-sm">
       {sites.map(({ site, buildings: siteBuildings }) => {
-        const siteOpen = expanded[site] !== false;
+        const siteOpen = expanded[site] === true;
         const siteTotal = siteBuildings.reduce(
           (n, b) => n + (b.stats?.total ?? b.floorGroups.reduce((s, fg) => s + (fg.stats?.total ?? fg.cameraCount), 0)),
           0,
@@ -127,7 +116,7 @@ export default function LocationTreePanel({
               <div className="ml-2 border-l border-gray-200 dark:border-gray-700/80 pl-1">
                 {siteBuildings.map((b) => {
                   const bKey = `${site}::${b.building}`;
-                  const isOpen = expanded[bKey] !== false;
+                  const isOpen = expanded[bKey] === true;
                   const bTotal = b.stats?.total ?? b.floorGroups.reduce((s, fg) => s + (fg.stats?.total ?? fg.cameraCount), 0);
                   return (
                     <div key={bKey}>

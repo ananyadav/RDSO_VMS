@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { apiFetch } from '../lib/api';
 import { authService } from '../services/authService';
@@ -6,6 +6,12 @@ import { isAdminUser } from '../lib/permissions';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import AddUserModal from '../components/AddUserModal';
+import {
+  useUrlHydration,
+  useUrlSync,
+  initialStringParam,
+  paramFlag,
+} from '../hooks/useUrlSearchState';
 
 interface CameraAccess {
   allowedCameraGroups: string[];
@@ -31,13 +37,34 @@ export type { User, CameraAccess };
 export default function UserManagement() {
   const currentUser = authService.getCurrentUser();
   const isAdmin = isAdminUser(currentUser);
+  const { setParams, initialParams, hydratedRef, markHydrated } = useUrlHydration();
   const [users, setUsers] = useState<User[]>([]);
-  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(() =>
+    paramFlag(initialParams.current?.get('add') ?? null, false),
+  );
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
   useEffect(() => {
-    fetchUsers();
+    void fetchUsers();
   }, []);
+
+  useEffect(() => {
+    const editId = initialStringParam(initialParams, 'edit');
+    if (editId && users.length > 0 && !editingUser) {
+      const match = users.find((u) => u.id === editId);
+      if (match) setEditingUser(match);
+    }
+    markHydrated();
+  }, [users, editingUser, initialParams, markHydrated]);
+
+  const urlValues = useMemo(
+    () => ({
+      add: isAddUserModalOpen ? '1' : null,
+      edit: editingUser?.id ?? null,
+    }),
+    [isAddUserModalOpen, editingUser],
+  );
+  useUrlSync(hydratedRef, setParams, urlValues);
 
   const fetchUsers = async () => {
     try {

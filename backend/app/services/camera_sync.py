@@ -94,12 +94,45 @@ async def apply_camera_side_effects(
         result["skipped"] = True
         return result
 
-    from app.services.go2rtc_service import GO2RTC_ENABLED, LIVE_PROVIDER, ensure_go2rtc_streams
+    from app.services.go2rtc_service import GO2RTC_ENABLED
+    from app.core.database import camera_collection
+    from bson import ObjectId
+    from bson.errors import InvalidId
 
-    if GO2RTC_ENABLED and LIVE_PROVIDER == "go2rtc":
+    if GO2RTC_ENABLED:
         try:
-            sync = await ensure_go2rtc_streams()
-            result["go2rtc"] = {"ok": bool(sync.get("ok")), "streams": sync.get("streamCount")}
+            from app.services.go2rtc_workers import (
+                WORKERS_ENABLED,
+                get_worker_id_for_camera_doc,
+                sync_all_workers,
+                sync_worker,
+            )
+
+            if WORKERS_ENABLED:
+                if camera_id:
+                    try:
+                        oid = ObjectId(camera_id)
+                        cam = await camera_collection.find_one({"_id": oid})
+                    except (InvalidId, TypeError):
+                        cam = None
+                    wid = await get_worker_id_for_camera_doc(cam)
+                    sync = await sync_worker(wid)
+                    result["go2rtc"] = {
+                        "ok": bool(sync.get("ok")),
+                        "workerId": wid,
+                        "streams": sync.get("streamCount"),
+                    }
+                else:
+                    sync = await sync_all_workers()
+                    result["go2rtc"] = {
+                        "ok": bool(sync.get("ok")),
+                        "workers": sync.get("workerCount"),
+                    }
+            else:
+                from app.services.go2rtc_service import ensure_go2rtc_streams
+
+                sync = await ensure_go2rtc_streams()
+                result["go2rtc"] = {"ok": bool(sync.get("ok")), "streams": sync.get("streamCount")}
         except Exception as exc:
             logger.warning("[camera_sync] go2rtc refresh failed: %s", exc)
             result["go2rtc"] = {"ok": False, "error": str(exc)}

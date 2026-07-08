@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { Loader2, VideoOff } from 'lucide-react';
-import { useLiveStream } from '../hooks/useLiveStream';
+import { useGo2RtcLive } from '../hooks/useGo2RtcLive';
 
 export interface AccessCamera {
   id: string;
@@ -36,7 +36,7 @@ export default function CameraAccessTile({
   const playerRef = useRef<HTMLDivElement>(null);
   const uid = camera.cameraUid || camera.id;
 
-  const { provider, videoRef, playerContainerRef, isConnecting, error, streamStatus } = useLiveStream(
+  const { isConnecting, error, streamStatus } = useGo2RtcLive(
     {
       id: camera.id,
       name: camera.name,
@@ -44,10 +44,9 @@ export default function CameraAccessTile({
       cameraUid: camera.cameraUid,
     },
     {
+      containerRef: playerRef,
       observeRef: tileRef,
-      playerContainerRef: playerRef,
       profile: 'sub',
-      forceSub: true,
       active: active && camera.online,
       streamsReady: active,
       sessionKey: streamSession,
@@ -70,17 +69,7 @@ export default function CameraAccessTile({
     >
       <div className="relative aspect-video bg-black">
         {camera.online && active ? (
-          provider === 'go2rtc' ? (
-            <div ref={playerRef} className="absolute inset-0 w-full h-full" />
-          ) : (
-            <video
-              ref={videoRef}
-              className="absolute inset-0 w-full h-full object-contain bg-black"
-              muted
-              autoPlay
-              playsInline
-            />
-          )
+          <div ref={playerRef} className="absolute inset-0 w-full h-full" />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-gray-500">
             <VideoOff size={28} />

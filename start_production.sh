@@ -1,12 +1,12 @@
 #!/bin/bash
-
-# NVR Interface Production Startup Script
-# Builds the frontend and starts the backend (serves API + static UI on one port)
+# Legacy single-process startup (no PM2). For GPU production use ./deploy_production.sh instead.
 
 set -e
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
+
+echo "NOTE: For production with go2rtc workers, run: ./deploy_production.sh"
 
 echo "Building frontend..."
 cd frontend

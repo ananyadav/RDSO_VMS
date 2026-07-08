@@ -29,7 +29,6 @@ CORPORATE_DEFAULTS: Dict[str, Any] = {
     "sub_channel": "102",
     "recording_channel": "102",
     "is_active": True,
-    "worker_id": "worker-1",
     "live_provider": "go2rtc",
 }
 
@@ -211,6 +210,25 @@ def prepare_camera_fields(
 
     if "is_active" in camera_data:
         merged["is_active"] = camera_data.get("is_active") is not False
+
+    if "ptz" in camera_data:
+        merged["ptz"] = bool(camera_data.get("ptz"))
+
+    if camera_data.get("http_port") is not None:
+        try:
+            merged["http_port"] = int(camera_data.get("http_port"))
+        except (TypeError, ValueError):
+            pass
+    elif existing.get("http_port") is not None:
+        merged["http_port"] = existing.get("http_port")
+
+    if camera_data.get("ptz_channel") is not None:
+        try:
+            merged["ptz_channel"] = max(1, int(camera_data.get("ptz_channel")))
+        except (TypeError, ValueError):
+            pass
+    elif existing.get("ptz_channel") is not None:
+        merged["ptz_channel"] = existing.get("ptz_channel")
 
     merged["camera_uid"] = make_camera_uid(ip_address) or ""
 

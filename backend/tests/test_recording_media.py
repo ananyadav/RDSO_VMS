@@ -52,8 +52,10 @@ class TestRecordingMediaService(unittest.IsolatedAsyncioTestCase):
 
 
 class TestPlaybackMediaRoute(unittest.IsolatedAsyncioTestCase):
+    @patch("app.routes.playback.deny_unless_camera_access", new_callable=AsyncMock, return_value=None)
+    @patch("app.routes.playback.deny_unless_playback_permission", new_callable=AsyncMock, return_value=None)
     @patch("app.routes.playback.build_recording_media_response", new_callable=AsyncMock)
-    async def test_playback_media_route(self, mock_build):
+    async def test_playback_media_route(self, mock_build, _mock_pb, _mock_cam):
         from aiohttp import web
 
         mock_build.return_value = web.Response(text="ok", status=200)
@@ -68,10 +70,12 @@ class TestPlaybackMediaRoute(unittest.IsolatedAsyncioTestCase):
         )
         response = await playback_media_endpoint(request)
         self.assertEqual(response.status, 200)
-        mock_build.assert_awaited_once_with("cam1", "sess1", "index.m3u8")
+        mock_build.assert_awaited_once_with("cam1", "sess1", "index.m3u8", auth_query="")
 
+    @patch("app.routes.playback.deny_unless_camera_access", new_callable=AsyncMock, return_value=None)
+    @patch("app.routes.playback.deny_unless_playback_permission", new_callable=AsyncMock, return_value=None)
     @patch("app.routes.playback.build_recording_media_response", new_callable=AsyncMock)
-    async def test_playback_media_not_found(self, mock_build):
+    async def test_playback_media_not_found(self, mock_build, _mock_pb, _mock_cam):
         mock_build.side_effect = RecordingMediaError(RECORDING_FILE_NOT_FOUND, 404)
         request = make_mocked_request(
             "GET",

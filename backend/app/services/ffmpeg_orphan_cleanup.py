@@ -1,7 +1,8 @@
 """
 Detect and clean orphan FFmpeg processes left after backend restarts.
 
-Only touches FFmpeg whose command line references NVR live HLS or recording paths.
+Only touches FFmpeg whose command line references NVR recording paths
+(or legacy nvr_live paths from prior live-HLS runs).
 """
 
 from __future__ import annotations
@@ -11,13 +12,12 @@ import logging
 import os
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Set
 
 import psutil
 
 from app.services.ffmpeg_util import ffmpeg_bin
-from app.services.live_stream_registry import REGISTRY
 from app.services.rtsp_utils import mask_rtsp_url
 
 logger = logging.getLogger(__name__)
@@ -52,12 +52,6 @@ class NvrFfmpegProcess:
     has_rtsp_453: bool = False
 
 
-def _live_dir_str() -> str:
-    from app.services.video_live_hls import LIVE_DIR
-
-    return str(LIVE_DIR)
-
-
 def _recordings_dir_str() -> str:
     from app.services.video_recording import RECORDINGS_DIR
 
@@ -71,7 +65,7 @@ def _ffmpeg_names() -> Set[str]:
 
 
 def is_nvr_ffmpeg_cmdline(cmdline: str) -> bool:
-    """True when cmdline is our live HLS or recording FFmpeg."""
+    """True when cmdline is our recording FFmpeg or legacy live HLS FFmpeg."""
     if not cmdline:
         return False
     low = cmdline.lower()
@@ -81,9 +75,6 @@ def is_nvr_ffmpeg_cmdline(cmdline: str) -> bool:
     if rec and rec in low:
         return True
     if "recordings" in low and ("seg_" in low or "index.m3u8" in low):
-        return True
-    live = _live_dir_str().lower()
-    if live and live in low:
         return True
     return False
 
@@ -139,11 +130,8 @@ def _parse_nvr_ffmpeg(cmdline: str, pid: int, parent_pid: Optional[int]) -> NvrF
 
 
 def get_tracked_ffmpeg_pids() -> Set[int]:
-    """PIDs owned by live registry and active recording sessions."""
+    """PIDs owned by active recording sessions."""
     pids: Set[int] = set()
-    for record in REGISTRY.all_records():
-        if record.proc and record.proc.returncode is None:
-            pids.add(record.proc.pid)
     try:
         from app.services.video_recording import ACTIVE_RECORDINGS
 
@@ -188,7 +176,6 @@ def list_nvr_ffmpeg_processes() -> List[NvrFfmpegProcess]:
             elif not info.parent_alive:
                 info.status = "orphan"
             elif parent_pid == current_pid:
-                # Leaked child of this backend (not in registry).
                 info.status = "orphan"
             else:
                 info.status = "external"
@@ -327,88 +314,5 @@ def get_orphans_report() -> dict:
         "processes": [nvr_ffmpeg_to_dict(p) for p in processes],
         "orphanCount": len(orphans),
         "trackedCount": len(tracked),
-        "orphans": [nvr_ffmpeg_to_dict(p) for p in orphans],
-    }
-
-
-def _camera_rtsp_counts(processes: List[NvrFfmpegProcess]) -> Dict[str, dict]:
-    """Per-cameraId RTSP consumer counts from FFmpeg command lines."""
-    by_camera: Dict[str, dict] = {}
-    for proc in processes:
-        cam = proc.camera_id or "unknown"
-        if cam not in by_camera:
-            by_camera[cam] = {
-                "cameraId": cam,
-                "sessionCount": 0,
-                "channels": {},
-                "pids": [],
-                "hasRtsp453": False,
-            }
-        row = by_camera[cam]
-        row["sessionCount"] += 1
-        row["pids"].append(proc.pid)
-        ch = proc.channel or "unknown"
-        row["channels"][ch] = row["channels"].get(ch, 0) + 1
-        if proc.has_rtsp_453:
-            row["hasRtsp453"] = True
-    return by_camera
-
-
-def _registry_rtsp_453_cameras() -> Set[str]:
-    cameras: Set[str] = set()
-    for record in REGISTRY.all_records():
-        err = record.last_error or ""
-        if "453" in err or "not enough bandwidth" in err.lower():
-            from app.services.video_live_hls import _base_camera_id
-
-            cameras.add(_base_camera_id(record.stream_id))
-    return cameras
-
-
-def build_ffmpeg_diagnostics_extra() -> dict:
-    """Orphan/session summary for /api/live/diagnostics."""
-    processes = list_nvr_ffmpeg_processes()
-    orphans = [p for p in processes if p.status == "orphan"]
-    tracked = [p for p in processes if p.status == "tracked"]
-    per_camera = _camera_rtsp_counts(processes)
-    rtsp_453_registry = _registry_rtsp_453_cameras()
-
-    warnings: List[dict] = []
-    camera_sessions = []
-    for cam_id, row in sorted(per_camera.items()):
-        entry = {
-            "cameraId": cam_id,
-            "rtspSessionCount": row["sessionCount"],
-            "channels": row["channels"],
-            "pids": row["pids"],
-        }
-        camera_sessions.append(entry)
-        if row["sessionCount"] > 2:
-            warnings.append(
-                {
-                    "type": "rtsp_session_overload",
-                    "cameraId": cam_id,
-                    "message": (
-                        f"Camera {cam_id} has {row['sessionCount']} NVR FFmpeg RTSP sessions "
-                        f"(Hikvision often limits main stream to ~2 clients)"
-                    ),
-                    "sessionCount": row["sessionCount"],
-                }
-            )
-        if row["hasRtsp453"] or cam_id in rtsp_453_registry:
-            warnings.append(
-                {
-                    "type": "rtsp_453",
-                    "cameraId": cam_id,
-                    "message": f"RTSP 453 Not Enough Bandwidth detected for camera {cam_id}",
-                }
-            )
-
-    return {
-        "trackedFfmpegCount": len(tracked),
-        "orphanFfmpegCount": len(orphans),
-        "totalNvrFfmpegCount": len(processes),
-        "cameraRtspSessions": camera_sessions,
-        "warnings": warnings,
         "orphans": [nvr_ffmpeg_to_dict(p) for p in orphans],
     }

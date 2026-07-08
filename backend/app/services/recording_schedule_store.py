@@ -85,10 +85,7 @@ async def stop_all_scheduled_recording(*, persist: bool = True) -> dict:
     """Stop FFmpeg for all cameras and clear schedule (opt-in mode)."""
     global master_enabled, recording_schedule
 
-    from app.services.recording_pilot import stop_pilot
     from app.services.video_recording import cleanup_all_recordings, is_camera_recording, stop_camera_recording
-
-    pilot = await stop_pilot(reason="stop_all")
 
     stopped: List[str] = []
     candidate_ids = set(recording_schedule.keys())
@@ -117,7 +114,7 @@ async def stop_all_scheduled_recording(*, persist: bool = True) -> dict:
         )
 
     logger.info("[RECORDING] Stopped all cameras (%s active stopped)", len(stopped))
-    return {"stopped": stopped, "pilot": pilot, "master_enabled": False}
+    return {"stopped": stopped, "master_enabled": False}
 
 
 async def bootstrap_recording_schedule() -> None:

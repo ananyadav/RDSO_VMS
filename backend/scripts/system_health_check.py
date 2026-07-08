@@ -72,7 +72,6 @@ async def main() -> int:
             ("/api/recordings/health", "Recording health"),
             ("/api/storage/dashboard?summary=1", "Storage dashboard (summary)"),
             ("/api/go2rtc/diagnostics", "go2rtc diagnostics"),
-            ("/api/live/diagnostics", "Live diagnostics"),
         ]
 
         for path, label in checks:
@@ -90,7 +89,7 @@ async def main() -> int:
                     print(
                         f"       provider={body.get('liveProvider')}, "
                         f"streams={len(body.get('streams') or [])}, "
-                        f"missing={len(body.get('missingStreams') or [])}"
+                        f"missing={len(body.get('missingInGo2rtc') or body.get('missingStreams') or [])}"
                     )
                 if label == "Recording health" and status == 200 and isinstance(body, dict):
                     cams = body.get("cameras") or []

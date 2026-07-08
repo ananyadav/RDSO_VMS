@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, ChevronLeft, ChevronRight, Circle, Loader2 } from 'lucide-react';
-import { useLiveStream } from '../hooks/useLiveStream';
-import type { FullscreenStartupPhase } from '../hooks/useLiveHLS';
-import { CodecBadge } from './CodecBadge';
+import { useGo2RtcLive } from '../hooks/useGo2RtcLive';
 import CameraSelector from './CameraSelector';
 import { cameraTileLabel } from '../lib/cameraLabel';
 
@@ -24,27 +22,6 @@ interface FullscreenCameraModalProps {
   onToggleRecording: (cameraId: string) => void;
 }
 
-function hlsStartupLabel(phase: FullscreenStartupPhase, forceSub: boolean): string {
-  switch (phase) {
-    case 'connecting_main':
-      return 'Connecting to main stream 101';
-    case 'waiting_playlist':
-      return 'Waiting for playlist';
-    case 'waiting_segment':
-      return 'Waiting for first segment';
-    case 'playing':
-      return 'Playing';
-    case 'failed_453':
-      return 'Failed: RTSP 453 / camera limit';
-    case 'fallback_sub':
-      return forceSub ? 'Connecting to sub stream 102' : 'Fallback: Sub Stream / Lower Quality';
-    case 'failed':
-      return 'Stream failed';
-    default:
-      return 'Connecting…';
-  }
-}
-
 export default function FullscreenCameraModal({
   camera,
   allCameras,
@@ -57,29 +34,13 @@ export default function FullscreenCameraModal({
   const [forceSub, setForceSub] = useState(false);
   const [sessionKey, setSessionKey] = useState(0);
 
-  const live = useLiveStream(camera, {
-    playerContainerRef: playerRef,
-    fullscreen: true,
+  const profile = forceSub ? 'sub' : 'main';
+  const { isConnecting, error, streamStatus, streamName } = useGo2RtcLive(camera, {
+    containerRef: playerRef,
+    profile,
     eager: true,
-    forceSub,
     sessionKey,
-    profile: forceSub ? 'sub' : 'main',
   });
-
-  const {
-    provider,
-    videoRef,
-    isConnecting,
-    error,
-    streamStatus,
-    streamLabel,
-    tileBadge,
-    startupPhase,
-    fullscreenTimedOut,
-    jumpingToLive,
-  } = live;
-
-  const isGo2Rtc = provider === 'go2rtc';
 
   const [currentIndex, setCurrentIndex] = useState(
     allCameras.findIndex((c) => c.id === camera.id),
@@ -148,25 +109,14 @@ export default function FullscreenCameraModal({
     onChangeCamera(selectedCamera);
   };
 
-  const showGo2RtcError = isGo2Rtc && streamStatus === 'error' && Boolean(error);
-  const showHlsTimeout =
-    !isGo2Rtc &&
-    fullscreenTimedOut &&
-    streamStatus !== 'playing' &&
-    startupPhase !== 'playing';
-  const showHlsError =
-    !isGo2Rtc &&
-    (streamStatus === 'error' || startupPhase === 'failed_453') &&
-    Boolean(error) &&
-    !showHlsTimeout;
-
-  const statusLabel = isGo2Rtc
-    ? streamStatus === 'playing'
-      ? 'Playing · Main 101 · go2rtc'
+  const showError = streamStatus === 'error' && Boolean(error);
+  const channelLabel = forceSub ? '102 · sub' : '101 · main';
+  const statusLabel =
+    streamStatus === 'playing'
+      ? `Playing · ${channelLabel} · go2rtc`
       : streamStatus === 'error'
         ? 'Stream failed'
-        : 'Connecting · Main 101 · go2rtc'
-    : hlsStartupLabel(startupPhase, forceSub);
+        : `Connecting · ${channelLabel} · go2rtc`;
 
   return (
     <div className="fixed inset-0 z-50 bg-black bg-opacity-75 flex items-center justify-center">
@@ -196,24 +146,11 @@ export default function FullscreenCameraModal({
 
         <div className="relative w-full h-full max-w-full max-h-full">
           {camera.online ? (
-            isGo2Rtc ? (
-              <div
-                key={`${camera.id}-${sessionKey}-${forceSub ? 'sub' : 'main'}`}
-                ref={playerRef}
-                className={`live-monitor-player w-full h-full bg-black ${showGo2RtcError ? 'opacity-0' : ''}`}
-              />
-            ) : videoRef ? (
-              <video
-                ref={videoRef as React.RefObject<HTMLVideoElement>}
-                autoPlay
-                playsInline
-                muted
-                controls={false}
-                className={`live-monitor-player w-full h-full object-contain bg-black ${
-                  error || showHlsTimeout ? 'opacity-0 pointer-events-none' : ''
-                }`}
-              />
-            ) : null
+            <div
+              key={`${camera.id}-${sessionKey}-${profile}`}
+              ref={playerRef}
+              className={`live-monitor-player w-full h-full bg-black ${showError ? 'opacity-0' : ''}`}
+            />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center text-gray-500 bg-black">
               <div className="text-white">Camera Offline</div>
@@ -232,9 +169,6 @@ export default function FullscreenCameraModal({
             </div>
 
             <div className="flex items-center space-x-2 flex-wrap justify-end gap-y-1">
-              {!isGo2Rtc && (
-                <CodecBadge badge={tileBadge === 'none' && error ? 'error' : tileBadge} />
-              )}
               <span
                 className={`px-3 py-1 text-sm font-semibold rounded-full ${
                   streamStatus === 'playing'
@@ -269,18 +203,15 @@ export default function FullscreenCameraModal({
           </div>
 
           <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 to-transparent flex flex-col items-center gap-3">
-            {!isGo2Rtc &&
-              !forceSub &&
-              streamStatus !== 'fallback' &&
-              startupPhase !== 'fallback_sub' && (
-                <button
-                  type="button"
-                  onClick={handleUseLowQuality}
-                  className="text-sm px-4 py-2 rounded-lg bg-amber-900/70 border border-amber-600/50 text-amber-100 hover:bg-amber-800/80 transition-colors"
-                >
-                  Fallback: Sub Stream / Lower Quality
-                </button>
-              )}
+            {!forceSub && streamStatus !== 'playing' && (
+              <button
+                type="button"
+                onClick={handleUseLowQuality}
+                className="text-sm px-4 py-2 rounded-lg bg-amber-900/70 border border-amber-600/50 text-amber-100 hover:bg-amber-800/80 transition-colors"
+              >
+                Use sub stream (102)
+              </button>
+            )}
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => onToggleRecording(camera.id)}
@@ -294,7 +225,7 @@ export default function FullscreenCameraModal({
             </div>
           </div>
 
-          {isConnecting && !showGo2RtcError && !showHlsTimeout && !showHlsError && (
+          {isConnecting && !showError && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 pointer-events-none gap-2">
               <div className="flex items-center gap-2 text-white text-lg">
                 <Loader2 className="animate-spin" size={22} />
@@ -303,49 +234,7 @@ export default function FullscreenCameraModal({
             </div>
           )}
 
-          {jumpingToLive && !isGo2Rtc && !showHlsTimeout && !showHlsError && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/50 pointer-events-none">
-              <span className="px-4 py-2 rounded-lg bg-black/80 text-amber-200 text-sm font-medium">
-                Jumping to live
-              </span>
-            </div>
-          )}
-
-          {showHlsTimeout && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-900/95 px-6 z-20">
-              <div className="text-center max-w-md space-y-5">
-                <p className="text-white text-lg font-medium">
-                  High quality stream is taking longer than expected
-                </p>
-                <p className="text-gray-400 text-sm">{statusLabel}</p>
-                <div className="flex flex-wrap justify-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleRetry}
-                    className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500"
-                  >
-                    Retry
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleUseLowQuality}
-                    className="px-4 py-2 rounded-lg bg-amber-700 text-white hover:bg-amber-600"
-                  >
-                    Use Low Quality Stream
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {(showGo2RtcError || showHlsError) && (
+          {showError && (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-900/95 px-6 z-20">
               <div className="text-center max-w-md space-y-5">
                 <p className="text-white text-center text-sm max-w-xl leading-relaxed">{error}</p>
@@ -357,13 +246,13 @@ export default function FullscreenCameraModal({
                   >
                     Retry
                   </button>
-                  {!isGo2Rtc && startupPhase === 'failed_453' && (
+                  {!forceSub && (
                     <button
                       type="button"
                       onClick={handleUseLowQuality}
                       className="px-4 py-2 rounded-lg bg-amber-700 text-white hover:bg-amber-600"
                     >
-                      Use Low Quality Stream
+                      Use sub stream (102)
                     </button>
                   )}
                   <button
@@ -381,9 +270,7 @@ export default function FullscreenCameraModal({
           <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm text-white px-3 py-2 rounded text-xs">
             <div className="text-gray-300 mb-1">Navigate:</div>
             <div>◀ ▶ Arrow keys • ESC Close</div>
-            {isGo2Rtc && streamLabel && (
-              <div className="text-gray-400 mt-1">Stream: {streamLabel}</div>
-            )}
+            {streamName && <div className="text-gray-400 mt-1">Stream: {streamName}</div>}
           </div>
         </div>
       </div>
