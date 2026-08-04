@@ -138,12 +138,21 @@ class TestCameraLocations(unittest.TestCase):
         fifth = next(f for f in tree[0]["floorGroups"] if f["floor_group"] == "5th Floor")
         self.assertEqual(fifth["cameraCount"], 2)
 
-    def test_camera_group_key_from_building_floor(self):
+    def test_camera_group_key_prefers_stored_over_building_floor(self):
         cam = {
             "site": DEFAULT_SITE_NAME,
             "building": CORPORATE_OFFICE,
             "floor": "2nd Floor",
             "camera_group": "wrong_key",
+        }
+        self.assertEqual(camera_group_key_for_document(cam), "wrong_key")
+
+    def test_camera_group_key_from_building_floor_when_unset(self):
+        cam = {
+            "site": DEFAULT_SITE_NAME,
+            "building": CORPORATE_OFFICE,
+            "floor": "2nd Floor",
+            "camera_group": "",
         }
         self.assertEqual(
             camera_group_key_for_document(cam),

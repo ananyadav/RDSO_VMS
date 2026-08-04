@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { HardDrive } from 'lucide-react';
 import Card from './Card';
+import { apiFetch, readJsonResponse } from '../lib/api';
 
 interface DriveInfo {
   name: string;
@@ -25,9 +26,9 @@ export default function StorageDrives(): React.ReactElement {
   useEffect(() => {
     const fetchDrives = async () => {
       try {
-        const res = await fetch('/api/storage/dashboard');
+        const res = await apiFetch('/api/storage/dashboard');
         if (!res.ok) return;
-        const data = await res.json();
+        const data = await readJsonResponse<{ disk?: DriveInfo & { disk_total_gb?: number; disk_used_gb?: number; disk_free_gb?: number; disk_free_percent?: number; disk_percent?: number; status_level?: 'green' | 'yellow' | 'red'; status_label?: string } }>(res);
         const disk = data.disk;
         if (disk?.disk_total_gb != null) {
           const freePct =
@@ -56,9 +57,9 @@ export default function StorageDrives(): React.ReactElement {
       } catch {
         // fallback to /api/status
         try {
-          const res = await fetch('/api/status');
+          const res = await apiFetch('/api/status');
           if (!res.ok) return;
-          const data = await res.json();
+          const data = await readJsonResponse<Record<string, number>>(res);
           if (data.disk_total_gb != null) {
             const free = data.disk_total_gb - data.disk_used_gb;
             const freePct = (free / data.disk_total_gb) * 100;

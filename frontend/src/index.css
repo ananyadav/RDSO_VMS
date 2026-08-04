@@ -4,9 +4,20 @@
 @tailwind utilities;
 
 @layer base {
+  /* Compact UI — fits 1366×768 / 125% Windows scale laptops without browser zoom */
+  html {
+    font-size: 87.5%;
+  }
+
   body {
     @apply bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 overflow-hidden;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  #root {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
   }
 }
 
@@ -16,7 +27,7 @@
     @apply w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none;
   }
   .select-style {
-    @apply w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md py-2.5 px-3 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none;
+    @apply w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md py-1.5 px-2 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none;
   }
   .checkbox-style {
     @apply h-4 w-4 rounded bg-gray-200 dark:bg-gray-600 border-gray-300 dark:border-gray-500 text-blue-600 focus:ring-2 focus:ring-blue-500 focus:outline-none ring-offset-gray-100 dark:ring-offset-gray-800;

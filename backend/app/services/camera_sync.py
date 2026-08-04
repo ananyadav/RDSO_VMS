@@ -6,7 +6,7 @@ import asyncio
 import logging
 from typing import Any, Dict, Optional, Set
 
-from app.services.camera_uid import camera_display_name, make_camera_uid
+from app.services.camera_uid import apply_default_camera_names, make_camera_uid
 from app.services.rtsp_utils import rtsp_url_credentials_stale, sync_camera_rtsp_urls
 
 logger = logging.getLogger(__name__)
@@ -76,9 +76,10 @@ def finalize_camera_document(doc: dict, *, existing: Optional[dict] = None) -> d
     for key in RTSP_DERIVED_FIELDS:
         if key in synced:
             out[key] = synced[key]
+    if "rtsp_fallback_urls" in synced:
+        out["rtsp_fallback_urls"] = synced["rtsp_fallback_urls"]
 
-    out["display_name"] = camera_display_name({**merged, **out})
-    return out
+    return apply_default_camera_names(out, existing=existing)
 
 
 async def apply_camera_side_effects(
@@ -104,12 +105,22 @@ async def apply_camera_side_effects(
             from app.services.go2rtc_workers import (
                 WORKERS_ENABLED,
                 get_worker_id_for_camera_doc,
+                rebalance_if_needed,
                 sync_all_workers,
                 sync_worker,
             )
 
             if WORKERS_ENABLED:
-                if camera_id:
+                rebalance = await rebalance_if_needed(reason=reason)
+                if rebalance.get("rebalanced"):
+                    sync = await sync_all_workers()
+                    result["go2rtc"] = {
+                        "ok": bool(sync.get("ok")),
+                        "rebalanced": True,
+                        "workers": sync.get("workerCount"),
+                        "rebalance": rebalance,
+                    }
+                elif camera_id:
                     try:
                         oid = ObjectId(camera_id)
                         cam = await camera_collection.find_one({"_id": oid})
@@ -121,12 +132,14 @@ async def apply_camera_side_effects(
                         "ok": bool(sync.get("ok")),
                         "workerId": wid,
                         "streams": sync.get("streamCount"),
+                        "rebalance": rebalance,
                     }
                 else:
                     sync = await sync_all_workers()
                     result["go2rtc"] = {
                         "ok": bool(sync.get("ok")),
                         "workers": sync.get("workerCount"),
+                        "rebalance": rebalance,
                     }
             else:
                 from app.services.go2rtc_service import ensure_go2rtc_streams
@@ -198,7 +211,59 @@ async def apply_bulk_camera_side_effects(
     *,
     any_stream_change: bool = True,
     reason: str = "bulk_camera_change",
+    worker_ids: Optional[Set[int]] = None,
 ) -> Dict[str, Any]:
     if not any_stream_change:
         return {"ok": True, "skipped": True, "reason": reason}
-    return await apply_camera_side_effects("", existing=None, updated_fields=None, reason=reason)
+
+    rebalance = None
+    try:
+        from app.services.go2rtc_workers import WORKERS_ENABLED, rebalance_if_needed
+
+        if WORKERS_ENABLED:
+            rebalance = await rebalance_if_needed(reason=reason)
+    except Exception as exc:
+        logger.warning("[camera_sync] worker rebalance failed: %s", exc)
+        rebalance = {"ok": False, "error": str(exc)}
+
+    if rebalance and rebalance.get("rebalanced"):
+        result = await apply_camera_side_effects("", existing=None, updated_fields=None, reason=reason)
+    elif worker_ids:
+        result = await _sync_workers_only(worker_ids, reason=reason, rebalance=rebalance)
+    else:
+        result = await apply_camera_side_effects("", existing=None, updated_fields=None, reason=reason)
+
+    if rebalance is not None:
+        result["rebalance"] = rebalance
+    return result
+
+
+async def _sync_workers_only(
+    worker_ids: Set[int],
+    *,
+    reason: str,
+    rebalance: Optional[dict] = None,
+) -> Dict[str, Any]:
+    result: Dict[str, Any] = {"ok": True, "reason": reason, "go2rtc": None, "recording": None}
+    try:
+        from app.services.go2rtc_workers import WORKERS_ENABLED, sync_worker
+
+        if not WORKERS_ENABLED:
+            from app.services.go2rtc_service import ensure_go2rtc_streams
+
+            sync = await ensure_go2rtc_streams()
+            result["go2rtc"] = {"ok": bool(sync.get("ok")), "streams": sync.get("streamCount")}
+            return result
+
+        sync_results = []
+        for wid in sorted(worker_ids):
+            sync_results.append(await sync_worker(wid))
+        result["go2rtc"] = {
+            "ok": all(r.get("ok") for r in sync_results),
+            "workers": sync_results,
+            "rebalance": rebalance,
+        }
+    except Exception as exc:
+        logger.warning("[camera_sync] targeted go2rtc sync failed: %s", exc)
+        result["go2rtc"] = {"ok": False, "error": str(exc)}
+    return result

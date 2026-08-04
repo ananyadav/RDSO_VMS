@@ -20,7 +20,7 @@ import yaml
 
 from app.core.database import camera_collection
 from app.services.camera_uid import make_camera_uid
-from app.services.rtsp_utils import effective_camera_rtsp_urls, mask_rtsp_url
+from app.services.rtsp_utils import mask_rtsp_url, stream_source_urls
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +124,9 @@ def local_recording_rtsp_url(
 def _rtsp_with_tcp(url: str) -> str:
     if not url:
         return url
+    # go2rtc ffmpeg: sources already carry #video=… options — do not rewrite.
+    if url.startswith("ffmpeg:"):
+        return url
     timeout = os.getenv("GO2RTC_RTSP_TIMEOUT", "20").strip()
     base, _, frag = url.partition("#")
     params: Dict[str, str] = {}
@@ -185,24 +188,25 @@ async def build_all_streams_config(worker_id: Optional[int] = None) -> Dict[str,
         camera_id = str(cam["_id"])
         camera_uid = cam.get("camera_uid") or make_camera_uid(cam.get("ip_address") or "") or camera_id
         name = cam.get("name") or camera_id
-        urls = effective_camera_rtsp_urls(cam)
-        sub_url = _rtsp_with_tcp(urls.get("sub_rtsp_url") or "")
-        main_url = _rtsp_with_tcp(urls.get("main_rtsp_url") or "")
+        sub_sources = [_rtsp_with_tcp(u) for u in stream_source_urls(cam, main=False) if u]
+        main_sources = [_rtsp_with_tcp(u) for u in stream_source_urls(cam, main=True) if u]
+        sub_url = sub_sources[0] if sub_sources else ""
+        main_url = main_sources[0] if main_sources else ""
 
         sub_key = stream_name(camera_uid, "sub")
         main_key = stream_name(camera_uid, "main")
 
-        if sub_url:
-            streams[sub_key] = sub_url
-            masked[sub_key] = mask_rtsp_url(sub_url)
+        if sub_sources:
+            streams[sub_key] = sub_sources[0] if len(sub_sources) == 1 else sub_sources
+            masked[sub_key] = mask_rtsp_url(sub_sources[0])
         else:
-            errors.append(f"{name}: missing sub/102 URL")
+            errors.append(f"{name}: missing sub stream URL")
 
-        if main_url:
-            streams[main_key] = main_url
-            masked[main_key] = mask_rtsp_url(main_url)
+        if main_sources:
+            streams[main_key] = main_sources[0] if len(main_sources) == 1 else main_sources
+            masked[main_key] = mask_rtsp_url(main_sources[0])
         else:
-            errors.append(f"{name}: missing main/101 URL")
+            errors.append(f"{name}: missing main stream URL")
 
         cameras_meta.append(
             {
@@ -246,6 +250,27 @@ def _webrtc_candidates(webrtc_port: int) -> List[str]:
     return [f"{resolve_webrtc_host()}:{webrtc_port}"]
 
 
+def _dump_go2rtc_yaml(data: dict) -> str:
+    """Dump go2rtc config; quote stream URLs so `&` in query strings is not a YAML alias."""
+
+    class _Dumper(yaml.SafeDumper):
+        pass
+
+    def _represent_str(dumper: yaml.SafeDumper, value: str):
+        style = (
+            "'"
+            if (
+                "&" in value
+                or value.startswith(("rtsp://", "onvif://", "ffmpeg:"))
+            )
+            else None
+        )
+        return dumper.represent_scalar("tag:yaml.org,2002:str", value, style=style)
+
+    _Dumper.add_representer(str, _represent_str)
+    return yaml.dump(data, Dumper=_Dumper, sort_keys=False, allow_unicode=True)
+
+
 def _base_yaml(
     streams: Dict[str, str],
     *,
@@ -284,14 +309,13 @@ async def write_worker_config_file(worker_id: int) -> Dict[str, Any]:
     config_path = worker_config_path(worker_id)
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(
-        yaml.safe_dump(
+        _dump_go2rtc_yaml(
             _base_yaml(
                 built["streams"],
                 api_port=api_port,
                 rtsp_port=rtsp_port,
                 webrtc_port=webrtc_port,
-            ),
-            sort_keys=False,
+            )
         ),
         encoding="utf-8",
     )
@@ -341,14 +365,13 @@ async def write_config_file() -> Dict[str, Any]:
 
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     CONFIG_PATH.write_text(
-        yaml.safe_dump(
+        _dump_go2rtc_yaml(
             _base_yaml(
                 built["streams"],
                 api_port=GO2RTC_API_PORT,
                 rtsp_port=int(os.getenv("GO2RTC_RTSP_PORT", "8554")),
                 webrtc_port=int(os.getenv("GO2RTC_WEBRTC_PORT", "8555")),
-            ),
-            sort_keys=False,
+            )
         ),
         encoding="utf-8",
     )
@@ -401,18 +424,62 @@ async def fetch_go2rtc_streams(api_url: Optional[str] = None) -> Dict[str, Any]:
         return {}
 
 
-def _producer_url_matches(existing_info: dict, desired_src: str) -> bool:
-    """True when go2rtc already has this stream source configured."""
-    producers = existing_info.get("producers") or []
+def _normalize_stream_sources(desired_src: Any) -> List[str]:
+    """Accept a single RTSP URL or a go2rtc failover list."""
+    if isinstance(desired_src, (list, tuple)):
+        return [str(s).strip() for s in desired_src if str(s).strip()]
+    text = str(desired_src or "").strip()
+    return [text] if text else []
+
+
+def _src_for_go2rtc_api(url: str) -> str:
+    """Return the source unchanged; aiohttp encodes it as one query value.
+
+    Pre-encoding inner ampersands produces a literal ``%26`` in go2rtc's RTSP
+    URL (for example ``ptype=tcp%26dev=1``), which cameras reject.
+    """
+    return (url or "").strip()
+
+
+def _producer_url_matches(existing_info: Any, desired_src: Any) -> bool:
+    """True when go2rtc already has the primary source configured.
+
+    Only the first desired URL is compared. Matching against fallbacks would
+    skip updates when an old primary (e.g. /h264) is still listed as a failover.
+    """
+    if isinstance(existing_info, (list, tuple)):
+        # Rare: go2rtc may return the configured source list instead of producer dicts.
+        producers = [{"url": existing_info[0]}] if existing_info else []
+    elif isinstance(existing_info, dict):
+        producers = existing_info.get("producers") or []
+    else:
+        return False
     if not producers:
         return False
-    cur = (producers[0].get("url") or "").strip()
-    want = (desired_src or "").strip()
-    if not cur or not want:
+    first = producers[0]
+    if isinstance(first, dict):
+        raw_url = first.get("url")
+    else:
+        raw_url = first
+    # Failover configs can surface url as a list — take the primary entry.
+    if isinstance(raw_url, (list, tuple)):
+        raw_url = raw_url[0] if raw_url else ""
+    cur = str(raw_url or "").strip()
+    wants = _normalize_stream_sources(desired_src)
+    if not cur or not wants:
         return False
-    if cur == want:
-        return True
-    return cur.split("#", 1)[0] == want.split("#", 1)[0]
+    primary = wants[0]
+    cur_base = cur.split("#", 1)[0]
+    want_base = primary.split("#", 1)[0]
+
+    def _norm(u: str) -> str:
+        return u.replace("%26", "&")
+
+    return (
+        cur == primary
+        or cur_base == want_base
+        or _norm(cur_base) == _norm(want_base)
+    )
 
 
 async def sync_streams_to_go2rtc(
@@ -457,17 +524,26 @@ async def sync_streams_to_go2rtc(
     ) -> None:
         nonlocal added, updated, skipped
 
-        async def _put_one(name: str, src: str) -> None:
+        async def _put_one(name: str, src: Any) -> None:
             nonlocal added, updated, skipped
             info = existing.get(name) or {}
-            if name in existing_names and _producer_url_matches(info, src):
+            sources = _normalize_stream_sources(src)
+            if not sources:
+                return
+            if name in existing_names and _producer_url_matches(info, sources):
                 skipped += 1
                 return
             async with sem:
                 try:
                     async with session.put(
                         f"{base}/api/streams",
-                        params={"name": name, "src": src},
+                        # go2rtc's query API accepts one src. Repeated src params
+                        # can corrupt its runtime YAML; failover lists are loaded
+                        # from the worker config on process reload.
+                        params={
+                            "name": name,
+                            "src": _src_for_go2rtc_api(sources[0]),
+                        },
                     ) as resp:
                         if resp.status in (200, 201):
                             if name in existing_names:
@@ -846,11 +922,21 @@ async def get_go2rtc_diagnostics() -> Dict[str, Any]:
     """Full status for debug UI: streams, online/offline, consumers."""
     from app.services.stream_issues import (
         ISSUE_LABELS,
+        is_confirmed_offline,
         producer_error_text,
+        producers_streaming,
         stream_issue_from_row,
         summarize_issues,
     )
+    from app.services.stream_health import (
+        ensure_stream_health_scan,
+        get_stream_health,
+        hydrate_stream_health_from_db,
+        stream_health_snapshot,
+    )
 
+    await hydrate_stream_health_from_db()
+    ensure_stream_health_scan()
     built = await build_all_streams_config()
     status = await get_go2rtc_status()
     streams_by_worker = await _streams_by_worker()
@@ -880,6 +966,7 @@ async def get_go2rtc_diagnostics() -> Dict[str, Any]:
     rows: List[dict] = []
     online_count = 0
     offline_count = 0
+    unknown_count = 0
     active_consumers = 0
 
     for cam in built.get("cameras") or []:
@@ -899,16 +986,11 @@ async def get_go2rtc_diagnostics() -> Dict[str, Any]:
         ui_sub = _consumer_counts.get(sub, 0)
         ui_main = _consumer_counts.get(main, 0)
 
-        sub_online = len(sub_producers) > 0
-        main_online = len(main_producers) > 0
+        sub_online = producers_streaming(sub_producers)
+        main_online = producers_streaming(main_producers)
         sub_registered = sub in worker_streams
         main_registered = main in worker_streams
         stream_registered = sub_registered or main_registered
-        if stream_registered or sub_online or main_online:
-            online_count += 1
-        else:
-            offline_count += 1
-
         active_consumers += sub_consumers + main_consumers
 
         sub_stale = max(0, sub_consumers - ui_sub)
@@ -916,21 +998,55 @@ async def get_go2rtc_diagnostics() -> Dict[str, Any]:
 
         cam_name = cam["cameraName"]
         cfg_err = config_errors_by_name.get(cam_name)
-        if not worker_running and not stream_registered:
-            issue_cat, issue_msg = "offline", f"go2rtc worker {cam_worker} not running"
+        health = get_stream_health(cam["cameraId"], cam.get("cameraUid") or "")
+        if (
+            health
+            and not health.get("ok")
+            and (sub_online or main_online)
+            and not (producer_error_text(sub_producers) or producer_error_text(main_producers))
+        ):
+            # Only clear probe failures when go2rtc is actually delivering media.
+            from app.services.stream_health import clear_stream_health_alarm
+
+            health = clear_stream_health_alarm(cam["cameraId"], cam.get("cameraUid") or "") or {
+                "ok": True,
+                "alarm": False,
+                "suspect": False,
+                "checkedAt": health.get("checkedAt"),
+            }
+
+        issue_cat, issue_msg = stream_issue_from_row(
+            sub_online=sub_online,
+            main_online=main_online,
+            sub_producers=sub_producers,
+            main_producers=main_producers,
+            config_error=cfg_err,
+            stream_registered=stream_registered,
+            worker_running=worker_running,
+            worker_id=cam_worker,
+            health=health,
+        )
+
+        confirmed_offline = is_confirmed_offline(issue_cat)
+        health_confirmed = bool(health) and (bool(health.get("ok")) or bool(health.get("alarm")))
+        if issue_cat == "online":
+            online_count += 1
+        elif issue_cat == "unchecked":
+            unknown_count += 1
         else:
-            issue_cat, issue_msg = stream_issue_from_row(
-                sub_online=sub_online,
-                main_online=main_online,
-                sub_producers=sub_producers,
-                main_producers=main_producers,
-                config_error=cfg_err,
-                stream_registered=stream_registered,
-            )
+            offline_count += 1
+
+        display_msg = "" if issue_cat == "online" else (
+            issue_msg
+            or producer_error_text(sub_producers)
+            or producer_error_text(main_producers)
+            or ISSUE_LABELS.get(issue_cat, "Not streaming")
+        )
 
         rows.append(
             {
                 "cameraId": cam["cameraId"],
+                "cameraUid": cam.get("cameraUid") or "",
                 "cameraName": cam_name,
                 "workerId": cam_worker,
                 "workerRunning": worker_running,
@@ -955,7 +1071,14 @@ async def get_go2rtc_diagnostics() -> Dict[str, Any]:
                 "mainOrphaned": main_stale > 0,
                 "issueCategory": issue_cat,
                 "issueLabel": ISSUE_LABELS.get(issue_cat, issue_cat),
-                "issueMessage": issue_msg or producer_error_text(sub_producers) or producer_error_text(main_producers),
+                "issueMessage": display_msg,
+                # Future email/WhatsApp: only alert when confirmedOffline is true.
+                "confirmedOffline": confirmed_offline,
+                "alertEligible": confirmed_offline,
+                "healthCheckedAt": health.get("checkedAt") if health else None,
+                "healthConfirmed": health_confirmed,
+                "healthAlarm": bool(health and health.get("alarm")),
+                "healthSuspect": bool(health and health.get("suspect")),
             }
         )
 
@@ -964,6 +1087,7 @@ async def get_go2rtc_diagnostics() -> Dict[str, Any]:
         "configuredStreamCount": built.get("streamCount", 0),
         "camerasOnline": online_count,
         "camerasOffline": offline_count,
+        "camerasUnknown": unknown_count,
         "activeConsumers": active_consumers,
         "uiTrackedConsumers": sum(_consumer_counts.values()),
         "streams": rows,
@@ -973,6 +1097,7 @@ async def get_go2rtc_diagnostics() -> Dict[str, Any]:
         "issueSummary": summarize_issues(rows),
         "issueLabels": ISSUE_LABELS,
         "locations": _build_location_tree(rows),
+        "healthScan": stream_health_snapshot(),
     }
 
 
@@ -1177,8 +1302,10 @@ async def start_go2rtc_on_startup() -> None:
 def get_live_config() -> Dict[str, Any]:
     from app.services.go2rtc_workers import WORKERS_ENABLED
 
+    direct_media = os.getenv("GO2RTC_DIRECT_MEDIA", "").strip().lower() in ("1", "true", "yes")
     return {
         "provider": "go2rtc",
         "go2rtcEnabled": GO2RTC_ENABLED,
         "go2rtcWorkersEnabled": WORKERS_ENABLED,
+        "directMediaEnabled": direct_media,
     }

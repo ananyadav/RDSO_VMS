@@ -96,12 +96,54 @@ async def delete_camera_endpoint(request):
         return web.json_response({"error": "Authentication required"}, status=401)
     except web.HTTPForbidden:
         return web.json_response({"error": "Admin only"}, status=403)
-    camera_id = request.match_info['id']
+    camera_id = request.match_info["id"]
+
+    from bson import ObjectId
+    from bson.errors import InvalidId
+    from app.core.database import camera_collection
+
+    try:
+        existing = await camera_collection.find_one({"_id": ObjectId(camera_id)})
+    except (InvalidId, TypeError):
+        existing = None
+    if not existing:
+        return web.json_response({"error": "Camera not found"}, status=404)
+
+    # Stop live recording and clear schedule flag before permanent delete.
+    try:
+        from app.services.recording_schedule_store import set_camera_recording
+        from app.services.video_recording import is_camera_recording, stop_camera_recording
+
+        if await is_camera_recording(camera_id):
+            await stop_camera_recording(camera_id)
+        set_camera_recording(camera_id, False)
+    except Exception as exc:
+        logger.warning("[cameras] Recording cleanup before delete failed for %s: %s", camera_id, exc)
+
     deleted = await delete_camera(camera_id)
-    if deleted:
+    if not deleted:
+        return web.json_response({"error": "Camera not found"}, status=404)
+
+    # Sync the camera's worker so go2rtc drops its streams (DB row is already gone).
+    try:
+        from app.services.go2rtc_workers import (
+            WORKERS_ENABLED,
+            get_worker_id_for_camera_doc,
+            sync_worker,
+        )
+
+        if WORKERS_ENABLED:
+            wid = await get_worker_id_for_camera_doc(existing)
+            await sync_worker(wid, reload_pm2=True)
+        else:
+            _schedule_go2rtc_reload()
+    except Exception as exc:
+        logger.warning("[cameras] go2rtc sync after delete failed for %s: %s", camera_id, exc)
         _schedule_go2rtc_reload()
-        return web.json_response({'message': 'Camera deleted'})
-    return web.json_response({'error': 'Camera not found'}, status=404)
+
+    label = (existing.get("ip_address") or existing.get("name") or camera_id).strip()
+    return web.json_response({"message": "Camera deleted", "cameraId": camera_id, "name": label})
+
 
 
 async def test_camera_stream_endpoint(request):

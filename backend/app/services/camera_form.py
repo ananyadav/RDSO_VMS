@@ -14,9 +14,9 @@ from app.services.camera_locations import (
     location_fields_for_building_floor,
 )
 from app.services.location_store import DEFAULT_SITE_NAME
-from app.services.camera_uid import camera_display_name, make_camera_uid
+from app.services.camera_uid import apply_default_camera_names, make_camera_uid
 from app.services.camera_sync import finalize_camera_document
-from app.services.rtsp_utils import mask_rtsp_url
+from app.services.rtsp_utils import AUTO_RTSP_BRANDS, MAKE_ALIASES, mask_rtsp_url
 
 CORPORATE_DEFAULTS: Dict[str, Any] = {
     "site": DEFAULT_SITE_NAME,
@@ -43,11 +43,10 @@ def _str(val: Any, default: str = "") -> str:
 
 def _protocol(val: str) -> str:
     p = _str(val, "HIKVISION").upper()
-    if p in ("HIK", "HIKVISION"):
-        return "HIKVISION"
-    if p == "ONVIF":
-        return "ONVIF"
-    return "CUSTOM"
+    p = MAKE_ALIASES.get(p, p)
+    if p in ("ONVIF", "CUSTOM") or p in AUTO_RTSP_BRANDS:
+        return p
+    return "HIKVISION"
 
 
 def normalize_ip_address(ip: Any) -> str:
@@ -183,15 +182,18 @@ def prepare_camera_fields(
 
     for key in (
         "site", "building", "floor_group", "floor", "area",
-        "camera_group", "location_path", "name", "model", "username", "worker_id", "live_provider",
+        "camera_group", "location_path", "name", "model", "username", "worker_id",
     ):
         if camera_data.get(key) is not None:
             merged[key] = _str(camera_data.get(key))
 
     merged["ip_address"] = ip_address
-    merged["port"] = int(camera_data.get("port") or existing.get("port") or 554)
+    # RTSP port is always 554 for this fleet (not collected in UI).
+    merged["port"] = 554
     merged["protocol"] = protocol
     merged["type"] = _str(camera_data.get("type") or existing.get("type") or "rtsp")
+    # Live view is go2rtc-only — ignore legacy HLS / other providers from DB inserts.
+    merged["live_provider"] = "go2rtc"
 
     for ch_key, legacy in (
         ("main_channel", "main_channel"),
@@ -244,9 +246,7 @@ def prepare_camera_fields(
         )
 
     merged = finalize_camera_document(merged, existing=existing)
-
-    merged["display_name"] = _str(camera_data.get("display_name")) or camera_display_name(merged)
-    return merged
+    return apply_default_camera_names(merged, existing=existing)
 
 
 def duplicate_conflict_response(

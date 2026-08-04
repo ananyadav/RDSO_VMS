@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
+import time
 from typing import Any, Dict, List, Optional
 
 from bson import ObjectId
@@ -15,9 +17,16 @@ from app.services.camera_locations import build_groups_hierarchy, camera_group_k
 from app.services.camera_uid import make_camera_uid
 from app.services.location_store import DEFAULT_SITE_NAME, list_buildings
 from app.services.recording_schedule_store import recording_schedule
-from app.services.rtsp_utils import build_camera_rtsp_urls
+from app.services.stream_issues import ISSUE_LABELS, is_confirmed_offline
 
 logger = logging.getLogger(__name__)
+
+_GO2RTC_CTX_CACHE: Dict[str, Any] = {
+    "expires_at": 0.0,
+    "stream_errors": {},
+    "live_rows": {},
+}
+_GO2RTC_CTX_TTL = max(15, int(os.getenv("MGMT_GO2RTC_CTX_TTL_SECONDS", "60")))
 
 _EMPTY_STATS = {
     "total": 0,
@@ -43,20 +52,58 @@ def _camera_oid(camera_id: str) -> Optional[ObjectId]:
 
 
 def stream_online(cam: dict, live_row: dict) -> bool:
-    """Ready for live view: active and stream registered in go2rtc (lazy — no producer required)."""
+    """Proven online (health OK or active video)."""
     if cam.get("is_active") is False:
         return False
-    return bool((live_row or {}).get("streamRegistered"))
+    return (live_row or {}).get("issueCategory") == "online"
+
+
+def stream_confirmed_offline(cam: dict, live_row: dict) -> bool:
+    """Alert-ready offline only (future mail/WhatsApp). Never checking/disabled."""
+    if cam.get("is_active") is False:
+        return False
+    row = live_row or {}
+    if "confirmedOffline" in row:
+        return bool(row.get("confirmedOffline"))
+    return is_confirmed_offline(row.get("issueCategory"))
+
+
+def stream_playable(cam: dict, live_row: dict) -> bool:
+    """Live View may try connect unless confirmed offline (alert-ready dead)."""
+    if cam.get("is_active") is False:
+        return False
+    return not stream_confirmed_offline(cam, live_row)
 
 
 def apply_stream_online_status(
     items: List[dict],
     live_rows: Dict[str, dict],
+    *,
+    playable_for_live: bool = False,
 ) -> None:
+    """Attach liveStatus / confirmedOffline for UI and future alerts.
+
+    Camera Management / Live badges use only Online vs Offline:
+    - Online = not confirmed dead (includes not-yet-probed)
+    - Offline + confirmedOffline / alertEligible = alert-ready failure
+    Checking is internal to the health probe — not a user-facing state.
+    """
     for item in items:
         cid = str(item.get("id") or item.get("_id") or "")
         row = live_rows.get(cid) or {}
-        item["online"] = stream_online(item, row)
+        confirmed = stream_confirmed_offline(item, row)
+        if playable_for_live:
+            item["online"] = stream_playable(item, row)
+        else:
+            # Management: show Online until confirmed offline (no Checking bucket).
+            item["online"] = (not confirmed) and item.get("is_active") is not False
+        if confirmed:
+            item["liveStatus"] = "offline"
+        else:
+            item["liveStatus"] = "online"
+        item["confirmedOffline"] = confirmed
+        # Explicit alias for a future notifier (email/WhatsApp) — no send logic yet.
+        item["alertEligible"] = confirmed
 
 
 def _stats_for_cameras(
@@ -77,13 +124,16 @@ def _stats_for_cameras(
             stats["disabled"] += 1
 
         row = live_rows.get(cid) or {}
-        online = stream_online(cam, row) if active else False
-        if online:
-            stats["online"] += 1
-        elif active:
+        if not active:
+            pass
+        elif stream_confirmed_offline(cam, row):
             stats["offline"] += 1
+        else:
+            # Not confirmed dead → Online (includes probe-pending cameras).
+            stats["online"] += 1
 
         uid = cam.get("camera_uid") or make_camera_uid(cam.get("ip_address") or "") or cid
+        # Errors = confirmed offline only.
         if stream_errors.get(uid) or stream_errors.get(cid):
             stats["errors"] += 1
 
@@ -105,26 +155,78 @@ def _group_cameras(cameras: List[dict]) -> Dict[str, List[dict]]:
     return by_group
 
 
-async def _load_go2rtc_context() -> tuple[Dict[str, str], Dict[str, dict]]:
-    """Map camera id → stream error; camera id → go2rtc row."""
+async def _load_go2rtc_context_from_health(
+    cameras: Optional[List[dict]] = None,
+) -> tuple[Dict[str, str], Dict[str, dict]]:
+    """Fast path: cached MongoDB / in-memory stream health — no live go2rtc fan-out."""
+    from app.services.stream_health import get_stream_health, hydrate_stream_health_from_db
+
+    await hydrate_stream_health_from_db()
+
     stream_errors: Dict[str, str] = {}
     live_rows: Dict[str, dict] = {}
-    try:
-        from app.services.go2rtc_service import get_go2rtc_diagnostics
 
-        diag = await get_go2rtc_diagnostics()
-        for row in diag.get("streams") or []:
-            cid = row.get("cameraId") or ""
-            live_rows[cid] = row
-            if not row.get("streamRegistered"):
-                stream_errors[cid] = (
-                    row.get("issueMessage") or "Stream not registered in go2rtc"
-                )
-            elif (row.get("issueCategory") or "") not in ("", "online"):
-                stream_errors[cid] = row.get("issueMessage") or "Stream error"
-    except Exception as exc:
-        logger.debug("[MGMT] go2rtc diagnostics unavailable: %s", exc)
+    def attach(cam: dict) -> None:
+        cid = str(cam.get("_id") or cam.get("id") or "")
+        if not cid:
+            return
+        uid = cam.get("camera_uid") or make_camera_uid(cam.get("ip_address") or "") or ""
+        health = get_stream_health(cid, uid)
+        if health and health.get("alarm"):
+            cat = (health.get("category") or "offline").strip()
+            msg = (health.get("message") or "").strip() or ISSUE_LABELS.get(cat, "Not streaming")
+            live_rows[cid] = {
+                "cameraId": cid,
+                "cameraUid": uid,
+                "issueCategory": "offline",
+                "confirmedOffline": True,
+                "issueMessage": msg,
+            }
+            stream_errors[cid] = msg
+            if uid:
+                stream_errors[uid] = msg
+        else:
+            live_rows[cid] = {
+                "cameraId": cid,
+                "cameraUid": uid,
+                "issueCategory": "online",
+                "confirmedOffline": False,
+            }
+
+    if cameras is not None:
+        for cam in cameras:
+            attach(cam)
+    else:
+        async for cam in camera_collection.find(
+            {"is_active": {"$ne": False}},
+            {"_id": 1, "camera_uid": 1, "ip_address": 1},
+        ):
+            attach(cam)
+
     return stream_errors, live_rows
+
+
+async def _load_go2rtc_context(
+    cameras: Optional[List[dict]] = None,
+    *,
+    force: bool = False,
+) -> tuple[Dict[str, str], Dict[str, dict]]:
+    """Map camera id → confirmed stream error; camera id → lightweight live row."""
+    now = time.monotonic()
+    scoped = cameras is not None
+    if not scoped and not force and now < float(_GO2RTC_CTX_CACHE.get("expires_at") or 0):
+        return _GO2RTC_CTX_CACHE["stream_errors"], _GO2RTC_CTX_CACHE["live_rows"]
+
+    stream_errors, live_rows = await _load_go2rtc_context_from_health(cameras)
+    if not scoped:
+        _GO2RTC_CTX_CACHE["stream_errors"] = stream_errors
+        _GO2RTC_CTX_CACHE["live_rows"] = live_rows
+        _GO2RTC_CTX_CACHE["expires_at"] = now + _GO2RTC_CTX_TTL
+    return stream_errors, live_rows
+
+
+def invalidate_go2rtc_context_cache() -> None:
+    _GO2RTC_CTX_CACHE["expires_at"] = 0.0
 
 
 def enrich_hierarchy_with_stats(
@@ -181,10 +283,27 @@ def group_hierarchy_by_site(hierarchy: List[dict]) -> List[dict]:
     return list(by_site.values())
 
 
+async def _merge_configured_sites(sites: List[dict]) -> List[dict]:
+    """Include every active site from Location Master even when it has no cameras yet."""
+    try:
+        from app.services.location_store import load_sites
+
+        configured = await load_sites(include_inactive=False)
+    except Exception:
+        return sites
+    by_name = {row["site"]: row for row in sites}
+    for site_doc in configured:
+        name = (site_doc.get("name") or "").strip()
+        if not name or name in by_name:
+            continue
+        by_name[name] = {"site": name, "buildings": [], "stats": dict(_EMPTY_STATS)}
+    return sorted(by_name.values(), key=lambda row: (row.get("site") or "").lower())
+
+
 async def get_management_hierarchy(cameras: List[dict]) -> dict:
     location_buildings = await list_buildings()
     hierarchy = build_groups_hierarchy(cameras, location_buildings, cameras_only=True)
-    stream_errors, live_rows = await _load_go2rtc_context()
+    stream_errors, live_rows = await _load_go2rtc_context(cameras)
     schedule = dict(recording_schedule)
     hierarchy = enrich_hierarchy_with_stats(
         hierarchy,
@@ -200,7 +319,7 @@ async def get_management_hierarchy(cameras: List[dict]) -> dict:
         live_rows=live_rows,
     )
     return {
-        "sites": group_hierarchy_by_site(hierarchy),
+        "sites": await _merge_configured_sites(group_hierarchy_by_site(hierarchy)),
         "buildings": hierarchy,
         "totals": totals,
         "streamErrors": stream_errors,
@@ -216,10 +335,16 @@ async def test_camera_stream(camera_id: str) -> dict:
     if not cam:
         return {"ok": False, "error": "Camera not found"}
 
+    from app.services.stream_health import record_stream_health
+
+    def finish(ok: bool, message: str, *, category: str | None = None) -> dict:
+        record_stream_health(cam, ok=ok, message=message, category=category)
+        return {"ok": True, "message": message} if ok else {"ok": False, "error": message}
+
     urls = build_camera_rtsp_urls(cam)
     sub_url = urls.get("sub_rtsp_url") or urls.get("main_rtsp_url") or ""
     if not sub_url:
-        return {"ok": False, "error": "No RTSP URL configured"}
+        return finish(False, "No RTSP URL configured", category="missing_url")
 
     try:
         from app.services.ffmpeg_util import ffmpeg_bin
@@ -244,14 +369,18 @@ async def test_camera_stream(camera_id: str) -> dict:
         _, stderr = await asyncio.wait_for(proc.communicate(), timeout=20)
         err = (stderr or b"").decode("utf-8", errors="replace").strip()
         if proc.returncode == 0:
-            return {"ok": True, "message": "Stream OK"}
+            return finish(True, "Stream OK")
         if re.search(r"401|unauthorized|wrong user|password", err, re.I):
-            return {"ok": False, "error": "Authentication failed (wrong username/password)"}
-        return {"ok": False, "error": err[:500] or f"ffmpeg exit {proc.returncode}"}
+            return finish(
+                False,
+                "Authentication failed (wrong username/password)",
+                category="wrong_password",
+            )
+        return finish(False, err[:500] or f"ffmpeg exit {proc.returncode}")
     except asyncio.TimeoutError:
-        return {"ok": False, "error": "Stream test timed out"}
+        return finish(False, "Stream test timed out", category="timeout")
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        return finish(False, str(exc))
 
 
 async def reload_go2rtc_for_group(camera_group: str) -> dict:

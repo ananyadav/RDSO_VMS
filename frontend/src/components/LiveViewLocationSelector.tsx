@@ -4,6 +4,7 @@ import {
   parseBuildingScopeKey,
   siteScopeKey,
   parseSiteScopeKey,
+  buildingScopeKey,
   type BuildingGroup,
 } from '../constants/corporateFloors';
 import {
@@ -18,6 +19,8 @@ export type { BuildingGroup };
 
 interface LiveViewLocationSelectorProps {
   buildings: BuildingGroup[];
+  /** Site names from Location Master with no cameras yet (still shown in unit picker). */
+  extraSiteNames?: string[];
   selectedSite: string | null;
   selectedBuildingKey: string | null;
   selectedGroup: string | null;
@@ -37,6 +40,7 @@ function confirmBulkLoad(label: string, count: number): boolean {
 
 export default function LiveViewLocationSelector({
   buildings,
+  extraSiteNames = [],
   selectedSite,
   selectedBuildingKey,
   selectedGroup,
@@ -53,6 +57,10 @@ export default function LiveViewLocationSelector({
       if (!map.has(site)) map.set(site, []);
       map.get(site)!.push(b);
     }
+    for (const site of extraSiteNames) {
+      const name = (site || '').trim();
+      if (name && !map.has(name)) map.set(name, []);
+    }
     return Array.from(map.entries()).map(([site, siteBuildings]) => ({
       site,
       buildings: siteBuildings,
@@ -61,11 +69,14 @@ export default function LiveViewLocationSelector({
         0,
       ),
     }));
-  }, [buildings]);
+  }, [buildings, extraSiteNames]);
 
   const selectedSiteData = sites.find((s) => s.site === selectedSite);
   const isSiteAllCameras = Boolean(
     selectedSite && selectedGroup && parseSiteScopeKey(selectedGroup) === selectedSite,
+  );
+  const isBuildingAllCameras = Boolean(
+    selectedGroup && parseBuildingScopeKey(selectedGroup),
   );
 
   const parsedBuilding = selectedBuildingKey ? parseBuildingKey(selectedBuildingKey) : null;
@@ -79,11 +90,18 @@ export default function LiveViewLocationSelector({
   const onlyFloorGroup = soleFloorGroup(floorGroups);
 
   useEffect(() => {
-    if (!selectedBuildingKey || isSiteAllCameras || !onlyFloorGroup) return;
+    if (!selectedBuildingKey || isSiteAllCameras || isBuildingAllCameras || !onlyFloorGroup) return;
     if (selectedGroup !== onlyFloorGroup) {
       onSelectGroup(onlyFloorGroup);
     }
-  }, [selectedBuildingKey, isSiteAllCameras, onlyFloorGroup, selectedGroup, onSelectGroup]);
+  }, [
+    selectedBuildingKey,
+    isSiteAllCameras,
+    isBuildingAllCameras,
+    onlyFloorGroup,
+    selectedGroup,
+    onSelectGroup,
+  ]);
 
   const selectedFloor =
     selectedGroup &&
@@ -91,6 +109,13 @@ export default function LiveViewLocationSelector({
     !selectedGroup.startsWith('__building__:')
       ? floorGroups.find((fg) => fg.camera_group === selectedGroup)
       : undefined;
+
+  const buildingCameraCount = floorGroups.reduce((n, fg) => n + (fg.cameraCount ?? 0), 0);
+  const buildingAllKey =
+    parsedBuilding && buildingCameraCount > 0
+      ? buildingScopeKey(parsedBuilding.site, parsedBuilding.building)
+      : null;
+  const hasFloorSubcategories = floorGroups.length > 1;
 
   const locationHint = isSiteAllCameras
     ? `${selectedSite} (all cameras)`
@@ -141,6 +166,14 @@ export default function LiveViewLocationSelector({
       onSelectGroup(null);
       return;
     }
+    if (buildingAllKey && value === buildingAllKey && parsedBuilding) {
+      if (!confirmBulkLoad(
+        `Load all cameras in ${parsedBuilding.building}?`,
+        buildingCameraCount,
+      )) {
+        return;
+      }
+    }
     onSelectGroup(value);
   };
 
@@ -148,8 +181,11 @@ export default function LiveViewLocationSelector({
     ? siteScopeKey(selectedSite!)
     : (selectedBuildingKey ?? '');
 
-  const floorValue =
-    selectedGroup && !parseSiteScopeKey(selectedGroup) ? selectedGroup : NO_FLOOR_SELECTED;
+  const floorValue = (() => {
+    if (!selectedGroup || parseSiteScopeKey(selectedGroup)) return NO_FLOOR_SELECTED;
+    if (isBuildingAllCameras && buildingAllKey) return buildingAllKey;
+    return selectedGroup;
+  })();
 
   return (
     <div className="flex flex-col lg:flex-row gap-3 items-start lg:items-center">
@@ -199,32 +235,41 @@ export default function LiveViewLocationSelector({
         </div>
       )}
 
-      {selectedBuildingKey && !isSiteAllCameras && floorGroups.length > 0 && (
+      {selectedBuildingKey && !isSiteAllCameras && hasFloorSubcategories && (
         <div className="flex items-center gap-2 min-w-0">
           <Layers size={18} className="text-sky-400 shrink-0" />
           <label className="sr-only">Floor / Zone</label>
-          {onlyFloorGroup && floorGroups[0] ? (
-            <span className={`${selectClass} inline-flex items-center bg-gray-100 dark:bg-gray-800/80 text-gray-700 dark:text-gray-300 cursor-default`}>
-              {floorGroups[0].floor_group || floorGroups[0].floor}
-              {' — '}
-              {floorGroups[0].cameraCount ?? 0} camera
-              {(floorGroups[0].cameraCount ?? 0) === 1 ? '' : 's'}
-            </span>
-          ) : (
-            <select
-              value={floorValue}
-              onChange={(e) => handleFloorChange(e.target.value)}
-              className={selectClass}
-            >
-              <option value={NO_FLOOR_SELECTED}>Select floor / zone…</option>
-              {floorGroups.map((fg) => (
-                <option key={fg.camera_group} value={fg.camera_group}>
-                  {fg.floor_group || fg.floor} — {fg.cameraCount} camera
-                  {fg.cameraCount === 1 ? '' : 's'}
-                </option>
-              ))}
-            </select>
-          )}
+          <select
+            value={floorValue}
+            onChange={(e) => handleFloorChange(e.target.value)}
+            className={selectClass}
+          >
+            <option value={NO_FLOOR_SELECTED}>Select floor / zone…</option>
+            {buildingAllKey && parsedBuilding && (
+              <option value={buildingAllKey}>
+                All cameras — {parsedBuilding.building} ({buildingCameraCount} camera
+                {buildingCameraCount === 1 ? '' : 's'})
+              </option>
+            )}
+            {floorGroups.map((fg) => (
+              <option key={fg.camera_group} value={fg.camera_group}>
+                {fg.floor_group || fg.floor} — {fg.cameraCount} camera
+                {fg.cameraCount === 1 ? '' : 's'}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {selectedBuildingKey && !isSiteAllCameras && !hasFloorSubcategories && floorGroups.length === 1 && floorGroups[0] && (
+        <div className="flex items-center gap-2 min-w-0">
+          <Layers size={18} className="text-sky-400 shrink-0" />
+          <span className={`${selectClass} inline-flex items-center bg-gray-100 dark:bg-gray-800/80 text-gray-700 dark:text-gray-300 cursor-default`}>
+            {floorGroups[0].floor_group || floorGroups[0].floor}
+            {' — '}
+            {floorGroups[0].cameraCount ?? 0} camera
+            {(floorGroups[0].cameraCount ?? 0) === 1 ? '' : 's'}
+          </span>
         </div>
       )}
 

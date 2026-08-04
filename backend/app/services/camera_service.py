@@ -13,7 +13,6 @@ from app.core.database import (
     get_all_cameras_from_db,
     create_camera,
     upsert_camera_by_ip,
-    mark_cameras_inactive_not_in_ips,
     update_camera as db_update_camera,
 )
 from app.services.camera_form import (
@@ -31,6 +30,7 @@ from app.services.camera_sync import (
     schedule_camera_side_effects,
     stream_config_changed,
 )
+from app.services.camera_bulk_import import bulk_import_cameras
 from app.core.auth_context import get_effective_user
 from app.services.camera_access import (
     active_camera_filter,
@@ -101,6 +101,9 @@ def _camera_list_item(cam: dict, *, admin: bool = False) -> dict:
         "ptz": bool(cam.get("ptz")),
         "activity": bool(cam.get("activity")),
     }
+    wid = cam.get("worker_id")
+    if wid is not None and wid != "":
+        item["workerId"] = wid
     if admin:
         item["ip_address"] = ip
         item["camera_uid"] = uid
@@ -158,12 +161,57 @@ def _parse_filters(request) -> Dict[str, Any]:
     if search:
         filters["search"] = search
     online_raw = (q.get("online") or "").strip().lower()
-    if online_raw in ("1", "true", "yes"):
+    if online_raw in ("1", "true", "yes", "online"):
         filters["online"] = True
-    elif online_raw in ("0", "false", "no"):
+    elif online_raw in ("0", "false", "no", "offline"):
         filters["online"] = False
     filters["include_inactive"] = include_inactive
     return filters
+
+
+def _site_scope_or_clauses(
+    site: str,
+    *,
+    floor_meta: Dict[str, Dict[str, str]] | None = None,
+) -> List[Dict[str, Any]]:
+    """Match all cameras for a site (Load all cameras) — same rules as location hierarchy."""
+    from app.services.location_store import slugify
+
+    site_name = (site or "").strip()
+    if not site_name:
+        return []
+
+    or_clauses: List[Dict[str, Any]] = [
+        {"site": {"$regex": f"^{re.escape(site_name)}$", "$options": "i"}},
+    ]
+    site_slug = slugify(site_name)
+    if site_slug:
+        or_clauses.append(
+            {"camera_group": {"$regex": f"^{re.escape(site_slug)}_", "$options": "i"}}
+        )
+
+    if floor_meta:
+        groups: set[str] = set()
+        for group, meta in floor_meta.items():
+            if (meta.get("site") or "").strip().lower() != site_name.lower():
+                continue
+            groups.add(group)
+            for alias in legacy_camera_group_aliases(group, site=site_name):
+                groups.add(alias)
+        for group in groups:
+            or_clauses.append({"camera_group": group})
+            meta = floor_meta.get(group) or {}
+            building = (meta.get("building") or "").strip()
+            floor = (meta.get("floor") or meta.get("floor_group") or "").strip()
+            if building and floor:
+                or_clauses.append(
+                    {
+                        "building": {"$regex": f"^{re.escape(building)}$", "$options": "i"},
+                        "$or": [{"floor": floor}, {"floor_group": floor}],
+                    }
+                )
+
+    return or_clauses
 
 
 def _location_filters(
@@ -188,6 +236,18 @@ def _location_filters(
             {"camera_group": alias}
             for alias in legacy_camera_group_aliases(group_filter, site=site or None)
         ]
+        or_clauses.append({"camera_group": group_filter})
+        if meta.get("building") and meta.get("floor"):
+            loc_match: Dict[str, Any] = {
+                "building": {"$regex": f"^{re.escape(meta['building'])}$", "$options": "i"},
+                "$or": [
+                    {"floor": meta["floor"]},
+                    {"floor_group": meta["floor"]},
+                ],
+            }
+            if meta.get("site"):
+                loc_match["site"] = {"$regex": f"^{re.escape(meta['site'])}$", "$options": "i"}
+            or_clauses.append(loc_match)
         if building and floor:
             or_clauses.extend(
                 [
@@ -228,8 +288,11 @@ def _location_filters(
             q["site"] = {"$regex": f"^{re.escape(site)}$", "$options": "i"}
     if filters.get("floor") and not group_filter:
         q["floor"] = filters["floor"]
-    if filters.get("site"):
-        q["site"] = filters["site"]
+    site_filter = (filters.get("site") or "").strip()
+    if site_filter and not group_filter and not filters.get("building"):
+        site_clauses = _site_scope_or_clauses(site_filter, floor_meta=floor_meta)
+        if site_clauses:
+            and_clauses.append({"$or": site_clauses})
     if filters.get("search"):
         s = filters["search"]
         and_clauses.append(
@@ -259,7 +322,12 @@ async def query_cameras(
     active_only = bool(filters.get("active_only"))
 
     floor_meta = None
-    if filters.get("camera_group") or filters.get("building") or filters.get("floor"):
+    if (
+        filters.get("camera_group")
+        or filters.get("building")
+        or filters.get("floor")
+        or filters.get("site")
+    ):
         from app.services.location_store import list_buildings
 
         floor_meta = build_floor_group_meta(await list_buildings())
@@ -309,7 +377,7 @@ async def get_camera_groups(request) -> dict:
     from app.services.location_store import list_buildings
 
     location_buildings = await list_buildings()
-    include_stats = (request.rel_url.query.get("includeStats") or "1").lower() in (
+    include_stats = (request.rel_url.query.get("includeStats") or "0").lower() in (
         "1",
         "true",
         "yes",
@@ -362,8 +430,9 @@ async def get_camera_info(request=None, filters: Optional[Dict[str, Any]] = None
             "is_active": True,
         })
 
-    _, live_rows = await _load_go2rtc_context()
-    apply_stream_online_status(cameras, live_rows)
+    _, live_rows = await _load_go2rtc_context(cameras)
+    # Live View: try to connect like Hikvision — only block confirmed offline.
+    apply_stream_online_status(cameras, live_rows, playable_for_live=True)
 
     for_playback = (
         request
@@ -391,26 +460,37 @@ async def get_configured_cameras_for_user(request) -> List[dict]:
     )
     from app.services.recording_schedule_store import recording_schedule
 
-    stream_errors, live_rows = await _load_go2rtc_context()
+    stream_errors, live_rows = await _load_go2rtc_context(cameras)
     apply_stream_online_status(cameras, live_rows)
 
+    live_status_filter = (filters.get("live_status") or "").strip().lower()
     online_filter = filters.get("online")
-    if online_filter is True:
-        cameras = [c for c in cameras if c.get("online")]
-    elif online_filter is False:
-        cameras = [c for c in cameras if not c.get("online")]
+    if online_filter is True or live_status_filter == "online":
+        cameras = [c for c in cameras if c.get("liveStatus") == "online"]
+    elif online_filter is False or live_status_filter == "offline":
+        # Offline filter = confirmed offline only (alert-ready).
+        cameras = [c for c in cameras if c.get("liveStatus") == "offline" or c.get("confirmedOffline")]
 
     schedule = dict(recording_schedule)
     for item in cameras:
         cid = str(item.get("_id") or item.get("id") or "")
         uid = item.get("camera_uid") or item.get("cameraUid") or ""
         item["recordingActive"] = bool(schedule.get(cid))
-        item["lastError"] = stream_errors.get(cid) or stream_errors.get(uid)
-        item["liveStatus"] = (
-            "offline"
-            if item.get("is_active") is False
-            else ("online" if item.get("online") else "offline")
-        )
+        # lastError only for confirmed offline.
+        if item.get("confirmedOffline"):
+            item["lastError"] = stream_errors.get(cid) or stream_errors.get(uid) or item.get("lastError")
+        else:
+            item["lastError"] = None
+        if item.get("is_active") is False:
+            # Disabled is not an alertable outage.
+            item["liveStatus"] = "disabled"
+            item["confirmedOffline"] = False
+            item["alertEligible"] = False
+            item["lastError"] = None
+            item["online"] = False
+        elif not item.get("liveStatus"):
+            item["liveStatus"] = "online" if item.get("online") else "offline"
+        item["alertEligible"] = bool(item.get("confirmedOffline"))
     return cameras
 
 
@@ -665,43 +745,22 @@ async def handle_import_cameras(payload: dict):
         return {"error": "cameras must be an array"}, 400
 
     mark_missing_inactive = payload.get("markMissingInactive", True) is not False
-    active_ips: set = set()
-    created = 0
-    updated = 0
-    errors: List[str] = []
 
-    for row in cameras_in:
-        if not isinstance(row, dict):
-            errors.append("invalid row")
-            continue
-        ip = (row.get("ip_address") or row.get("ip") or "").strip()
-        if not ip:
-            errors.append("row missing ip_address")
-            continue
-        active_ips.add(ip)
-        name = (row.get("name") or "").strip()
-        if name:
-            row["name"] = name
-        loc = default_location_for_camera(name or ip, row)
-        row.update(loc)
-        row["is_active"] = row.get("is_active", True) is not False
-        try:
-            fields = prepare_camera_fields(row)
-            result = await upsert_camera_by_ip({**row, **fields})
-            if result.get("created"):
-                created += 1
-            else:
-                updated += 1
-        except Exception as exc:
-            errors.append(f"{ip}: {exc}")
+    result = await bulk_import_cameras(
+        cameras_in,
+        mark_missing_inactive=mark_missing_inactive,
+    )
+    created = result["created"]
+    updated = result["updated"]
+    inactive = result["markedInactive"]
+    errors = result["errors"]
+    worker_ids = set(result.get("workerIds") or [])
 
-    inactive = 0
-    if mark_missing_inactive and active_ips:
-        inactive = await mark_cameras_inactive_not_in_ips(active_ips)
-
-    # Always refresh go2rtc when import changed fleet membership (add/update/deactivate).
     if created or updated or inactive:
-        await apply_bulk_camera_side_effects(reason="camera_import")
+        await apply_bulk_camera_side_effects(
+            reason="camera_import",
+            worker_ids=worker_ids or None,
+        )
 
     return {
         "created": created,

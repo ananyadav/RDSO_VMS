@@ -37,7 +37,14 @@ interface LocationTreePanelProps {
 }
 
 function hoverStats(stats?: LocationStats, fallback = 0): string {
-  const s = stats ?? { total: fallback, active: fallback, disabled: 0, online: 0, offline: 0, errors: 0 };
+  const s = stats ?? {
+    total: fallback,
+    active: fallback,
+    disabled: 0,
+    online: 0,
+    offline: 0,
+    errors: 0,
+  };
   const parts = [
     `${s.total} total`,
     `${s.online} online`,

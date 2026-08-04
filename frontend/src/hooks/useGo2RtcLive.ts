@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { go2rtcStreamName, resetGo2RtcStreamSync } from '../lib/liveProvider';
+import { go2rtcStreamName, reportGo2RtcClientError } from '../lib/liveProvider';
 import { acquireGo2RtcSlot, releaseGo2RtcSlot } from '../lib/go2rtcConnectionLimiter';
 import { registerUiConsumer, unregisterUiConsumer } from '../lib/go2rtcConsumerRegistry';
 import { mountGo2RtcPlayer } from '../lib/go2rtcPlayer';
@@ -12,12 +12,16 @@ interface Camera {
   displayName?: string;
   ip_address?: string;
   online: boolean;
+  workerId?: number | string | null;
 }
 
 export type Go2RtcStreamStatus = 'idle' | 'connecting' | 'playing' | 'error';
 
-const CONNECT_TIMEOUT_MS = 22000;
-const MAX_RETRIES = 3;
+/** First attempt — cameras often need a few seconds for RTSP SETUP. */
+const CONNECT_TIMEOUT_MS = 16000;
+/** Single conditional retry for transient faults. */
+const RETRY_TIMEOUT_MS = 10000;
+const MAX_ATTEMPTS = 2;
 
 interface UseGo2RtcLiveOptions {
   containerRef: RefObject<HTMLElement | null>;
@@ -33,17 +37,129 @@ function cameraStreamLabel(camera: Camera): string {
   return cameraTileLabel(camera);
 }
 
+function isAuthError(raw: string): boolean {
+  const lower = raw.toLowerCase();
+  return (
+    lower.includes('401') ||
+    lower.includes('auth') ||
+    lower.includes('password') ||
+    lower.includes('wrong user') ||
+    // go2rtc often truncates to "streams: wrong"
+    /streams:\s*wrong\b/.test(lower)
+  );
+}
+
+function isSetupError(raw: string): boolean {
+  const lower = raw.toLowerCase();
+  return (
+    lower.includes('eof') ||
+    lower.includes('setup') ||
+    lower.includes('describe') ||
+    lower.includes('rtsp')
+  );
+}
+
+function isPermissionError(raw: string): boolean {
+  const lower = raw.toLowerCase();
+  return (
+    lower.includes('403') ||
+    lower.includes('forbidden') ||
+    lower.includes('access denied') ||
+    lower.includes('permission')
+  );
+}
+
+function isDisabledCameraError(raw: string): boolean {
+  const lower = raw.toLowerCase();
+  return lower.includes('camera disabled') || /\bdisabled\b/.test(lower);
+}
+
+function isCodecError(raw: string): boolean {
+  const lower = raw.toLowerCase();
+  return (
+    lower.includes('codec') ||
+    lower.includes('unsupported') ||
+    lower.includes('h265') ||
+    lower.includes('hevc')
+  );
+}
+
+function isTemporaryError(raw: string): boolean {
+  const lower = raw.toLowerCase();
+  return (
+    lower.includes('timed out') ||
+    lower.includes('timeout') ||
+    lower.includes('econnreset') ||
+    lower.includes('connection reset') ||
+    lower.includes('502') ||
+    lower.includes('503') ||
+    lower.includes('bad gateway') ||
+    lower.includes('service unavailable') ||
+    lower.includes('cannot reach go2rtc') ||
+    (lower.includes('worker') && lower.includes('unavailable'))
+  );
+}
+
+/** Errors that will not heal with a short wait — fail immediately. */
+function isNonRetryableError(raw: string): boolean {
+  const lower = raw.toLowerCase();
+  return (
+    isAuthError(raw) ||
+    isPermissionError(raw) ||
+    isDisabledCameraError(raw) ||
+    isCodecError(raw) ||
+    isGo2RtcStreamMissing(raw) ||
+    isSetupError(raw) ||
+    lower.includes('453') ||
+    lower.includes('not enough bandwidth') ||
+    lower.includes('session expired')
+  );
+}
+
+function shouldRetryConnection(raw: string): boolean {
+  if (isNonRetryableError(raw)) return false;
+  return isTemporaryError(raw);
+}
+
+/** True missing go2rtc stream name — not ONVIF/HTTP 404 or camera SETUP errors. */
+function isGo2RtcStreamMissing(raw: string): boolean {
+  const lower = raw.toLowerCase();
+  if (/\bstream not found\b/.test(lower) || /\bstreams?:\s*not found\b/.test(lower)) {
+    return true;
+  }
+  // Bare "not found" without camera/ONVIF/SETUP noise.
+  return (
+    lower.includes('not found') &&
+    !lower.includes('onvif') &&
+    !lower.includes('setup') &&
+    !lower.includes('404') &&
+    !lower.includes('453') &&
+    !lower.includes('bandwidth')
+  );
+}
+
 function friendlyError(camera: Camera, _stream: string, raw: string): string {
   const label = cameraStreamLabel(camera);
   const lower = raw.toLowerCase();
-  if (lower.includes('not found')) {
+  if (isGo2RtcStreamMissing(raw)) {
     return `${label}: stream not registered in go2rtc — use Diagnostics → Reload`;
   }
-  if (lower.includes('timed out') || lower.includes('timeout')) {
-    return `${label}: connection timed out — check camera is online, on the same network, and RTSP credentials are correct`;
+  // Hikvision concurrent RTSP limit — path is fine; free slots on NVR/other viewers.
+  if (lower.includes('453') || lower.includes('not enough bandwidth')) {
+    return `${label}: camera RTSP limit reached (453 Not Enough Bandwidth) — close other live viewers/NVR clients, then retry`;
   }
-  if (lower.includes('401') || lower.includes('auth') || lower.includes('password')) {
+  if (lower.includes('timed out') || lower.includes('timeout')) {
+    return `${label}: connection timed out — check camera is online and RTSP credentials/path are correct`;
+  }
+  if (isAuthError(raw)) {
     return `${label}: wrong username or password for RTSP`;
+  }
+  if (
+    (lower.includes('eof') && lower.includes('setup')) ||
+    lower.includes('wrong response on setup') ||
+    (lower.includes('onvif') && lower.includes('404'))
+  ) {
+    return `${label}: RTSP SETUP failed (wrong Make/path — Hikvision URL may not match this camera) — edit protocol in Camera Management`;
   }
   if (lower.includes('refused') || lower.includes('unreachable')) {
     return `${label}: camera unreachable at RTSP port (network or firewall)`;
@@ -51,11 +167,14 @@ function friendlyError(camera: Camera, _stream: string, raw: string): string {
   return raw.includes(label) ? raw : `${label}: ${raw}`;
 }
 
+const RETRY_DELAY_MS = 800;
+
 async function waitForFirstFrame(
   container: HTMLElement,
   stream: string,
   mode: 'webrtc' | 'mse',
   timeoutMs: number,
+  workerId?: number | string | null,
 ): Promise<() => void> {
   return new Promise((resolve, reject) => {
     let cleanup: (() => void) | null = null;
@@ -74,6 +193,7 @@ async function waitForFirstFrame(
     void mountGo2RtcPlayer(container, {
       stream,
       mode,
+      workerId,
       onFirstFrame: () => {
         frameSeen = true;
         finish();
@@ -105,6 +225,7 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
   const streamsReady = options.streamsReady !== false;
 
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isQueued, setIsQueued] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [streamStatus, setStreamStatus] = useState<Go2RtcStreamStatus>('idle');
   const [inView, setInView] = useState(eager);
@@ -115,6 +236,13 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
   const trackedStreamRef = useRef<string | null>(null);
   const slotHeldRef = useRef(false);
 
+  const releaseSlot = () => {
+    if (slotHeldRef.current) {
+      releaseGo2RtcSlot();
+      slotHeldRef.current = false;
+    }
+  };
+
   const stopPlayer = (unregister = true) => {
     const stream = trackedStreamRef.current;
     teardownRef.current?.();
@@ -123,10 +251,7 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
       unregisterUiConsumer(stream);
       trackedStreamRef.current = null;
     }
-    if (slotHeldRef.current) {
-      releaseGo2RtcSlot();
-      slotHeldRef.current = false;
-    }
+    releaseSlot();
   };
 
   useEffect(() => {
@@ -151,6 +276,7 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
     if (!shouldConnect) {
       stopPlayer(true);
       setIsConnecting(false);
+      setIsQueued(false);
       setError(null);
       setStreamStatus('idle');
       return;
@@ -166,28 +292,43 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
 
     const run = async () => {
       stopPlayer(true);
-      setIsConnecting(true);
+      setIsConnecting(false);
+      setIsQueued(true);
       setError(null);
-      setStreamStatus('connecting');
+      setStreamStatus('idle');
 
       await acquireGo2RtcSlot();
       if (cancelled || session !== sessionRef.current) {
         releaseGo2RtcSlot();
+        setIsQueued(false);
         return;
       }
       slotHeldRef.current = true;
+      setIsQueued(false);
+      setIsConnecting(true);
+      setStreamStatus('connecting');
 
-      for (let attempt = 0; attempt < MAX_RETRIES; attempt += 1) {
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
         if (cancelled || session !== sessionRef.current) return;
 
         const mode = modes[Math.min(attempt, modes.length - 1)];
+        const timeoutMs = attempt === 0 ? CONNECT_TIMEOUT_MS : RETRY_TIMEOUT_MS;
 
         try {
-          const cleanup = await waitForFirstFrame(container, stream, mode, CONNECT_TIMEOUT_MS);
+          const cleanup = await waitForFirstFrame(
+            container,
+            stream,
+            mode,
+            timeoutMs,
+            camera.workerId,
+          );
           if (cancelled || session !== sessionRef.current) {
             cleanup();
             return;
           }
+
+          // Free the connect slot so later tiles (last cam in the grid) can start.
+          releaseSlot();
 
           registerUiConsumer(stream);
           trackedStreamRef.current = stream;
@@ -202,24 +343,11 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
 
           const raw = err instanceof Error ? err.message : 'Failed to connect';
           const message = friendlyError(camera, stream, raw);
-          const isNotFound = raw.toLowerCase().includes('not found');
-          const isLast = attempt >= MAX_RETRIES - 1;
+          const canRetry = attempt < MAX_ATTEMPTS - 1 && shouldRetryConnection(raw);
 
-          if (isNotFound && attempt === 0) {
-            const ok = await resetGo2RtcStreamSync();
-            await new Promise((r) => setTimeout(r, ok ? 500 : 1200));
-            await acquireGo2RtcSlot();
-            if (cancelled || session !== sessionRef.current) {
-              releaseGo2RtcSlot();
-              return;
-            }
-            slotHeldRef.current = true;
-            continue;
-          }
-
-          if (!isLast) {
-            setError(`${message} — retrying (${attempt + 2}/${MAX_RETRIES})…`);
-            await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+          if (canRetry) {
+            setError(`${message} — retrying…`);
+            await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
             await acquireGo2RtcSlot();
             if (cancelled || session !== sessionRef.current) {
               releaseGo2RtcSlot();
@@ -232,6 +360,12 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
           setError(message);
           setIsConnecting(false);
           setStreamStatus('error');
+          reportGo2RtcClientError({
+            cameraId: camera.id,
+            cameraUid: camera.cameraUid,
+            stream,
+            message: raw,
+          });
           return;
         }
       }
@@ -246,6 +380,7 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
       }
       stopPlayer(true);
       setIsConnecting(false);
+      setIsQueued(false);
       setStreamStatus('idle');
     };
   }, [
@@ -254,6 +389,7 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
     camera?.name,
     camera?.displayName,
     camera?.online,
+    camera?.workerId,
     profile,
     active,
     inView,
@@ -274,6 +410,7 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
 
   return {
     isConnecting,
+    isQueued,
     error,
     streamStatus,
     inView: eager || inView,

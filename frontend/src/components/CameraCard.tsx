@@ -9,13 +9,19 @@ interface Camera {
   displayName?: string;
   ip_address?: string;
   cameraUid?: string;
+  /** True when Live View should attempt a stream (not confirmed offline). */
   online: boolean;
+  liveStatus?: string;
+  confirmedOffline?: boolean;
+  lastError?: string | null;
 }
 
 interface CameraCardProps {
   camera: Camera;
   eagerLive?: boolean;
   streamsReady?: boolean;
+  /** When false, tear down the tile player (e.g. same cam is in fullscreen). */
+  liveActive?: boolean;
   isRecording: boolean;
   onToggleRecording: (cameraId: string) => void;
   onFullscreen?: (camera: Camera) => void;
@@ -25,6 +31,7 @@ function CameraCard({
   camera,
   eagerLive = false,
   streamsReady = true,
+  liveActive = true,
   isRecording,
   onToggleRecording,
   onFullscreen,
@@ -32,15 +39,28 @@ function CameraCard({
   const tileRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<HTMLDivElement>(null);
 
-  const { isConnecting, error, inView } = useGo2RtcLive(camera, {
-    containerRef: playerRef,
-    observeRef: tileRef,
-    profile: 'sub',
-    eager: eagerLive,
-    streamsReady,
-  });
+  const confirmedOffline = Boolean(camera.confirmedOffline) || camera.liveStatus === 'offline';
+  // Like Hikvision: try connect unless confirmed dead.
+  const shouldTryStream = !confirmedOffline && camera.online !== false;
+
+  const { isConnecting, isQueued, error, streamStatus, inView } = useGo2RtcLive(
+    shouldTryStream ? camera : null,
+    {
+      containerRef: playerRef,
+      observeRef: tileRef,
+      profile: 'sub',
+      eager: eagerLive,
+      active: liveActive && shouldTryStream,
+      streamsReady,
+    },
+  );
 
   const showStreamMessage = Boolean(error);
+  const statusLabel = confirmedOffline ? 'Offline' : 'Online';
+
+  const statusClass = confirmedOffline || streamStatus === 'error'
+    ? 'text-red-800 bg-red-200'
+    : 'text-green-800 bg-green-200';
 
   const handleDoubleClick = () => {
     if (onFullscreen) onFullscreen(camera);
@@ -56,9 +76,15 @@ function CameraCard({
         onDoubleClick={handleDoubleClick}
       >
         <div className="absolute inset-0">
-          {camera.online ? (
+          {shouldTryStream ? (
             <>
-              {!inView && !isConnecting && !showStreamMessage && (
+              {isQueued && !isConnecting && !showStreamMessage && (
+                <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-xs bg-gray-900/80 px-2 text-center z-10">
+                  Waiting for connect slot…
+                </div>
+              )}
+
+              {!inView && !isConnecting && !isQueued && !showStreamMessage && (
                 <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-xs bg-gray-900 px-2 text-center z-10">
                   Scroll into view for live feed
                 </div>
@@ -83,15 +109,19 @@ function CameraCard({
               )}
 
               {showStreamMessage && (
-                <div className="absolute inset-0 flex items-center justify-center text-gray-100 text-xs text-center px-3 bg-gray-900 z-20">
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-100 text-xs text-center px-3 bg-gray-900 z-20 gap-2">
+                  <VideoOff size={36} className="text-gray-500" />
                   <p className="max-w-[95%] leading-relaxed">{error}</p>
                 </div>
               )}
             </>
           ) : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 px-3 text-center gap-2">
               <VideoOff size={48} />
-              <p>Camera Offline</p>
+              <p className="font-medium text-gray-400">Camera Offline</p>
+              {camera.lastError && (
+                <p className="text-xs text-red-300/90 max-w-[95%] leading-relaxed">{camera.lastError}</p>
+              )}
             </div>
           )}
         </div>
@@ -107,12 +137,8 @@ function CameraCard({
             <h3 className="font-bold text-white text-sm truncate">{cameraTileLabel(camera)}</h3>
           </div>
 
-          <span
-            className={`flex-shrink-0 px-2 py-0.5 text-xs font-semibold rounded-full ${
-              camera.online ? 'text-green-800 bg-green-200' : 'text-red-800 bg-red-200'
-            }`}
-          >
-            {camera.online ? 'Online' : 'Offline'}
+          <span className={`flex-shrink-0 px-2 py-0.5 text-xs font-semibold rounded-full ${statusClass}`}>
+            {statusLabel}
           </span>
         </div>
 
@@ -132,6 +158,7 @@ function CameraCard({
           <div className="flex items-center space-x-2">
             {onFullscreen && (
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onFullscreen(camera);
@@ -144,6 +171,7 @@ function CameraCard({
             )}
 
             <button
+              type="button"
               onClick={() => onToggleRecording(camera.id)}
               className={`flex items-center space-x-1.5 py-1 px-2 rounded transition-colors bg-black/30 backdrop-blur-sm ${
                 isRecording ? 'text-red-400' : 'text-gray-200 hover:bg-white/20'

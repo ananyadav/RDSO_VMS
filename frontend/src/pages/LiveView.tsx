@@ -10,7 +10,7 @@ import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { flushAllUiConsumers } from '../lib/go2rtcConsumerRegistry';
 import { destroyAllGo2RtcPlayers } from '../lib/go2rtcPlayer';
-import { ensureGo2RtcStreamsSynced, isGo2RtcRunning } from '../lib/liveProvider';
+import { waitForGo2RtcReady } from '../lib/liveProvider';
 import { apiFetch, cameraQuery } from '../lib/api';
 import {
   parseBuildingScopeKey,
@@ -31,6 +31,7 @@ const LIVE_LAYOUTS = [
   { cols: 3, label: '3x3' },
   { cols: 4, label: '4x4' },
   { cols: 5, label: '5x5' },
+  { cols: 6, label: '6x6' },
 ] as const;
 
 type LiveLayout = (typeof LIVE_LAYOUTS)[number];
@@ -42,6 +43,9 @@ interface Camera {
   displayName?: string;
   ip_address?: string;
   online: boolean;
+  liveStatus?: string;
+  confirmedOffline?: boolean;
+  lastError?: string | null;
   camera_group?: string;
   location_path?: string;
   is_active?: boolean;
@@ -56,6 +60,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
   const { params, setParams, initialParams, hydratedRef, markHydrated } = useUrlHydration();
 
   const [buildings, setBuildings] = useState<BuildingGroup[]>([]);
+  const [configuredSiteNames, setConfiguredSiteNames] = useState<string[]>([]);
   const [selectedSite, setSelectedSite] = useState<string | null>(null);
   const [selectedBuildingKey, setSelectedBuildingKey] = useState<string | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
@@ -67,6 +72,8 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
   const [showFullscreenModal, setShowFullscreenModal] = useState(false);
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
   const [selectedLayout, setSelectedLayout] = useState<LiveLayout>(LIVE_LAYOUTS[1]);
+  const gridViewportRef = useRef<HTMLDivElement>(null);
+  const [rowHeightPx, setRowHeightPx] = useState(0);
 
   const openFullscreen = (camera: Camera) => {
     setFullscreenCamera(camera);
@@ -81,10 +88,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
   useEffect(() => {
     let cancelled = false;
     setGo2rtcReady(false);
-    void isGo2RtcRunning().then((running) => {
-      if (!cancelled && running) setGo2rtcReady(true);
-    });
-    void ensureGo2RtcStreamsSynced().finally(() => {
+    void waitForGo2RtcReady().finally(() => {
       if (!cancelled) setGo2rtcReady(true);
     });
     return () => {
@@ -103,12 +107,17 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
     const loadGroups = async () => {
       setGroupsLoading(true);
       try {
-        const res = await apiFetch('/api/cameras/groups');
+        const res = await apiFetch('/api/cameras/groups?includeStats=false');
         if (!res.ok) throw new Error('Failed to load locations');
         const data = await res.json();
         const list: BuildingGroup[] = data.buildings ?? [];
         const access: PublicCameraAccess = data.cameraAccess ?? { all: true };
         setBuildings(list);
+        setConfiguredSiteNames(
+          (data.sites ?? [])
+            .map((s: { site?: string }) => (s.site || '').trim())
+            .filter(Boolean),
+        );
 
         const fromUrl = resolveLiveViewFromUrl(initialParams.current!, list);
         if (fromUrl) {
@@ -236,6 +245,9 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
   const isSiteAllCameras = Boolean(
     selectedSite && selectedGroup && parseSiteScopeKey(selectedGroup) === selectedSite,
   );
+  const isBuildingAllCameras = Boolean(
+    selectedGroup && parseBuildingScopeKey(selectedGroup),
+  );
 
   const selectedFloor =
     selectedGroup &&
@@ -244,8 +256,30 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
       ? buildingDef?.floorGroups.find((fg) => fg.camera_group === selectedGroup)
       : undefined;
 
-  const onlineIds = cameras.filter((c) => c.online).map((c) => c.id);
-  const eagerLive = onlineIds.length > 0 && onlineIds.length <= 4;
+  // N×N resolution: first screen shows cols×cols tiles; extra cams scroll.
+  const gridCols = selectedLayout.cols;
+  const gridCapacity = gridCols * gridCols;
+
+  const sortedCameras = useMemo(
+    () =>
+      [...cameras].sort((a, b) => cameraTileLabel(a).localeCompare(cameraTileLabel(b))),
+    [cameras],
+  );
+
+  useEffect(() => {
+    const el = gridViewportRef.current;
+    if (!el) return;
+    const update = () => {
+      const gap = 2; // gap-0.5 ≈ 2px
+      const h = el.clientHeight;
+      const minRow = gridCols >= 6 ? 52 : gridCols >= 5 ? 64 : 80;
+      if (h > 0) setRowHeightPx(Math.max(minRow, Math.floor((h - gap * (gridCols - 1)) / gridCols)));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [gridCols, selectedGroup, camerasLoading, go2rtcReady, groupsLoading]);
 
   const subtitle = (() => {
     if (!selectedGroup) {
@@ -274,25 +308,18 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
   const awaitingBuilding = Boolean(selectedSite && !selectedBuildingKey && !isSiteAllCameras);
   const awaitingSite = !selectedSite && !isSiteAllCameras;
 
-  if (groupsLoading || !go2rtcReady) {
+  if (groupsLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3">
         <Loader2 className="animate-spin text-gray-500" size={48} />
-        {!go2rtcReady && (
-          <p className="text-sm text-gray-500">Syncing go2rtc streams…</p>
-        )}
       </div>
     );
   }
 
-  const sortedCameras = [...cameras].sort((a, b) =>
-    cameraTileLabel(a).localeCompare(cameraTileLabel(b)),
-  );
-
   return (
     <>
       <div className="flex flex-col h-full min-h-0">
-        <div className="shrink-0 px-4 pt-4 pb-3 border-b border-gray-300 dark:border-gray-700 bg-gray-200 dark:bg-gray-900 z-20">
+        <div className="shrink-0 px-3 pt-2 pb-2 border-b border-gray-300 dark:border-gray-700 bg-gray-200 dark:bg-gray-900 z-20">
           <PageHeader
             title="Live View"
             subtitle={subtitle}
@@ -326,6 +353,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
           <div className="mt-3">
             <LiveViewLocationSelector
               buildings={buildings}
+              extraSiteNames={configuredSiteNames}
               selectedSite={selectedSite}
               selectedBuildingKey={selectedBuildingKey}
               selectedGroup={selectedGroup}
@@ -336,14 +364,9 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4">
-          <div className="rounded-lg border border-emerald-700/40 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-100">
-            Pick <strong>Site → Building → Floor</strong> to load cameras. Grid uses substream
-            102; fullscreen uses main 101.
-          </div>
-
+        <div className="flex-1 min-h-0 overflow-hidden p-2 flex flex-col gap-2">
           {(awaitingSite || awaitingBuilding || awaitingFloor) && (
-            <div className="flex items-center justify-center py-16 text-gray-500 text-center px-4">
+            <div className="flex items-center justify-center flex-1 text-gray-500 text-center px-4">
               {awaitingSite && 'Select a site / unit to begin.'}
               {awaitingBuilding && `Select a building / area under ${selectedSite}.`}
               {awaitingFloor &&
@@ -353,53 +376,70 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
           )}
 
           {isSiteAllCameras && !camerasLoading && cameras.length > 0 && (
-            <div className="rounded-lg border border-amber-700/40 bg-amber-950/25 px-4 py-2 text-xs text-amber-200">
+            <div className="shrink-0 rounded-lg border border-amber-700/40 bg-amber-950/25 px-4 py-2 text-xs text-amber-200">
               Showing all {cameras.length} cameras in {selectedSite}. Select a building and floor to
               reduce load.
             </div>
           )}
 
+          {isBuildingAllCameras && !camerasLoading && cameras.length > 0 && parsedBuilding && (
+            <div className="shrink-0 rounded-lg border border-amber-700/40 bg-amber-950/25 px-4 py-2 text-xs text-amber-200">
+              Showing all {cameras.length} cameras in {parsedBuilding.building}. Pick a single floor
+              to reduce load.
+            </div>
+          )}
+
           {selectedGroup && camerasLoading && (
-            <div className="flex items-center justify-center py-16 gap-2 text-gray-500">
+            <div className="flex items-center justify-center flex-1 gap-2 text-gray-500">
               <Loader2 className="animate-spin" size={24} />
               Loading cameras…
             </div>
           )}
 
           {selectedGroup && !camerasLoading && cameras.length === 0 && !awaitingFloor && (
-            <div className="flex items-center justify-center py-16 text-gray-500">
+            <div className="flex items-center justify-center flex-1 text-gray-500">
               No cameras in this location.
             </div>
           )}
 
-          {selectedGroup && !camerasLoading && cameras.length > 0 && (
-            <div
-              className="grid gap-4"
-              style={{
-                gridTemplateColumns: `repeat(${selectedLayout.cols}, minmax(0, 1fr))`,
-              }}
-            >
-              {sortedCameras.map((camera) => (
-                <div
-                  key={camera.id}
-                  className={`relative w-full aspect-video ${
-                    selectedCamera?.id === camera.id
-                      ? 'ring-2 ring-blue-400 dark:ring-blue-500'
-                      : ''
-                  }`}
-                >
-                  <div className="absolute inset-0">
-                    <CameraCard
-                      camera={camera}
-                      eagerLive={eagerLive}
-                      streamsReady={go2rtcReady}
-                      isRecording={recordingSchedule[camera.id] || false}
-                      onToggleRecording={() => onToggleRecording(camera.id)}
-                      onFullscreen={openFullscreen}
-                    />
+          {selectedGroup && !camerasLoading && sortedCameras.length > 0 && (
+            <div ref={gridViewportRef} className="flex-1 min-h-0 overflow-y-auto bg-black">
+              <div
+                className="grid gap-0.5"
+                style={{
+                  gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`,
+                  gridAutoRows: rowHeightPx > 0 ? `${rowHeightPx}px` : undefined,
+                }}
+              >
+                {sortedCameras.map((camera, index) => (
+                  <div
+                    key={camera.id}
+                    className={`relative min-w-0 ${
+                      selectedCamera?.id === camera.id
+                        ? 'ring-2 ring-blue-400 dark:ring-blue-500 z-10'
+                        : ''
+                    }`}
+                    style={rowHeightPx > 0 ? { height: rowHeightPx } : { aspectRatio: '16 / 9' }}
+                  >
+                    <div className="absolute inset-0">
+                      <CameraCard
+                        camera={camera}
+                        eagerLive={index < gridCapacity}
+                        streamsReady={go2rtcReady}
+                        liveActive={
+                          !(
+                            showFullscreenModal &&
+                            fullscreenCamera?.id === camera.id
+                          )
+                        }
+                        isRecording={recordingSchedule[camera.id] || false}
+                        onToggleRecording={() => onToggleRecording(camera.id)}
+                        onFullscreen={openFullscreen}
+                      />
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
         </div>

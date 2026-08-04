@@ -56,6 +56,14 @@ export default function FullscreenCameraModal({
     setSessionKey((k) => k + 1);
   }, []);
 
+  // Auto-fallback to sub when main fails (common for HEVC / busy RTSP slots).
+  useEffect(() => {
+    if (forceSub) return;
+    if (streamStatus !== 'error') return;
+    setForceSub(true);
+    setSessionKey((k) => k + 1);
+  }, [forceSub, streamStatus]);
+
   useEffect(() => {
     setForceSub(false);
     setSessionKey((k) => k + 1);

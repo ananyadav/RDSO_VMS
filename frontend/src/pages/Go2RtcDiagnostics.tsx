@@ -4,6 +4,7 @@ import {
   useUrlSync,
   initialStringParam,
 } from '../hooks/useUrlSearchState';
+import { useVisibilityInterval } from '../hooks/useVisibilityInterval';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import { apiFetch } from '../lib/api';
@@ -78,6 +79,7 @@ interface Diagnostics {
   configuredStreamCount: number;
   camerasOnline: number;
   camerasOffline: number;
+  camerasUnknown?: number;
   activeConsumers: number;
   uiTrackedConsumers: number;
   configErrors: string[];
@@ -88,6 +90,19 @@ interface Diagnostics {
   locations?: LocationSite[];
   issueSummary?: IssueSummary;
   issueLabels?: Record<string, string>;
+  healthScan?: {
+    running: boolean;
+    total: number;
+    completed: number;
+    healthy: number;
+    errors: number;
+    suspects?: number;
+    startedAt?: string | null;
+    completedAt?: string | null;
+    cachedResults: number;
+    cachedSuspects?: number;
+    confirmStrikes?: number;
+  };
 }
 
 const ISSUE_STYLES: Record<string, string> = {
@@ -98,6 +113,7 @@ const ISSUE_STYLES: Record<string, string> = {
   missing_url: 'bg-orange-900/40 text-orange-200 border-orange-700/50',
   other: 'bg-yellow-900/30 text-yellow-200 border-yellow-700/40',
   online: 'bg-green-900/40 text-green-200 border-green-700/50',
+  unchecked: 'bg-slate-800 text-slate-300 border-slate-600',
 };
 
 function StatusPill({ ok, label }: { ok: boolean; label: string }) {
@@ -202,9 +218,11 @@ export default function Go2RtcDiagnostics(): React.ReactElement {
 
   useEffect(() => {
     void fetchDiagnostics(true);
-    const id = window.setInterval(() => void fetchDiagnostics(false), 3000);
-    return () => window.clearInterval(id);
   }, [fetchDiagnostics]);
+
+  useVisibilityInterval(() => {
+    void fetchDiagnostics(false);
+  }, 3000, true);
 
   const locations = data?.locations ?? [];
   const buildings = useMemo(
@@ -408,8 +426,18 @@ export default function Go2RtcDiagnostics(): React.ReactElement {
               <p className="text-2xl font-bold text-white">{data.configuredStreamCount}</p>
               <p className="text-sm text-gray-400">{data.cameraCount} cameras configured</p>
               <p className="text-xs text-gray-500 mt-1">
-                Online: {data.camerasOnline} · Offline: {data.camerasOffline}
+                Confirmed: {data.camerasOnline} · Failed: {data.camerasOffline}
+                {(data.camerasUnknown ?? 0) > 0 && ` · Pending: ${data.camerasUnknown}`}
               </p>
+              {data.healthScan && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {data.healthScan.running
+                    ? `Scanning ${data.healthScan.completed}/${data.healthScan.total}…`
+                    : data.healthScan.completedAt
+                      ? `Last scan: ${new Date(data.healthScan.completedAt).toLocaleTimeString()}`
+                      : 'Stream health scan pending'}
+                </p>
+              )}
             </Card>
 
             <Card>
@@ -448,6 +476,25 @@ export default function Go2RtcDiagnostics(): React.ReactElement {
                 </button>
                 <button
                   type="button"
+                  onClick={() => void runAction('/api/go2rtc/health-scan', 'Stream scan started')}
+                  disabled={data.healthScan?.running}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded bg-amber-800 text-amber-100 hover:bg-amber-700 text-sm disabled:opacity-50"
+                >
+                  <Radio size={14} />
+                  {data.healthScan?.running ? 'Scanning…' : 'Scan streams'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    void runAction('/api/go2rtc/health-scan/clear-failures', 'Cleared stale failures')
+                  }
+                  className="flex items-center gap-1 px-3 py-1.5 rounded bg-slate-700 text-slate-100 hover:bg-slate-600 text-sm"
+                >
+                  <AlertTriangle size={14} />
+                  Clear stale errors
+                </button>
+                <button
+                  type="button"
                   onClick={() => void runAction('/api/go2rtc/stop', 'Stop')}
                   className="flex items-center gap-1 px-3 py-1.5 rounded bg-red-900 text-red-100 hover:bg-red-800 text-sm"
                 >
@@ -455,6 +502,16 @@ export default function Go2RtcDiagnostics(): React.ReactElement {
                   Stop
                 </button>
               </div>
+              {data.healthScan && (
+                <p className="text-xs text-gray-500 mt-2">
+                  Confirmed errors: {data.healthScan.errors}
+                  {(data.healthScan.cachedSuspects ?? data.healthScan.suspects ?? 0) > 0 &&
+                    ` · Suspects (not alarmed): ${data.healthScan.cachedSuspects ?? data.healthScan.suspects}`}
+                  {data.healthScan.confirmStrikes
+                    ? ` · Needs ${data.healthScan.confirmStrikes} strikes`
+                    : ''}
+                </p>
+              )}
               {actionMsg && <p className="text-xs text-gray-400 mt-2">{actionMsg}</p>}
               {!data.binaryFound && (
                 <p className="text-xs text-amber-400 mt-2">go2rtc binary not found on server</p>
@@ -494,6 +551,22 @@ export default function Go2RtcDiagnostics(): React.ReactElement {
               <ul className="text-sm text-amber-100/80 list-disc pl-5 space-y-1">
                 {data.configErrors.map((e) => (
                   <li key={e}>{e}</li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          {((data.errors?.length ?? 0) > 0 || (data.staleInGo2rtc?.length ?? 0) > 0) && (
+            <Card>
+              <h3 className="font-semibold text-red-300 mb-2">Engine errors and stale streams</h3>
+              <ul className="text-sm text-red-100/80 list-disc pl-5 space-y-1">
+                {(data.errors ?? []).filter(Boolean).map((message) => (
+                  <li key={`error-${message}`}>{message}</li>
+                ))}
+                {(data.staleInGo2rtc ?? []).map((stream) => (
+                  <li key={`stale-${stream}`}>
+                    Stale go2rtc stream: <span className="font-mono text-xs">{stream}</span>
+                  </li>
                 ))}
               </ul>
             </Card>

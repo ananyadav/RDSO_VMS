@@ -138,6 +138,9 @@ async def delete_user(id: str):
     """Delete a user from the database by their ID."""
     user = await user_collection.find_one({"_id": ObjectId(id)})
     if user:
+        from app.services.session_service import revoke_sessions_for_user
+
+        await revoke_sessions_for_user(id)
         await user_collection.delete_one({"_id": ObjectId(id)})
         return True
     return False
@@ -365,6 +368,10 @@ async def upsert_camera_by_ip(camera_data: dict) -> dict:
             if existing.get(key) is not None:
                 preserve[key] = existing[key]
         fields.update(preserve)
+        from app.services.go2rtc_workers import WORKERS_ENABLED, ensure_camera_worker_assigned
+
+        if WORKERS_ENABLED:
+            fields = await ensure_camera_worker_assigned(fields, existing=existing)
         await camera_collection.update_one({"_id": existing["_id"]}, {"$set": fields})
         updated = await camera_collection.find_one({"_id": existing["_id"]})
         updated["_id"] = str(updated["_id"])
@@ -495,6 +502,9 @@ async def ensure_database_indexes() -> None:
         from app.services.go2rtc_workers import ensure_workers_indexes
 
         await ensure_workers_indexes()
+        from app.services.session_service import ensure_session_indexes
+
+        await ensure_session_indexes()
         try:
             await camera_collection.drop_index("idx_camera_online")
         except Exception:

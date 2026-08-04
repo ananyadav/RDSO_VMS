@@ -9,7 +9,7 @@ import { useTheme } from './hooks/useTheme';
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import { renderProtected, renderHome } from "./components/ProtectedRoute";
-import { PERMISSIONS } from './lib/permissions';
+import { isAdminUser, PERMISSIONS } from './lib/permissions';
 
 // --- Page Imports ---
 import LoginPage from "./pages/LoginPage";
@@ -30,13 +30,14 @@ import { authService } from './services/authService';
 import { apiFetch } from './lib/api';
 import { LocationsProvider } from './context/LocationsContext';
 import ErrorBoundary from './components/ErrorBoundary';
+import { useVisibilityInterval } from './hooks/useVisibilityInterval';
 
 type RecordingScheduleType = Record<string, boolean>;
 
 export default function App(): React.ReactElement {
   // --- State Management ---
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [sessionReady, setSessionReady] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => authService.getCurrentUser());
+  const [sessionReady, setSessionReady] = useState(() => Boolean(authService.getCurrentUser()));
   const stopSessionSyncRef = useRef<(() => void) | null>(null);
 
   const beginSessionSync = useCallback(() => {
@@ -62,21 +63,29 @@ export default function App(): React.ReactElement {
   // --- Restore and validate session from localStorage ---
   useEffect(() => {
     const initSession = async () => {
-      const stored = authService.getCurrentUser();
-      if (!stored) {
+      const hadCachedUser = Boolean(authService.getCurrentUser());
+      if (hadCachedUser) {
         setSessionReady(true);
-        return;
-      }
-
-      const fresh = await authService.refreshSession();
-      if (fresh) {
-        setCurrentUser(fresh);
         beginSessionSync();
-      } else {
-        setCurrentUser(null);
-        toast.error('Your session ended. Please log in again.');
       }
-      setSessionReady(true);
+      try {
+        const fresh = await authService.refreshSession();
+        if (fresh) {
+          setCurrentUser(fresh);
+          if (!hadCachedUser) {
+            beginSessionSync();
+          }
+        } else {
+          setCurrentUser(null);
+        }
+      } catch (err) {
+        console.warn('[auth] initSession failed:', err);
+        if (!hadCachedUser) {
+          setCurrentUser(null);
+        }
+      } finally {
+        setSessionReady(true);
+      }
     };
 
     void initSession();
@@ -99,6 +108,16 @@ export default function App(): React.ReactElement {
     };
     if (userId) { void fetchSchedule(); }
   }, [userId]);
+
+  // Keep stream-health cache warm while any project tab is open so Camera Management
+  // / diagnostics error columns stay current without requiring a manual refresh.
+  useVisibilityInterval(
+    () => {
+      void apiFetch('/api/go2rtc/health-scan', { cache: 'no-store' }).catch(() => {});
+    },
+    30000,
+    Boolean(currentUser && isAdminUser(currentUser)),
+  );
 
   // --- Handlers (useCallback keeps references stable across re-renders so
   //     child components don't think their props changed) ---
@@ -172,9 +191,10 @@ export default function App(): React.ReactElement {
 
   const handleLogout = () => {
     endSessionSync();
-    authService.logout();
-    setCurrentUser(null);
-    toast('You have been logged out.');
+    void authService.logout().then(() => {
+      setCurrentUser(null);
+      toast('You have been logged out.');
+    });
   };
 
   // --- Render Logic ---

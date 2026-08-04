@@ -1,7 +1,17 @@
 /* Live CCTV monitoring — no media-player chrome (grid + fullscreen only) */
 
+.live-monitor-player,
+.live-monitor-player video-stream,
+.live-monitor-player video {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
 .live-monitor-player video {
   pointer-events: none;
+  object-fit: cover;
+  background: #000;
 }
 
 .live-monitor-player video::-webkit-media-controls {

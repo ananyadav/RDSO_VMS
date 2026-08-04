@@ -125,14 +125,33 @@ async def _next_worker_id() -> int:
     return int(doc.get("worker_id") or doc.get("_id") or 0) + 1
 
 
-async def _count_cameras(worker_id: int) -> int:
+def _active_cameras_query() -> dict:
+    return {"$or": [{"is_active": True}, {"is_active": {"$exists": False}}]}
+
+
+def _worker_id_filter(worker_id: int) -> dict:
     wid = int(worker_id)
-    return await camera_collection.count_documents(
-        {
-            "worker_id": wid,
-            "$or": [{"is_active": True}, {"is_active": {"$exists": False}}],
-        }
-    )
+    return {
+        "$or": [
+            {"worker_id": wid},
+            {"worker_id": str(wid)},
+            {"worker_id": f"worker-{wid}"},
+        ]
+    }
+
+
+def _cameras_for_worker_query(worker_id: int) -> dict:
+    return {"$and": [_active_cameras_query(), _worker_id_filter(worker_id)]}
+
+
+def needed_workers_for_camera_count(camera_count: int) -> int:
+    if camera_count <= 0:
+        return 0
+    return max(1, (camera_count + MAX_CAMERAS_PER_WORKER - 1) // MAX_CAMERAS_PER_WORKER)
+
+
+async def _count_cameras(worker_id: int) -> int:
+    return await camera_collection.count_documents(_cameras_for_worker_query(worker_id))
 
 
 async def _refresh_worker_camera_count(worker_id: int) -> int:
@@ -210,8 +229,31 @@ async def assign_worker_for_new_camera(preferred: Any = None) -> int:
     if best_id is not None:
         return best_id
 
+    # All active workers are full — open the next slot (worker 4 at 901 cams, etc.).
+    total = await camera_collection.count_documents(_active_cameras_query())
+    needed = needed_workers_for_camera_count(total + 1)
+    active_ids = {int(row["worker_id"]) for row in workers}
+    for wid in range(1, needed + 1):
+        count = await _count_cameras(wid)
+        if count < MAX_CAMERAS_PER_WORKER:
+            if wid not in active_ids or not await get_worker(wid):
+                await create_worker_record(wid)
+            else:
+                await workers_collection.update_one(
+                    {"worker_id": wid},
+                    {
+                        "$set": {
+                            "active": True,
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    },
+                )
+            await _ensure_worker_records([wid])
+            return wid
+
     new_id = await _next_worker_id()
     await create_worker_record(new_id)
+    await _ensure_worker_records([new_id])
     return new_id
 
 
@@ -221,10 +263,11 @@ async def get_worker_id_for_camera_doc(cam: Optional[dict]) -> int:
         return int(worker["worker_id"])
     wid = normalize_worker_id(cam.get("worker_id"))
     if wid:
-        if await get_worker(wid):
+        worker = await get_worker(wid)
+        if worker and worker.get("active") is not False:
             return wid
-    worker = await ensure_default_worker()
-    return int(worker["worker_id"])
+    # Orphan / inactive worker_id — fall back to least-loaded active worker.
+    return await assign_worker_for_new_camera()
 
 
 async def get_api_url_for_camera_doc(cam: Optional[dict]) -> str:
@@ -452,29 +495,193 @@ async def reload_worker_process(worker_id: int, *, reason: str = "config") -> di
     """Start or reload only one worker — never restarts the full fleet."""
     if _use_pm2():
         return await pm2_reload_worker(worker_id)
-    from app.services.go2rtc_service import is_api_healthy, sync_streams_to_go2rtc, write_worker_config_file
+    from app.services.go2rtc_service import sync_streams_to_go2rtc, write_worker_config_file
 
     built = await write_worker_config_file(worker_id)
     if not built.get("ok"):
         return {"ok": False, "worker_id": worker_id, "error": built.get("error")}
 
     api_url = worker_base_url(worker_id)
-    if await is_api_healthy(api_url):
-        sync = await sync_streams_to_go2rtc(built.get("streams") or {}, api_url=api_url)
-        return {"ok": bool(sync.get("ok")), "worker_id": worker_id, "sync": sync, "reason": reason}
-
+    # A reload must restart the process so list-valued failovers and quoted
+    # RTSP URLs are read from YAML. API sync alone cannot safely represent them.
+    await subprocess_stop_worker(worker_id)
     started = await subprocess_start_worker(worker_id)
     if not started.get("ok"):
         return started
     sync = await sync_streams_to_go2rtc(built.get("streams") or {}, api_url=api_url)
-    return {"ok": bool(sync.get("ok")), "worker_id": worker_id, "sync": sync, "started": started}
+    return {
+        "ok": bool(sync.get("ok")),
+        "worker_id": worker_id,
+        "sync": sync,
+        "started": started,
+        "reason": reason,
+    }
+
+
+async def _ensure_worker_records(worker_ids: List[int]) -> List[int]:
+    """Create/reactivate go2rtc_workers records and start missing processes."""
+    created: List[int] = []
+    for wid in sorted(set(int(w) for w in worker_ids if w >= 1)):
+        worker = await get_worker(wid)
+        if not worker:
+            await create_worker_record(wid)
+            created.append(wid)
+            logger.info("[go2rtc-workers] Created missing worker record %s", wid)
+        elif worker.get("active") is False:
+            await workers_collection.update_one(
+                {"worker_id": wid},
+                {
+                    "$set": {
+                        "active": True,
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                },
+            )
+            logger.info("[go2rtc-workers] Reactivated worker record %s", wid)
+
+        if _use_pm2():
+            from app.services.go2rtc_service import write_worker_config_file
+
+            # Always write YAML before start — fresh hosts have no worker configs yet.
+            await write_worker_config_file(wid)
+            if not await pm2_worker_running(wid):
+                await pm2_start_worker(wid)
+        else:
+            from app.services.go2rtc_service import is_api_healthy, write_worker_config_file
+
+            api_url = worker_base_url(wid)
+            if not await is_api_healthy(api_url):
+                await write_worker_config_file(wid)
+                await subprocess_start_worker(wid)
+    return created
+
+
+async def rebalance_worker_assignments(*, reason: str = "rebalance") -> dict:
+    """
+    Redistribute active cameras across workers (≤ MAX_CAMERAS_PER_WORKER each).
+    Creates worker records and starts processes when the fleet outgrows existing workers.
+    """
+    if not WORKERS_ENABLED:
+        return {"ok": True, "skipped": True, "reason": reason}
+
+    camera_ids: List[Any] = []
+    async for cam in camera_collection.find(_active_cameras_query(), {"_id": 1}).sort("_id", 1):
+        camera_ids.append(cam["_id"])
+
+    total = len(camera_ids)
+    if total == 0:
+        return {"ok": True, "moved": 0, "workerCount": 0, "reason": reason}
+
+    needed_workers = needed_workers_for_camera_count(total)
+    moved = 0
+    for index, oid in enumerate(camera_ids):
+        target_wid = (index // MAX_CAMERAS_PER_WORKER) + 1
+        cam = await camera_collection.find_one({"_id": oid}, {"worker_id": 1})
+        current = normalize_worker_id(cam.get("worker_id") if cam else None)
+        if current != target_wid:
+            await camera_collection.update_one(
+                {"_id": oid},
+                {"$set": {"worker_id": target_wid}},
+            )
+            moved += 1
+
+    created = await _ensure_worker_records(list(range(1, needed_workers + 1)))
+    for wid in range(1, needed_workers + 1):
+        await _refresh_worker_camera_count(wid)
+
+    # Deactivate leftover worker records (e.g. worker 4 after fleet shrinks / DB inserts).
+    deactivated = 0
+    async for row in workers_collection.find({"worker_id": {"$gt": needed_workers}}):
+        wid = int(row["worker_id"])
+        if row.get("active") is not False:
+            await workers_collection.update_one(
+                {"worker_id": wid},
+                {"$set": {"active": False, "assigned_camera_count": 0}},
+            )
+            deactivated += 1
+        await subprocess_stop_worker(wid)
+
+    logger.info(
+        "[go2rtc-workers] Rebalanced %s camera(s): moved=%s workers=%s created=%s deactivated=%s (%s)",
+        total,
+        moved,
+        needed_workers,
+        created,
+        deactivated,
+        reason,
+    )
+    return {
+        "ok": True,
+        "rebalanced": True,
+        "reason": reason,
+        "totalCameras": total,
+        "neededWorkers": needed_workers,
+        "moved": moved,
+        "createdWorkers": created,
+        "deactivatedWorkers": deactivated,
+    }
+
+
+async def rebalance_if_needed(*, reason: str = "auto") -> dict:
+    """Rebalance when overloaded, missing workers, or cameras point at invalid workers.
+
+    Cameras inserted directly in Mongo with worker_id=4 (etc.) while only workers
+    1..N exist never appear in go2rtc until rebalanced — treat that as orphan.
+    """
+    if not WORKERS_ENABLED:
+        return {"ok": True, "skipped": True}
+
+    counts: Dict[int, int] = {}
+    missing_worker_id = False
+    async for cam in camera_collection.find(_active_cameras_query(), {"worker_id": 1}):
+        wid = normalize_worker_id(cam.get("worker_id"))
+        if not wid:
+            missing_worker_id = True
+            break
+        counts[wid] = counts.get(wid, 0) + 1
+
+    if missing_worker_id:
+        return await rebalance_worker_assignments(reason=f"{reason}:missing_worker_id")
+
+    total = sum(counts.values())
+    needed = needed_workers_for_camera_count(total)
+    workers = await list_active_workers()
+    worker_ids = {int(row["worker_id"]) for row in workers}
+    valid_ids = set(range(1, needed + 1))
+    overloaded = any(count > MAX_CAMERAS_PER_WORKER for count in counts.values())
+    needs_more_workers = needed > len(worker_ids) or any(
+        wid not in worker_ids for wid in valid_ids
+    )
+    # Cameras on worker 4+ when fleet only needs 1..3, or on a missing worker record.
+    orphan_assignments = any(wid not in valid_ids for wid in counts) or any(
+        wid not in worker_ids for wid in counts if wid in valid_ids
+    )
+
+    if overloaded or needs_more_workers or orphan_assignments:
+        tag = reason
+        if orphan_assignments and "orphan" not in reason:
+            tag = f"{reason}:orphan_worker"
+        return await rebalance_worker_assignments(reason=tag)
+
+    for wid, count in counts.items():
+        await workers_collection.update_one(
+            {"worker_id": wid},
+            {"$set": {"assigned_camera_count": count}},
+        )
+
+    return {
+        "ok": True,
+        "rebalanced": False,
+        "totalCameras": total,
+        "neededWorkers": needed,
+        "workerCounts": counts,
+    }
 
 
 async def ensure_workers_for_assigned_cameras() -> List[int]:
     """Ensure go2rtc_workers records exist for every worker_id assigned to active cameras."""
     worker_ids: set[int] = set()
-    query = {"$or": [{"is_active": True}, {"is_active": {"$exists": False}}]}
-    async for cam in camera_collection.find(query, {"worker_id": 1}):
+    async for cam in camera_collection.find(_active_cameras_query(), {"worker_id": 1}):
         wid = normalize_worker_id(cam.get("worker_id"))
         if wid:
             worker_ids.add(wid)
@@ -483,12 +690,7 @@ async def ensure_workers_for_assigned_cameras() -> List[int]:
         await ensure_default_worker()
         return [1]
 
-    for wid in sorted(worker_ids):
-        if not await get_worker(wid):
-            await create_worker_record(wid)
-            logger.info("[go2rtc-workers] Created missing worker record %s from camera assignments", wid)
-            if _use_pm2() and wid >= 2:
-                await pm2_start_worker(wid)
+    await _ensure_worker_records(sorted(worker_ids))
     return sorted(worker_ids)
 
 
@@ -589,6 +791,13 @@ async def sync_worker(worker_id: int, *, reload_pm2: bool = False) -> dict:
 
 
 async def sync_all_workers() -> dict:
+    """Assign workers for DB-inserted cameras, then push streams to every active worker.
+
+    Safe to call after raw Mongo inserts: missing/orphan worker_id values are fixed first.
+    """
+    migrated = await migrate_cameras_without_worker()
+    rebalance = await rebalance_if_needed(reason="sync_all")
+
     workers = await list_active_workers()
     if not workers:
         await ensure_default_worker()
@@ -602,7 +811,13 @@ async def sync_all_workers() -> dict:
         results.append(result)
         ok = ok and bool(result.get("ok"))
 
-    return {"ok": ok, "workers": results, "workerCount": len(results)}
+    return {
+        "ok": ok,
+        "workers": results,
+        "workerCount": len(results),
+        "migratedWorkerIds": migrated,
+        "rebalance": rebalance,
+    }
 
 
 async def ensure_camera_worker_assigned(
@@ -610,22 +825,33 @@ async def ensure_camera_worker_assigned(
     *,
     existing: Optional[dict] = None,
 ) -> dict:
-    """Assign worker_id for new cameras; preserve existing assignment on update."""
+    """Assign worker_id for new cameras; preserve existing assignment on update.
+
+    Invalid / orphan worker ids (e.g. 4 when only 1–3 are active) are ignored so
+    cameras always land on a running go2rtc worker.
+    """
     if not WORKERS_ENABLED:
         return fields
     out = dict(fields)
+    active = await list_active_workers()
+    active_ids = {int(row["worker_id"]) for row in active} if active else {1}
+
     if existing:
         wid = normalize_worker_id(existing.get("worker_id"))
-        if wid:
+        if wid and wid in active_ids:
             out["worker_id"] = wid
             return out
     preferred = normalize_worker_id(out.get("worker_id"))
+    if preferred and preferred not in active_ids:
+        preferred = None
     out["worker_id"] = await assign_worker_for_new_camera(preferred)
     return out
 
 
 async def migrate_cameras_without_worker() -> int:
-    """Assign worker_id to active cameras missing it."""
+    """Assign worker_id to active cameras missing it (typical after raw Mongo inserts)."""
+    from app.services.camera_uid import make_camera_uid
+
     await ensure_default_worker()
     migrated = 0
     query = {
@@ -642,10 +868,15 @@ async def migrate_cameras_without_worker() -> int:
     }
     async for cam in camera_collection.find(query):
         wid = await assign_worker_for_new_camera()
-        await camera_collection.update_one(
-            {"_id": cam["_id"]},
-            {"$set": {"worker_id": wid}},
-        )
+        patch: Dict[str, Any] = {"worker_id": wid, "live_provider": "go2rtc"}
+        ip = (cam.get("ip_address") or "").strip()
+        if ip and not (cam.get("camera_uid") or "").strip():
+            uid = make_camera_uid(ip)
+            if uid:
+                patch["camera_uid"] = uid
+                if not cam.get("recording_storage_id"):
+                    patch["recording_storage_id"] = uid
+        await camera_collection.update_one({"_id": cam["_id"]}, {"$set": patch})
         migrated += 1
 
     # Normalize legacy string worker ids (worker-1) to integers.
@@ -715,6 +946,7 @@ async def heal_worker(worker_id: int) -> dict:
 
 
 async def heal_all_workers() -> dict:
+    rebalance = await rebalance_if_needed(reason="heal")
     workers = await list_active_workers()
     results = []
     ok = True
@@ -723,7 +955,7 @@ async def heal_all_workers() -> dict:
         result = await heal_worker(wid)
         results.append(result)
         ok = ok and bool(result.get("ok"))
-    return {"ok": ok, "workers": results}
+    return {"ok": ok, "rebalance": rebalance, "workers": results}
 
 
 async def _watchdog_loop() -> None:
@@ -733,6 +965,11 @@ async def _watchdog_loop() -> None:
         try:
             await asyncio.sleep(WATCHDOG_INTERVAL)
             if not WORKERS_ENABLED:
+                continue
+            # Pick up cameras inserted directly in Mongo (missing/orphan worker_id).
+            rebalance = await rebalance_if_needed(reason="watchdog")
+            if rebalance.get("rebalanced") or rebalance.get("moved"):
+                await sync_all_workers()
                 continue
             for row in await list_active_workers():
                 wid = int(row["worker_id"])
@@ -781,6 +1018,7 @@ async def startup_workers() -> dict:
 
     await ensure_workers_indexes()
     await migrate_cameras_without_worker()
+    await rebalance_if_needed(reason="startup")
     await ensure_workers_for_assigned_cameras()
     await stop_legacy_monolithic_go2rtc()
 

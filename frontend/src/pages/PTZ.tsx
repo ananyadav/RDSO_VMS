@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { apiFetch } from '../lib/api';
 import { useParams, useHistory, Link } from 'react-router-dom';
 import { useGo2RtcLive } from '../hooks/useGo2RtcLive';
-import { ensureGo2RtcStreamsSynced } from '../lib/liveProvider';
+import { waitForGo2RtcReady } from '../lib/liveProvider';
 import {
   fetchPtzCameras,
   fetchPtzPresets,
@@ -61,7 +61,7 @@ const PTZ = () => {
   }, [markHydrated]);
 
   useEffect(() => {
-    void ensureGo2RtcStreamsSynced().then(setStreamsReady);
+    void waitForGo2RtcReady().then(setStreamsReady);
   }, []);
 
   const urlValues = useMemo(() => ({ speed: speed === 2 ? null : String(speed) }), [speed]);
@@ -83,6 +83,9 @@ const PTZ = () => {
 
   useEffect(() => {
     const initialize = async () => {
+      let finishLoading = true;
+      setLoading(true);
+      setError(null);
       try {
         const ptzList = await fetchPtzCameras();
         setPtzCameras(ptzList);
@@ -90,6 +93,9 @@ const PTZ = () => {
         if (!cameraId) {
           const first = ptzList.find((c) => c.online) ?? ptzList[0];
           if (first) {
+            // Keep the loading state visible while the redirected route loads
+            // the selected camera. Otherwise "Camera not found" flashes briefly.
+            finishLoading = false;
             history.replace(`/ptz/${first.id}`);
             return;
           }
@@ -123,7 +129,7 @@ const PTZ = () => {
       } catch {
         setError('Failed to load PTZ cameras.');
       } finally {
-        setLoading(false);
+        if (finishLoading) setLoading(false);
       }
     };
     void initialize();
@@ -132,7 +138,8 @@ const PTZ = () => {
   const { isConnecting, error: streamError, streamStatus } = useGo2RtcLive(camera, {
     containerRef: videoContainerRef,
     profile: 'main',
-    active: Boolean(camera?.online),
+    // Wait until the loading screen is removed so the player container exists.
+    active: Boolean(camera?.online && !loading),
     eager: true,
     streamsReady,
   });

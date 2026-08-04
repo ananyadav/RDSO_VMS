@@ -45,7 +45,7 @@ function NavItemLink({ item }: { item: NavItem }) {
       aria-label={item.label}
       className={(isActive: boolean) =>
         [
-          'relative flex flex-col items-center justify-center gap-1 py-2.5 px-1 w-full transition-colors',
+          'relative flex flex-col items-center justify-center gap-0.5 py-2 px-1 w-full transition-colors',
           "before:content-[''] before:absolute before:left-0 before:top-2 before:bottom-2 before:w-0.5 before:rounded-r",
           isActive
             ? '!text-white bg-white/10 before:bg-red-500'
@@ -53,8 +53,8 @@ function NavItemLink({ item }: { item: NavItem }) {
         ].join(' ')
       }
     >
-      <Icon size={22} strokeWidth={1.75} className="flex-shrink-0" />
-      <span className="text-[10px] leading-tight text-center font-medium px-0.5 max-w-[4.5rem]">
+      <Icon size={18} strokeWidth={1.75} className="flex-shrink-0" />
+      <span className="text-[9px] leading-tight text-center font-medium px-0.5 max-w-[4.25rem]">
         {item.label}
       </span>
     </NavLink>
@@ -71,7 +71,7 @@ export default function Sidebar({ user }: SidebarProps): React.ReactElement {
   const system = filterNav(systemNav, user);
 
   return (
-    <aside className="w-[4.75rem] flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col">
+    <aside className="w-[4.25rem] flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col">
       <nav className="flex-grow py-1 overflow-y-auto scrollbar-hide">
         {main.map((item) => (
           <NavItemLink key={item.href} item={item} />

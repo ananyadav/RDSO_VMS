@@ -1,3 +1,5 @@
+import { readJsonResponse } from '../lib/jsonResponse';
+
 export interface CameraAccess {
   all?: boolean;
   allowedCameraGroups: string[];
@@ -50,14 +52,15 @@ export const authService = {
   async login(username: string, password: string): Promise<User> {
     const res = await fetch('/api/login', {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: username, password }),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
+      const err = await readJsonResponse<{ error?: string }>(res).catch(() => ({} as { error?: string }));
       throw new Error(err.error || 'Invalid credentials');
     }
-    const user = normalizeStoredUser((await res.json()) as User);
+    const user = normalizeStoredUser(await readJsonResponse<User>(res));
     if (!user) {
       throw new Error('Login response missing user id — contact an administrator');
     }
@@ -84,7 +87,12 @@ export const authService = {
     return this.getCurrentUser()?.id ?? null;
   },
 
-  logout(): void {
+  async logout(): Promise<void> {
+    try {
+      await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+    } catch {
+      // ignore network errors during logout
+    }
     localStorage.removeItem(STORAGE_KEY);
   },
 
@@ -95,26 +103,32 @@ export const authService = {
 
   /** Validate session with server and refresh cached profile (permissions, role, etc.). */
   async refreshSession(): Promise<User | null> {
-    const cached = this.getCurrentUser();
-    if (!cached?.id) return null;
+    try {
+      const res = await fetch('/api/auth/session', { credentials: 'include' });
+      if (res.status === 401) {
+        localStorage.removeItem(STORAGE_KEY);
+        return null;
+      }
+      if (!res.ok) {
+        return this.getCurrentUser();
+      }
 
-    const res = await fetch('/api/auth/session', {
-      headers: { 'X-User-Id': cached.id },
-    });
-    if (res.status === 401) {
-      this.handleUnauthorized();
-      return null;
-    }
-    if (!res.ok) {
-      return cached;
-    }
+      const contentType = res.headers.get('content-type') ?? '';
+      if (!contentType.includes('application/json')) {
+        console.warn('[auth] Session check returned non-JSON — is the backend running?');
+        return this.getCurrentUser();
+      }
 
-    const fresh = normalizeStoredUser((await res.json()) as User);
-    if (!fresh) {
-      this.handleUnauthorized();
-      return null;
+      const fresh = normalizeStoredUser(await readJsonResponse<User>(res));
+      if (!fresh) {
+        this.handleUnauthorized();
+        return null;
+      }
+      return persistUser(fresh);
+    } catch (err) {
+      console.warn('[auth] Session check failed:', err);
+      return this.getCurrentUser();
     }
-    return persistUser(fresh);
   },
 
   startSessionSync(onUserChange: (user: User | null) => void): () => void {
@@ -127,7 +141,7 @@ export const authService = {
     };
 
     setOnUnauthorized(() => {
-      this.logout();
+      void this.logout();
       onUserChange(null);
     });
 

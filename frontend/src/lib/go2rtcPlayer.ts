@@ -6,7 +6,7 @@ import {
   LIVE_MONITOR_PLAYER_CLASS,
   watchGo2RtcVideo,
 } from './liveMonitorVideo';
-import { authService } from '../services/authService';
+import { buildGo2RtcStreamSrc, isDirectMediaEnabled, normalizeWorkerId } from './mediaUrls';
 
 const GO2RTC_PLAYER_MODULE = '/go2rtc/video-stream.js';
 const GO2RTC_RTC_MODULE = '/go2rtc/video-rtc.js';
@@ -102,6 +102,7 @@ export function ensureGo2RtcPlayer(): Promise<void> {
 export interface Go2RtcMountOptions {
   stream: string;
   mode: 'webrtc' | 'mse';
+  workerId?: number | string | null;
   onFirstFrame?: (ms: number) => void;
   onModeLabel?: (label: string) => void;
   onError?: (message: string) => void;
@@ -177,9 +178,9 @@ export async function mountGo2RtcPlayer(
   el.style.display = 'block';
   el.style.width = '100%';
   el.style.height = '100%';
-  const userId = authService.getUserId();
-  const wsBase = `/go2rtc/api/ws?src=${encodeURIComponent(options.stream)}`;
-  el.src = userId ? `${wsBase}&uid=${encodeURIComponent(userId)}` : wsBase;
+  const directMedia = await isDirectMediaEnabled();
+  const workerId = normalizeWorkerId(options.workerId);
+  el.src = buildGo2RtcStreamSrc(options.stream, workerId, directMedia);
 
   const reportFrame = () => {
     if (reported) return;

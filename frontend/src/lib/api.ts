@@ -1,32 +1,28 @@
 import { authService } from '../services/authService';
 
+const SESSION_FETCH_INIT: RequestInit = { credentials: 'include' };
+
 export function apiHeaders(extra?: HeadersInit): HeadersInit {
-  const user = authService.getCurrentUser();
-  const headers: Record<string, string> = {
-    ...(extra as Record<string, string>),
-  };
-  if (user?.id) {
-    headers['X-User-Id'] = user.id;
-  }
-  return headers;
+  return { ...(extra as Record<string, string>) };
 }
 
-/** Append session uid for media/HLS requests that cannot send custom headers (e.g. Safari). */
+/** Same-origin media/HLS — session cookie is sent automatically. */
 export function withAuthQuery(url: string): string {
-  const user = authService.getCurrentUser();
-  if (!user?.id) return url;
-  const sep = url.includes('?') ? '&' : '?';
-  return `${url}${sep}uid=${encodeURIComponent(user.id)}`;
+  return url;
 }
 
 export async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
   const headers = apiHeaders(init?.headers);
-  const response = await fetch(input, { ...init, headers });
+  const response = await fetch(input, { ...init, headers, credentials: 'include' });
   if (response.status === 401) {
     authService.handleUnauthorized();
   }
   return response;
 }
+
+export { readJsonResponse } from './jsonResponse';
+
+export { SESSION_FETCH_INIT };
 
 export function cameraQuery(params: Record<string, string | undefined>): string {
   const q = new URLSearchParams();

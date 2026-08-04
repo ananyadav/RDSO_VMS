@@ -30,7 +30,14 @@ from app.services.go2rtc_workers import (
     get_default_player_api_url,
     heal_all_workers,
     list_active_workers,
+    rebalance_worker_assignments,
+    sync_all_workers,
     sync_worker,
+)
+from app.services.stream_health import (
+    clear_stale_stream_health_failures,
+    ensure_stream_health_scan,
+    start_stream_health_scan,
 )
 
 logger = logging.getLogger(__name__)
@@ -83,6 +90,24 @@ async def go2rtc_diagnostics(request: web.Request) -> web.Response:
     return web.json_response(await get_go2rtc_diagnostics())
 
 
+async def go2rtc_health_scan(request: web.Request) -> web.Response:
+    """GET keeps/ensures a soft scan; POST forces a fresh scan."""
+    denied = await _admin_only(request)
+    if denied is not None:
+        return denied
+    if request.method == "GET":
+        return web.json_response({"ok": True, "healthScan": ensure_stream_health_scan()})
+    return web.json_response({"ok": True, "healthScan": start_stream_health_scan(force=True)})
+
+
+async def go2rtc_health_clear_failures(request: web.Request) -> web.Response:
+    denied = await _admin_only(request)
+    if denied is not None:
+        return denied
+    cleared = await clear_stale_stream_health_failures()
+    return web.json_response({"ok": True, **cleared, "healthScan": start_stream_health_scan(force=True)})
+
+
 async def go2rtc_reload(request: web.Request) -> web.Response:
     denied = await _admin_only(request)
     if denied is not None:
@@ -125,6 +150,47 @@ async def go2rtc_consumer(request: web.Request) -> web.Response:
 
     report_consumer(stream, delta)
     return web.json_response({"ok": True})
+
+
+async def go2rtc_client_error(request: web.Request) -> web.Response:
+    """Record a final Live View playback failure into stream health / lastError."""
+    try:
+        user = await require_user(request)
+    except web.HTTPUnauthorized:
+        return web.json_response({"ok": False, "error": "Authentication required"}, status=401)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+
+    camera_id = str(body.get("cameraId") or "").strip()
+    camera_uid = str(body.get("cameraUid") or "").strip()
+    stream = str(body.get("stream") or "").strip()
+    message = str(body.get("message") or "").strip()[:500]
+    if not message:
+        return web.json_response({"ok": False, "error": "message required"}, status=400)
+
+    ref = camera_id or camera_uid or parse_stream_camera_id(stream) or ""
+    cam_doc = await get_camera_by_ref(ref) if ref else None
+    if cam_doc is None and stream:
+        cam_doc = await get_camera_by_ref(parse_stream_camera_id(stream) or "")
+    if cam_doc is None:
+        return web.json_response({"ok": False, "error": "Camera not found"}, status=404)
+
+    if not is_admin(user) and not user_can_access_stream(user, stream or ref, cam_doc):
+        return web.json_response({"ok": False, "error": "Camera access denied"}, status=403)
+
+    from app.services.stream_health import record_stream_health
+    from app.services.stream_issues import classify_stream_error
+
+    result = record_stream_health(
+        cam_doc,
+        ok=False,
+        message=message,
+        category=classify_stream_error(message),
+    )
+    return web.json_response({"ok": True, "health": result})
 
 
 async def live_config(request: web.Request) -> web.Response:
@@ -208,6 +274,16 @@ async def go2rtc_workers_heal(request: web.Request) -> web.Response:
     if denied is not None:
         return denied
     return web.json_response(await heal_all_workers())
+
+
+async def go2rtc_workers_rebalance(request: web.Request) -> web.Response:
+    """POST /api/go2rtc/workers/rebalance — redistribute cameras across workers."""
+    denied = await _admin_only(request)
+    if denied is not None:
+        return denied
+    rebalance = await rebalance_worker_assignments(reason="api")
+    sync = await sync_all_workers()
+    return web.json_response({"rebalance": rebalance, "sync": sync})
 
 
 async def _resolve_go2rtc_api_url(
@@ -364,14 +440,19 @@ def setup_go2rtc_routes(app: web.Application) -> None:
     app.router.add_get("/api/go2rtc/live-config", live_config)
     app.router.add_get("/api/go2rtc/status", go2rtc_status)
     app.router.add_get("/api/go2rtc/diagnostics", go2rtc_diagnostics)
+    app.router.add_get("/api/go2rtc/health-scan", go2rtc_health_scan)
+    app.router.add_post("/api/go2rtc/health-scan", go2rtc_health_scan)
+    app.router.add_post("/api/go2rtc/health-scan/clear-failures", go2rtc_health_clear_failures)
     app.router.add_post("/api/go2rtc/start", go2rtc_start)
     app.router.add_post("/api/go2rtc/stop", go2rtc_stop)
     app.router.add_post("/api/go2rtc/reload", go2rtc_reload)
     app.router.add_post("/api/go2rtc/sync", go2rtc_sync)
     app.router.add_get("/api/go2rtc/sync", go2rtc_sync)
     app.router.add_post("/api/go2rtc/consumer", go2rtc_consumer)
+    app.router.add_post("/api/go2rtc/client-error", go2rtc_client_error)
     app.router.add_get("/api/go2rtc/workers", go2rtc_workers_list)
     app.router.add_post("/api/go2rtc/workers/heal", go2rtc_workers_heal)
+    app.router.add_post("/api/go2rtc/workers/rebalance", go2rtc_workers_rebalance)
     app.router.add_post("/api/go2rtc/workers/{worker_id}/sync", go2rtc_worker_sync)
     app.router.add_get("/go2rtc/api/ws", go2rtc_ws_proxy)
     for method in ("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"):

@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { X, Camera, ChevronDown, ChevronUp, MapPin } from 'lucide-react';
+import { X, Camera, ChevronDown, ChevronUp, MapPin, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
-  CORPORATE_OFFICE,
+  buildRtspUrls,
+  isAutoRtspBrand,
+} from '../lib/rtspUrls';
+import {
   DEFAULT_SITE_NAME,
   activeLocationSites,
   buildingsForSite,
@@ -43,17 +46,17 @@ export const CORPORATE_CAMERA_DEFAULTS: CameraFormData = {
   name: '',
   ip_address: '',
   port: '554',
-  model: 'Hikvision',
+  model: '',
   username: 'admin',
-  password: 'Corp#2024',
+  password: '',
   protocol: 'HIKVISION',
-  site: DEFAULT_SITE_NAME,
-  building: CORPORATE_OFFICE,
-  floor_group: 'Ground Floor',
-  floor: 'Ground Floor',
+  site: '',
+  building: '',
+  floor_group: '',
+  floor: '',
   area: '',
-  camera_group: 'rml_6_corporate_office_ground_floor',
-  location_path: 'RML - 6 / Corporate Office / Ground Floor',
+  camera_group: '',
+  location_path: '',
   main_channel: '101',
   sub_channel: '102',
   main_rtsp_url: '',
@@ -161,34 +164,69 @@ export default function AddCameraModal({
 }: AddCameraModalProps) {
   const [form, setForm] = useState<CameraFormData>(CORPORATE_CAMERA_DEFAULTS);
   const [showStream, setShowStream] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
   const wasOpenRef = useRef(false);
 
   const isManualRtsp = form.protocol === 'ONVIF' || form.protocol === 'CUSTOM';
+  const isAutoRtsp = isAutoRtspBrand(form.protocol);
+
+  const applyAutoRtspFields = (
+    base: CameraFormData,
+    opts?: { previousIp?: string },
+  ): CameraFormData => {
+    if (!isAutoRtspBrand(base.protocol) || !base.ip_address.trim()) return base;
+    const built = buildRtspUrls({
+      make: base.protocol,
+      ip: base.ip_address.trim(),
+      username: base.username,
+      password: base.password,
+      port: 554,
+    });
+    const ip = base.ip_address.trim();
+    const prevIp = (opts?.previousIp || '').trim();
+    const currentName = base.name.trim();
+    const nameStillDefault = !currentName || currentName === prevIp;
+    return {
+      ...base,
+      port: '554',
+      name: nameStillDefault ? ip : currentName,
+      main_channel: built.main_channel,
+      sub_channel: built.sub_channel,
+      main_rtsp_url: built.main_rtsp_url,
+      sub_rtsp_url: built.sub_rtsp_url,
+      rtsp_url_source: built.rtsp_source,
+    };
+  };
 
   useEffect(() => {
     if (isOpen && !wasOpenRef.current) {
-      const base = defaultsForLocations(locationSites, locationBuildings);
-      const withLocation = !isEditMode && defaultLocation
-        ? { ...base, ...defaultLocation }
-        : base;
-      setForm({ ...withLocation, ...initialData });
+      if (isEditMode) {
+        const base = defaultsForLocations(locationSites, locationBuildings);
+        setForm({ ...base, ...initialData });
+      } else {
+        // Add mode: start blank; optionally prefill if a tree location is already selected.
+        const blank = { ...CORPORATE_CAMERA_DEFAULTS };
+        setForm(defaultLocation ? { ...blank, ...defaultLocation } : blank);
+      }
       setShowStream(initialData?.protocol === 'ONVIF' || initialData?.protocol === 'CUSTOM');
+      setShowPassword(false);
     }
     wasOpenRef.current = isOpen;
   }, [isOpen, initialData, locationBuildings, locationSites, defaultLocation, isEditMode]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || isEditMode) return;
     setForm((prev) => {
+      if (!prev.site || !prev.building) return prev;
       const zones = locationSites.length > 0
         ? floorsForBuildingTree(locationSites, prev.site, prev.building)
         : zonesForBuilding(locationBuildings, prev.building, prev.site);
       if (zones.length === 0) return prev;
-      if (zones.includes(prev.floor)) return prev;
+      if (!prev.floor || zones.includes(prev.floor)) return prev;
       return applyLocationFields(prev, prev.site, prev.building, zones[0]);
     });
-  }, [locationSites, locationBuildings, isOpen]);
+  }, [locationSites, locationBuildings, isOpen, isEditMode]);
 
   const locationDerived = useMemo(
     () => locationForBuildingFloor(form.site, form.building, form.floor.trim(), ''),
@@ -206,19 +244,53 @@ export default function AddCameraModal({
   }, [hasSiteTree, locationSites, locationBuildings]);
 
   const buildingOptions = useMemo(() => {
-    if (hasSiteTree) {
-      return buildingsForSiteTree(locationSites, form.site).map((b) => ({
+    const configured = hasSiteTree
+      ? buildingsForSiteTree(locationSites, form.site).map((b) => ({
         id: b.id,
         building: b.name,
-      }));
+      }))
+      : buildingsForSite(locationBuildings, form.site);
+    if (
+      isEditMode &&
+      form.building.trim() &&
+      !configured.some((item) => item.building === form.building)
+    ) {
+      return [
+        ...configured,
+        { id: `stored:${form.site}:${form.building}`, building: form.building },
+      ];
     }
-    return buildingsForSite(locationBuildings, form.site);
-  }, [hasSiteTree, locationSites, locationBuildings, form.site]);
+    return configured;
+  }, [
+    hasSiteTree,
+    locationSites,
+    locationBuildings,
+    form.site,
+    form.building,
+    isEditMode,
+  ]);
 
   const zoneOptions = useMemo(() => {
-    if (hasSiteTree) return floorsForBuildingTree(locationSites, form.site, form.building);
-    return zonesForBuilding(locationBuildings, form.building, form.site);
-  }, [hasSiteTree, locationSites, locationBuildings, form.building, form.site]);
+    const configured = hasSiteTree
+      ? floorsForBuildingTree(locationSites, form.site, form.building)
+      : zonesForBuilding(locationBuildings, form.building, form.site);
+    if (
+      isEditMode &&
+      form.floor.trim() &&
+      !configured.includes(form.floor)
+    ) {
+      return [...configured, form.floor];
+    }
+    return configured;
+  }, [
+    hasSiteTree,
+    locationSites,
+    locationBuildings,
+    form.building,
+    form.site,
+    form.floor,
+    isEditMode,
+  ]);
 
   const noFloorsConfigured = buildingOptions.length > 0 && zoneOptions.length === 0;
 
@@ -262,13 +334,28 @@ export default function AddCameraModal({
       }
       if (key === 'protocol') {
         const p = String(value);
-        if (p === 'HIKVISION') {
-          next.rtsp_url_source = 'auto_hikvision';
+        if (isAutoRtspBrand(p)) {
+          next.rtsp_url_source = buildRtspUrls({
+            make: p,
+            ip: next.ip_address,
+            username: next.username,
+            password: next.password,
+            port: next.port,
+          }).rtsp_source;
         } else if (p === 'ONVIF') {
           next.rtsp_url_source = 'onvif';
         } else {
           next.rtsp_url_source = 'custom';
         }
+      }
+      if (
+        key === 'ip_address' ||
+        key === 'port' ||
+        key === 'username' ||
+        key === 'password' ||
+        key === 'protocol'
+      ) {
+        next = applyAutoRtspFields(next, { previousIp: prev.ip_address });
       }
       return next;
     });
@@ -276,6 +363,14 @@ export default function AddCameraModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.site.trim()) {
+      toast.error('Select a site / unit');
+      return;
+    }
+    if (!form.building.trim()) {
+      toast.error('Select a building / area');
+      return;
+    }
     if (!form.floor.trim()) {
       toast.error('Select a floor / zone / sub-area');
       return;
@@ -290,6 +385,8 @@ export default function AddCameraModal({
       await onSave({
         ...form,
         ...loc,
+        port: '554',
+        model: form.protocol,
         area: '',
         floor_group: loc.floor_group,
       });
@@ -328,17 +425,18 @@ export default function AddCameraModal({
                   <input className={inputClass} value={form.ip_address} onChange={(e) => setField('ip_address', e.target.value)} required placeholder="192.168.41.50" />
                 </div>
                 <div>
-                  <label className={labelClass}>Port</label>
-                  <input type="number" className={inputClass} value={form.port} onChange={(e) => setField('port', e.target.value)} min={1} max={65535} />
-                </div>
-                <div>
-                  <label className={labelClass}>Model</label>
-                  <input className={inputClass} value={form.model} onChange={(e) => setField('model', e.target.value)} placeholder="Hikvision" />
-                </div>
-                <div>
                   <label className={labelClass}>Protocol *</label>
-                  <select className={inputClass} value={form.protocol} onChange={(e) => setField('protocol', e.target.value)}>
-                    <option value="HIKVISION">HIKVISION</option>
+                  <select
+                    className={inputClass}
+                    value={form.protocol === 'PRAMA' ? 'HIKVISION' : form.protocol}
+                    onChange={(e) => setField('protocol', e.target.value)}
+                  >
+                    <option value="HIKVISION">HIKVISION / PRAMA</option>
+                    <option value="DAHUA">DAHUA</option>
+                    <option value="UNIVIEW">UNIVIEW</option>
+                    <option value="VIVOTEK">VIVOTEK</option>
+                    <option value="HONEYWELL">HONEYWELL</option>
+                    <option value="SPARSH">SPARSH</option>
                     <option value="ONVIF">ONVIF</option>
                     <option value="CUSTOM">CUSTOM</option>
                   </select>
@@ -349,14 +447,26 @@ export default function AddCameraModal({
                 </div>
                 <div>
                   <label className={labelClass}>Password *</label>
-                  <input
-                    type="password"
-                    className={inputClass}
-                    value={form.password}
-                    onChange={(e) => setField('password', e.target.value)}
-                    required={!isEditMode}
-                    placeholder={isEditMode ? 'Leave blank to keep current' : ''}
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      className={`${inputClass} pr-10`}
+                      value={form.password}
+                      onChange={(e) => setField('password', e.target.value)}
+                      required={!isEditMode}
+                      autoComplete="new-password"
+                      placeholder={isEditMode ? 'Leave blank to keep current' : 'Enter camera password'}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-gray-200"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      tabIndex={-1}
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                 </div>
               </div>
             </section>
@@ -385,6 +495,7 @@ export default function AddCameraModal({
                       onChange={(e) => setField('site', e.target.value)}
                       required
                     >
+                      <option value="">Select site / unit…</option>
                       {siteOptions.map((s) => (
                         <option key={s} value={s}>{s}</option>
                       ))}
@@ -401,7 +512,9 @@ export default function AddCameraModal({
                       value={form.building}
                       onChange={(e) => setField('building', e.target.value)}
                       required
+                      disabled={!form.site}
                     >
+                      <option value="">Select building / area…</option>
                       {buildingOptions.map((b) => (
                         <option key={b.id} value={b.building}>{b.building}</option>
                       ))}
@@ -412,7 +525,11 @@ export default function AddCameraModal({
                 </div>
                 <div className="sm:col-span-2">
                   <label className={labelClass}>Floor / Zone / Sub-area *</label>
-                  {noFloorsConfigured ? (
+                  {!form.site || !form.building ? (
+                    <p className="text-sm text-gray-400 bg-gray-700/40 border border-gray-600 rounded-md px-3 py-2">
+                      Select a site and building first.
+                    </p>
+                  ) : noFloorsConfigured ? (
                     <p className="text-sm text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-md px-3 py-2">
                       No floors configured for this building.{' '}
                       {onOpenManageLocations ? (
@@ -447,8 +564,8 @@ export default function AddCameraModal({
                       value={form.floor}
                       onChange={(e) => setField('floor', e.target.value)}
                       required
-                      disabled={zoneOptions.length === 0}
                     >
+                      <option value="">Select floor / zone…</option>
                       {zoneOptions.map((z) => (
                         <option key={z} value={z}>{z}</option>
                       ))}
@@ -483,11 +600,11 @@ export default function AddCameraModal({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className={labelClass}>Main Channel</label>
-                    <input className={inputClass} value={form.main_channel} onChange={(e) => setField('main_channel', e.target.value)} disabled={!isManualRtsp && form.protocol === 'HIKVISION'} />
+                    <input className={inputClass} value={form.main_channel} onChange={(e) => setField('main_channel', e.target.value)} disabled={isAutoRtsp} />
                   </div>
                   <div>
                     <label className={labelClass}>Sub Channel</label>
-                    <input className={inputClass} value={form.sub_channel} onChange={(e) => setField('sub_channel', e.target.value)} disabled={!isManualRtsp && form.protocol === 'HIKVISION'} />
+                    <input className={inputClass} value={form.sub_channel} onChange={(e) => setField('sub_channel', e.target.value)} disabled={isAutoRtsp} />
                   </div>
                   {isManualRtsp ? (
                     <>
@@ -502,7 +619,7 @@ export default function AddCameraModal({
                     </>
                   ) : (
                     <p className="sm:col-span-3 text-xs text-gray-500">
-                      RTSP URLs are generated automatically from IP, credentials, and Hikvision channels (101 main, 102 sub).
+                      RTSP URLs are generated from IP, credentials, and brand template (sub for grid, main for fullscreen).
                     </p>
                   )}
                   <div className="sm:col-span-3">

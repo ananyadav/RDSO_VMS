@@ -39,7 +39,7 @@ if [ -z "${GO2RTC_WEBRTC_HOST:-}" ]; then
   echo "==> GO2RTC_WEBRTC_HOST not set — using ${GO2RTC_WEBRTC_HOST}"
 fi
 
-pm2 startOrReload ecosystem.config.cjs --update-env
+pm2 startOrReload ecosystem.config.cjs --only cctv-backend --update-env
 
 echo "==> Waiting for backend..."
 sleep 5

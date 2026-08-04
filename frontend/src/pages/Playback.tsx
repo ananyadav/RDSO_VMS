@@ -236,7 +236,7 @@ export default function Playback(): React.ReactElement {
     const loadGroups = async () => {
       setGroupsLoading(true);
       try {
-        const res = await apiFetch('/api/cameras/groups');
+        const res = await apiFetch('/api/cameras/groups?includeStats=false');
         if (!res.ok) throw new Error('Failed to load locations');
         const data = await res.json();
         const list: BuildingGroup[] = data.buildings ?? [];

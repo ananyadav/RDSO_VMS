@@ -17,7 +17,7 @@ from app.routes.users import (
     get_users_list, add_user_endpoint, update_user_endpoint,
     delete_user_endpoint
 )
-from app.routes.auth import login_endpoint, session_endpoint
+from app.routes.auth import login_endpoint, logout_endpoint, session_endpoint
 
 from app.routes.recording import setup_recording_routes
 from app.routes.playback import setup_playback_routes
@@ -26,6 +26,7 @@ from app.routes.go2rtc import setup_go2rtc_routes
 from app.routes.ptz import setup_ptz_routes
 
 from app.core.auth_context import session_middleware
+from app.core.http_utils import json_error_middleware
 from app.services.video_streaming import performance_monitor, get_video_decode_mode
 
 # --- Log configuration ---
@@ -40,7 +41,7 @@ logging.getLogger("aiortc").setLevel(logging.WARNING)
 
 async def create_app():
     """Application factory function."""
-    app = web.Application(middlewares=[session_middleware])
+    app = web.Application(middlewares=[json_error_middleware, session_middleware])
 
     setup_recording_routes(app)
     setup_playback_routes(app)
@@ -72,6 +73,7 @@ async def create_app():
     app.router.add_delete("/api/users/{id}", delete_user_endpoint)
 
     app.router.add_post("/api/login", login_endpoint)
+    app.router.add_post("/api/logout", logout_endpoint)
     app.router.add_get("/api/auth/session", session_endpoint)
 
     async def status_handler(_request):
@@ -193,6 +195,7 @@ async def main():
             bootstrap_location_config,
             consolidate_healthcare_into_rml6,
             migrate_corporate_office_cameras,
+            remediate_camera_location_fields,
             sync_all_camera_groups,
         )
 
@@ -213,6 +216,9 @@ async def main():
             synced = await sync_all_camera_groups()
             if synced:
                 print(f"[OK] Locations: Canonicalized camera_group for {synced} camera(s)")
+            remediated = await remediate_camera_location_fields()
+            if remediated:
+                print(f"[OK] Locations: Remediated site/building/floor for {remediated} camera(s)")
             await sync_locations_catalog()
             print("[OK] Locations: Site/building/floor config ready")
             n = await backfill_all_camera_rtsp_urls()
@@ -265,7 +271,19 @@ async def main():
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', args.api_port)
-    await site.start()
+    try:
+        await site.start()
+    except OSError as exc:
+        winerr = getattr(exc, "winerror", None)
+        if winerr == 10048 or getattr(exc, "errno", None) in (98, 10048):
+            print(f"[ERROR] Port {args.api_port} is already in use.")
+            print("        Another backend is already running. Stop it first, e.g.:")
+            print(f"          Get-NetTCPConnection -LocalPort {args.api_port} -State Listen")
+            print("          Stop-Process -Id <OwningProcess> -Force")
+            print(f"        Or start on a different port: --api-port <other>")
+            await runner.cleanup()
+            raise SystemExit(1) from exc
+        raise
 
     print(f"[OK] Server: Running on http://localhost:{args.api_port}")
     print(f"    API: http://localhost:{args.api_port}/api/*")

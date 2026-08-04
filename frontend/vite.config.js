@@ -6,91 +6,148 @@ import http from 'node:http';
 /** Benign proxy errors during backend restart or stream teardown — avoid log spam. */
 const BENIGN_PROXY_CODES = new Set(['ECONNABORTED', 'ECONNRESET', 'EPIPE', 'ECONNREFUSED']);
 
-const BACKEND_ORIGIN = 'http://127.0.0.1:10000';
+const BACKEND_HOST = '127.0.0.1';
+const BACKEND_PORT = Number(process.env.CCTV_BACKEND_PORT || 10000);
 
 function isHttpResponse(res) {
     return Boolean(res && typeof res.writeHead === 'function' && typeof res.end === 'function');
 }
 
-function configureHttpProxy(proxy, label) {
-    proxy.on('error', (err, _req, res) => {
-        const code = err && err.code;
-        if (code && BENIGN_PROXY_CODES.has(code)) {
-            if (isHttpResponse(res) && !res.headersSent && !res.writableEnded) {
+function isBenignProxyError(err) {
+    return Boolean(err && err.code && BENIGN_PROXY_CODES.has(err.code));
+}
+
+function proxyToBackend(req, res, next) {
+    const proxyReq = http.request(
+        {
+            hostname: BACKEND_HOST,
+            port: BACKEND_PORT,
+            path: req.url,
+            method: req.method,
+            headers: {
+                ...req.headers,
+                host: `${BACKEND_HOST}:${BACKEND_PORT}`,
+            },
+        },
+        (proxyRes) => {
+            if (isHttpResponse(res) && !res.headersSent) {
+                res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers);
+                proxyRes.pipe(res);
+            }
+        },
+    );
+
+    proxyReq.on('error', (err) => {
+        if (isBenignProxyError(err)) {
+            if (isHttpResponse(res) && !res.headersSent) {
                 res.writeHead(503, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'Backend unavailable — retry shortly' }));
+                res.end(JSON.stringify({
+                    error: 'Backend unavailable — start backend on port 10000',
+                }));
             }
             return;
         }
-        console.warn(`[vite] ${label} proxy:`, err.message || err);
+        next(err);
     });
-}
 
-/** WS proxy passes a socket as the third arg — never call writeHead on it. */
-function configureWsProxy(proxy) {
-    proxy.on('error', (err) => {
-        const code = err && err.code;
-        if (code && BENIGN_PROXY_CODES.has(code)) {
-            return;
-        }
-        console.warn('[vite] ws proxy:', err.message || err);
-    });
+    if (req.method === 'GET' || req.method === 'HEAD') {
+        proxyReq.end();
+    } else {
+        req.pipe(proxyReq);
+    }
 }
 
 /**
- * Proxy /go2rtc/* to the backend before Vite tries to resolve those URLs as local files.
- * Fixes: "Pre-transform error: Failed to load url /go2rtc/video-stream.js"
+ * Vite attaches its own proxy error loggers *after* `configure` returns.
+ * Replace them on the next microtask so ECONNRESET / ECONNREFUSED don't spam the terminal.
  */
+function silenceViteProxyNoise(proxy, label) {
+    queueMicrotask(() => {
+        proxy.removeAllListeners('error');
+        proxy.on('error', (err, _req, res) => {
+            if (isBenignProxyError(err)) {
+                if (isHttpResponse(res) && !res.headersSent && !res.writableEnded) {
+                    res.writeHead(503, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Backend unavailable — retry shortly' }));
+                } else if (res && typeof res.end === 'function' && !isHttpResponse(res)) {
+                    try {
+                        res.end();
+                    } catch {
+                        // socket already closed
+                    }
+                }
+                return;
+            }
+            console.warn(`[vite] ${label} proxy:`, err.message || err);
+            if (isHttpResponse(res) && !res.headersSent && !res.writableEnded) {
+                res.writeHead(500, { 'Content-Type': 'text/plain' });
+                res.end();
+            }
+        });
+
+        const wsListeners = proxy.listeners('proxyReqWs').slice();
+        proxy.removeAllListeners('proxyReqWs');
+        for (const listener of wsListeners) {
+            proxy.on('proxyReqWs', (proxyReq, req, socket, options) => {
+                const origOn = socket.on.bind(socket);
+                socket.on = (event, handler) => {
+                    if (event === 'error') {
+                        return origOn(event, (err) => {
+                            if (isBenignProxyError(err)) return;
+                            handler(err);
+                        });
+                    }
+                    return origOn(event, handler);
+                };
+                listener(proxyReq, req, socket, options);
+            });
+        }
+    });
+}
+
+function configureWsProxy(proxy) {
+    silenceViteProxyNoise(proxy, 'ws');
+}
+
+/** Proxy /api/* before SPA fallback — all browser traffic stays on :3000. */
+function apiEarlyProxyPlugin() {
+    return {
+        name: 'api-early-proxy',
+        apply: 'serve',
+        configureServer: {
+            order: 'pre',
+            handler(server) {
+                server.middlewares.use((req, res, next) => {
+                    const path = (req.url ?? '').split('?')[0];
+                    if (!path.startsWith('/api')) {
+                        return next();
+                    }
+                    proxyToBackend(req, res, next);
+                });
+            },
+        },
+    };
+}
+
+/** Proxy /go2rtc/* before Vite tries to resolve those URLs as local files. */
 function go2rtcEarlyProxyPlugin() {
     return {
         name: 'go2rtc-early-proxy',
         apply: 'serve',
-        configureServer(server) {
-            const handler = (req, res, next) => {
-                const path = (req.url ?? '').split('?')[0];
-                if (!path.startsWith('/go2rtc') || path === '/go2rtc-diagnostics') {
-                    return next();
-                }
-                if ((req.headers.upgrade || '').toLowerCase() === 'websocket') {
-                    return next();
-                }
-
-                const proxyReq = http.request(
-                    {
-                        hostname: '127.0.0.1',
-                        port: 10000,
-                        path: req.url,
-                        method: req.method,
-                        headers: {
-                            ...req.headers,
-                            host: '127.0.0.1:10000',
-                        },
-                    },
-                    (proxyRes) => {
-                        if (isHttpResponse(res) && !res.headersSent) {
-                            res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers);
-                            proxyRes.pipe(res);
-                        }
-                    },
-                );
-
-                proxyReq.on('error', (err) => {
-                    const code = err && err.code;
-                    if (code && BENIGN_PROXY_CODES.has(code)) {
-                        if (isHttpResponse(res) && !res.headersSent) {
-                            res.writeHead(503, { 'Content-Type': 'application/json' });
-                            res.end(JSON.stringify({ error: 'Backend unavailable — retry shortly' }));
-                        }
-                        return;
+        configureServer: {
+            order: 'pre',
+            handler(server) {
+                server.middlewares.use((req, res, next) => {
+                    const path = (req.url ?? '').split('?')[0];
+                    if (!path.startsWith('/go2rtc') || path === '/go2rtc-diagnostics') {
+                        return next();
                     }
-                    next(err);
+                    if ((req.headers.upgrade || '').toLowerCase() === 'websocket') {
+                        return next();
+                    }
+                    proxyToBackend(req, res, next);
                 });
-
-                req.pipe(proxyReq);
-            };
-
-            // Registered before Vite internal middleware — go2rtc assets are not pre-bundled.
-            server.middlewares.use(handler);
+            },
         },
     };
 }
@@ -99,19 +156,15 @@ function go2rtcEarlyProxyPlugin() {
 export default defineConfig({
     base: '/',
     appType: 'spa',
-    plugins: [react(), go2rtcEarlyProxyPlugin()],
+    plugins: [react(), apiEarlyProxyPlugin(), go2rtcEarlyProxyPlugin()],
     server: {
-        host: '0.0.0.0',
+        host: '127.0.0.1',
         port: 3000,
+        strictPort: true,
         proxy: {
-            '/api': {
-                target: BACKEND_ORIGIN,
-                changeOrigin: true,
-                configure: (proxy) => configureHttpProxy(proxy, 'api'),
-            },
-            // WebSocket + HTTP for go2rtc live view (and PTZ).
+            // WebSocket for go2rtc live view (and PTZ).
             '/go2rtc': {
-                target: BACKEND_ORIGIN,
+                target: `http://${BACKEND_HOST}:${BACKEND_PORT}`,
                 changeOrigin: true,
                 ws: true,
                 configure: configureWsProxy,

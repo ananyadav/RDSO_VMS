@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { apiFetch } from '../lib/api';
+import { apiFetch, readJsonResponse } from '../lib/api';
+import { readSessionCache, UI_CACHE_TTL_MS, writeSessionCache } from '../lib/sessionCache';
 
 export interface DiskInfo {
   disk_path: string;
@@ -137,8 +138,13 @@ export const DISK_LEVEL_STYLES = {
 };
 
 export function useStorageDashboard() {
-  const [data, setData] = useState<StorageDashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cachedSummary = readSessionCache<StorageDashboardData>(
+    'cctv:storage:summary:v1',
+    UI_CACHE_TTL_MS,
+  );
+  const hadCacheRef = useRef(Boolean(cachedSummary));
+  const [data, setData] = useState<StorageDashboardData | null>(() => cachedSummary);
+  const [loading, setLoading] = useState(() => !cachedSummary);
   const [loadingFull, setLoadingFull] = useState(false);
   const [runningRetention, setRunningRetention] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -147,7 +153,7 @@ export function useStorageDashboard() {
     const url = summaryOnly ? '/api/storage/dashboard?summary=1' : '/api/storage/dashboard';
     const res = await apiFetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return (await res.json()) as StorageDashboardData;
+    return readJsonResponse<StorageDashboardData>(res);
   }, []);
 
   const refresh = useCallback(async () => {
@@ -155,6 +161,7 @@ export function useStorageDashboard() {
     try {
       const json = await fetchDashboard(false);
       setData(json);
+      writeSessionCache('cctv:storage:summary:v1', json);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load storage data');
@@ -172,6 +179,7 @@ export function useStorageDashboard() {
         const summary = await fetchDashboard(true);
         if (cancelled) return;
         setData(summary);
+        writeSessionCache('cctv:storage:summary:v1', summary);
         setError(null);
         setLoading(false);
 
@@ -179,10 +187,13 @@ export function useStorageDashboard() {
         const full = await fetchDashboard(false);
         if (cancelled) return;
         setData(full);
+        writeSessionCache('cctv:storage:summary:v1', full);
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : 'Failed to load storage data');
-          setLoading(false);
+          if (!hadCacheRef.current) {
+            setLoading(false);
+          }
         }
       } finally {
         if (!cancelled) setLoadingFull(false);

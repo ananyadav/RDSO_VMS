@@ -5,12 +5,16 @@ from __future__ import annotations
 import copy
 import logging
 import re
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from app.core.database import camera_collection, database
 
 logger = logging.getLogger(__name__)
+
+_CAMERA_COUNT_INDEX_CACHE: Dict[str, Any] = {"expires_at": 0.0, "index": None}
+_CAMERA_COUNT_INDEX_TTL = 60.0
 
 _settings_collection = database.get_collection("system_settings")
 _SETTINGS_ID = "locations"
@@ -538,6 +542,67 @@ async def migrate_corporate_office_cameras() -> int:
     return updated
 
 
+async def remediate_camera_location_fields(*, force: bool = False) -> int:
+    """
+    Align camera site/building/floor with camera_group using Location Master catalog.
+    Fixes floors that show a camera count but return zero cameras on select.
+    """
+    from app.services.camera_locations import (
+        build_floor_group_meta,
+        camera_group_for_site_building_floor,
+        legacy_camera_group_aliases,
+    )
+
+    doc = await _settings_collection.find_one({"_id": _SETTINGS_ID})
+    if not force and doc and doc.get("cameras_remediated_location_v4"):
+        return 0
+
+    floor_meta = build_floor_group_meta(await list_buildings(include_inactive=True))
+    updated = 0
+
+    async for cam in camera_collection.find({}):
+        if cam.get("is_active") is False:
+            continue
+
+        group = (cam.get("camera_group") or "").strip()
+        meta: Dict[str, Any] | None = floor_meta.get(group) if group else None
+
+        if not meta and group:
+            for alias in legacy_camera_group_aliases(group):
+                if alias in floor_meta:
+                    meta = floor_meta[alias]
+                    break
+
+        if not meta:
+            site = (cam.get("site") or DEFAULT_SITE_NAME).strip()
+            building = (cam.get("building") or "").strip()
+            floor = (cam.get("floor") or cam.get("floor_group") or "").strip()
+            if building and floor:
+                derived = camera_group_for_site_building_floor(site, building, floor)
+                meta = floor_meta.get(derived)
+
+        if not meta:
+            continue
+
+        patch: Dict[str, Any] = {}
+        for key in ("site", "building", "floor_group", "floor", "camera_group", "location_path"):
+            val = (meta.get(key) or "").strip()
+            if val and cam.get(key) != val:
+                patch[key] = val
+        if patch:
+            await camera_collection.update_one({"_id": cam["_id"]}, {"$set": patch})
+            updated += 1
+
+    await _settings_collection.update_one(
+        {"_id": _SETTINGS_ID},
+        {"$set": {"cameras_remediated_location_v4": True}},
+        upsert=True,
+    )
+    if updated:
+        logger.info("[LOCATIONS] Remediated location fields for %s camera(s)", updated)
+    return updated
+
+
 async def count_cameras_at_location(
     *,
     site_name: str,
@@ -563,8 +628,111 @@ async def count_cameras_at_location(
     return count
 
 
+async def _iter_cameras_at_location(
+    *,
+    site_name: str,
+    building_name: str | None = None,
+    floor_name: str | None = None,
+):
+    site_cf = (site_name or "").strip().casefold()
+    building_cf = (building_name or "").strip().casefold() if building_name else None
+    floor_cf = (floor_name or "").strip().casefold() if floor_name else None
+    async for cam in camera_collection.find({}):
+        if (cam.get("site") or "").strip().casefold() != site_cf:
+            continue
+        if building_cf is not None:
+            if (cam.get("building") or "").strip().casefold() != building_cf:
+                continue
+        if floor_cf is not None:
+            cam_floor = (cam.get("floor") or cam.get("floor_group") or "").strip()
+            if cam_floor.casefold() != floor_cf:
+                continue
+        yield cam
+
+
+async def delete_cameras_at_location(
+    *,
+    site_name: str,
+    building_name: str | None = None,
+    floor_name: str | None = None,
+) -> Dict[str, Any]:
+    """Permanently delete all cameras under a site/building/floor.
+
+    Also stops active recording and syncs go2rtc workers so streams drop.
+    """
+    deleted = 0
+    worker_ids: set[int] = set()
+    try:
+        from app.services.go2rtc_workers import WORKERS_ENABLED, get_worker_id_for_camera_doc
+        from app.services.recording_schedule_store import set_camera_recording
+        from app.services.video_recording import is_camera_recording, stop_camera_recording
+    except Exception:
+        WORKERS_ENABLED = False
+        get_worker_id_for_camera_doc = None  # type: ignore
+        set_camera_recording = None  # type: ignore
+        is_camera_recording = None  # type: ignore
+        stop_camera_recording = None  # type: ignore
+
+    async for cam in _iter_cameras_at_location(
+        site_name=site_name,
+        building_name=building_name,
+        floor_name=floor_name,
+    ):
+        cid = str(cam.get("_id") or "")
+        if not cid:
+            continue
+        if WORKERS_ENABLED and get_worker_id_for_camera_doc is not None:
+            try:
+                worker_ids.add(int(await get_worker_id_for_camera_doc(cam)))
+            except Exception:
+                pass
+        if is_camera_recording is not None and stop_camera_recording is not None:
+            try:
+                if await is_camera_recording(cid):
+                    await stop_camera_recording(cid)
+            except Exception as exc:
+                logger.warning("[LOCATIONS] Recording stop failed for %s: %s", cid, exc)
+        if set_camera_recording is not None:
+            try:
+                set_camera_recording(cid, False)
+            except Exception:
+                pass
+        await camera_collection.delete_one({"_id": cam["_id"]})
+        deleted += 1
+
+    if deleted:
+        logger.info(
+            "[LOCATIONS] Deleted %s camera(s) under site=%s building=%s floor=%s",
+            deleted,
+            site_name,
+            building_name or "*",
+            floor_name or "*",
+        )
+        try:
+            from app.services.go2rtc_workers import WORKERS_ENABLED, sync_worker
+            from app.services.go2rtc_service import schedule_go2rtc_stream_sync
+
+            if WORKERS_ENABLED and worker_ids:
+                for wid in sorted(worker_ids):
+                    try:
+                        await sync_worker(wid, reload_pm2=True)
+                    except Exception as exc:
+                        logger.warning("[LOCATIONS] go2rtc worker %s sync failed: %s", wid, exc)
+            else:
+                schedule_go2rtc_stream_sync(reason="location_camera_cascade_delete")
+        except Exception as exc:
+            logger.warning("[LOCATIONS] go2rtc sync after cascade delete failed: %s", exc)
+
+    return {"camerasDeleted": deleted, "workerIds": sorted(worker_ids)}
+
+
 async def _build_camera_count_index() -> dict:
     """Single pass: counts keyed by site, site+building, site+building+floor."""
+    now = time.monotonic()
+    cached = _CAMERA_COUNT_INDEX_CACHE.get("index")
+    if cached is not None and now < float(_CAMERA_COUNT_INDEX_CACHE.get("expires_at") or 0):
+        return cached
+
     site_counts: Dict[str, int] = {}
     building_counts: Dict[str, int] = {}
     floor_counts: Dict[str, int] = {}
@@ -583,11 +751,14 @@ async def _build_camera_count_index() -> dict:
             if floor:
                 fk = f"{bk}\0{floor.casefold()}"
                 floor_counts[fk] = floor_counts.get(fk, 0) + 1
-    return {
+    result = {
         "site": site_counts,
         "building": building_counts,
         "floor": floor_counts,
     }
+    _CAMERA_COUNT_INDEX_CACHE["index"] = result
+    _CAMERA_COUNT_INDEX_CACHE["expires_at"] = now + _CAMERA_COUNT_INDEX_TTL
+    return result
 
 
 async def enrich_sites_with_camera_counts(sites: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -686,20 +857,16 @@ async def update_site(*, site_id: str, name: Optional[str] = None, is_active: Op
     return site
 
 
-async def delete_site(*, site_id: str) -> None:
+async def delete_site(*, site_id: str) -> Dict[str, Any]:
     sites = await load_sites(include_inactive=True)
     site = _find_site(sites, site_id)
     if not site:
         raise LocationStoreError("Site not found", 404)
     site_name = (site.get("name") or "").strip()
-    assigned = await count_cameras_at_location(site_name=site_name)
-    if assigned > 0:
-        raise LocationStoreError(
-            f"Cannot delete site '{site_name}': {assigned} camera(s) assigned. Disable the site instead.",
-            409,
-        )
+    cascade = await delete_cameras_at_location(site_name=site_name)
     sites = [s for s in sites if s["id"] != site["id"]]
     await save_sites(sites)
+    return {"site": site_name, **cascade}
 
 
 async def add_building(*, site_id: str, building: str, floors: List[str] | None = None) -> Dict[str, Any]:
@@ -835,7 +1002,7 @@ async def update_building(
     return target
 
 
-async def delete_building(*, site_id: str, building_id: str) -> None:
+async def delete_building(*, site_id: str, building_id: str) -> Dict[str, Any]:
     sites = await load_sites(include_inactive=True)
     site = _find_site(sites, site_id)
     if not site:
@@ -849,14 +1016,13 @@ async def delete_building(*, site_id: str, building_id: str) -> None:
         raise LocationStoreError("Building not found", 404)
     site_name = (site.get("name") or "").strip()
     building_name = (target.get("name") or "").strip()
-    assigned = await count_cameras_at_location(site_name=site_name, building_name=building_name)
-    if assigned > 0:
-        raise LocationStoreError(
-            f"Cannot delete building '{building_name}': {assigned} camera(s) assigned. Disable it instead.",
-            409,
-        )
+    cascade = await delete_cameras_at_location(
+        site_name=site_name,
+        building_name=building_name,
+    )
     site["buildings"] = [b for b in site.get("buildings") or [] if b["id"] != building_id]
     await save_sites(sites)
+    return {"site": site_name, "building": building_name, **cascade}
 
 
 async def add_floor(*, site_id: str, building_id: str, floor: str) -> Dict[str, Any]:
@@ -929,7 +1095,7 @@ async def update_floor(
     return floor_entry
 
 
-async def delete_floor(*, site_id: str, building_id: str, floor_name: str) -> None:
+async def delete_floor(*, site_id: str, building_id: str, floor_name: str) -> Dict[str, Any]:
     sites = await load_sites(include_inactive=True)
     site = _find_site(sites, site_id)
     if not site:
@@ -943,16 +1109,11 @@ async def delete_floor(*, site_id: str, building_id: str, floor_name: str) -> No
         raise LocationStoreError("Building not found", 404)
     site_name = (site.get("name") or "").strip()
     building_name = (target_b.get("name") or "").strip()
-    assigned = await count_cameras_at_location(
+    cascade = await delete_cameras_at_location(
         site_name=site_name,
         building_name=building_name,
         floor_name=floor_name,
     )
-    if assigned > 0:
-        raise LocationStoreError(
-            f"Cannot delete floor '{floor_name}': {assigned} camera(s) assigned. Disable it instead.",
-            409,
-        )
     for b in site.get("buildings") or []:
         if b["id"] != building_id:
             continue
@@ -960,3 +1121,9 @@ async def delete_floor(*, site_id: str, building_id: str, floor_name: str) -> No
             f for f in b.get("floors") or [] if f["name"].casefold() != floor_name.casefold()
         ]
     await save_sites(sites)
+    return {
+        "site": site_name,
+        "building": building_name,
+        "floor": floor_name,
+        **cascade,
+    }

@@ -42,18 +42,16 @@ def camera_group_for_floor(floor: str, *, site: str | None = None) -> str:
 
 
 def camera_group_key_for_document(cam: dict) -> str:
+    """Stable group key for hierarchy + filters — prefer stored camera_group when set."""
+    group = (cam.get("camera_group") or "").strip()
+    if group:
+        return group
     site = (cam.get("site") or DEFAULT_SITE_NAME).strip()
     building = (cam.get("building") or "").strip()
     floor = (cam.get("floor") or cam.get("floor_group") or "").strip()
-    derived = (
-        camera_group_for_site_building_floor(site, building, floor)
-        if building and floor
-        else ""
-    )
-    group = (cam.get("camera_group") or "").strip()
-    if derived:
-        return derived
-    return group
+    if building and floor:
+        return camera_group_for_site_building_floor(site, building, floor)
+    return ""
 
 
 def location_fields_for_building_floor(
@@ -279,12 +277,13 @@ def build_groups_hierarchy(
         _ensure_configured_floors(buildings, location_buildings)
 
     for cam in cameras:
-        site = (cam.get("site") or DEFAULT_SITE_NAME).strip()
-        building = (cam.get("building") or "").strip() or "Unassigned"
-        key = f"{site}::{building}"
         group_key = camera_group_key_for_document(cam)
         if not group_key:
             continue
+        meta = floor_meta.get(group_key, {})
+        site = (meta.get("site") or cam.get("site") or DEFAULT_SITE_NAME).strip()
+        building = (meta.get("building") or cam.get("building") or "").strip() or "Unassigned"
+        key = f"{site}::{building}"
         if key not in buildings:
             buildings[key] = {
                 "site": site,
@@ -293,7 +292,6 @@ def build_groups_hierarchy(
             }
         fg = buildings[key]["floorGroups"]
         if group_key not in fg:
-            meta = floor_meta.get(group_key, {})
             fg[group_key] = {
                 "floor_group": meta.get("floor_group") or cam.get("floor_group", group_key),
                 "floor": meta.get("floor") or cam.get("floor", ""),

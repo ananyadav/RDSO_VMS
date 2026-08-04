@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { HardDrive, Database, Clock, Film, Loader2, AlertTriangle, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { apiFetch, readJsonResponse } from '../lib/api';
 import Card from './Card';
 
 interface DiskInfo {
@@ -131,9 +132,9 @@ export default function StorageDashboard(): React.ReactElement {
 
   const fetchDashboard = useCallback(async () => {
     try {
-      const res = await fetch('/api/storage/dashboard');
+      const res = await apiFetch('/api/storage/dashboard');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
+      const json = await readJsonResponse<StorageDashboardData>(res);
       setData(json);
       setError(null);
     } catch (e) {
@@ -152,9 +153,9 @@ export default function StorageDashboard(): React.ReactElement {
   const runRetentionNow = async () => {
     setRunningRetention(true);
     try {
-      const res = await fetch('/api/storage/retention/run', { method: 'POST' });
+      const res = await apiFetch('/api/storage/retention/run', { method: 'POST' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const result = await res.json();
+      const result = await readJsonResponse<Record<string, number>>(res);
       toast.success(
         `Retention: freed ${result.freed_gb ?? 0} GB, ` +
           `${result.pruned_segments ?? 0} segments, ` +

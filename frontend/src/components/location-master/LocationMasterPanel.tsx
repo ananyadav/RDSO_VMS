@@ -152,16 +152,21 @@ export default function LocationMasterPanel({ sites, onUpdated }: LocationMaster
   };
 
   const deleteSite = async (site: LocationSite) => {
-    if ((site.camera_count ?? 0) > 0) {
-      toast.error(`Cannot delete: ${site.camera_count} camera(s) assigned. Disable the site instead.`);
-      return;
-    }
-    if (!window.confirm(`Delete site "${site.name}" and all its buildings/floors?`)) return;
+    const cams = site.camera_count ?? 0;
+    const msg =
+      cams > 0
+        ? `Delete site "${site.name}" AND permanently remove its ${cams} camera(s)? This cannot be undone.`
+        : `Delete site "${site.name}" and all its buildings/floors?`;
+    if (!window.confirm(msg)) return;
     setSaving(true);
     try {
       const res = await apiFetch(`/api/locations/sites/${site.id}`, { method: 'DELETE' });
       if (!res.ok) await handleError(res, 'Failed to delete site');
-      toast.success(`Deleted ${site.name}`);
+      const data = await res.json().catch(() => ({}));
+      const removed = Number(data.camerasDeleted || 0);
+      toast.success(
+        removed > 0 ? `Deleted ${site.name} and ${removed} camera(s)` : `Deleted ${site.name}`,
+      );
       refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete site');
@@ -244,18 +249,23 @@ export default function LocationMasterPanel({ sites, onUpdated }: LocationMaster
     name: string,
     cameraCount?: number,
   ) => {
-    if ((cameraCount ?? 0) > 0) {
-      toast.error(`Cannot delete: ${cameraCount} camera(s) assigned. Disable the building instead.`);
-      return;
-    }
-    if (!window.confirm(`Delete building "${name}"?`)) return;
+    const cams = cameraCount ?? 0;
+    const msg =
+      cams > 0
+        ? `Delete building "${name}" AND permanently remove its ${cams} camera(s)? This cannot be undone.`
+        : `Delete building "${name}"?`;
+    if (!window.confirm(msg)) return;
     setSaving(true);
     try {
       const res = await apiFetch(`/api/locations/sites/${siteId}/buildings/${buildingId}`, {
         method: 'DELETE',
       });
       if (!res.ok) await handleError(res, 'Failed to delete building');
-      toast.success(`Deleted ${name}`);
+      const data = await res.json().catch(() => ({}));
+      const removed = Number(data.camerasDeleted || 0);
+      toast.success(
+        removed > 0 ? `Deleted ${name} and ${removed} camera(s)` : `Deleted ${name}`,
+      );
       refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete building');
@@ -324,11 +334,12 @@ export default function LocationMasterPanel({ sites, onUpdated }: LocationMaster
     floorName: string,
     cameraCount?: number,
   ) => {
-    if ((cameraCount ?? 0) > 0) {
-      toast.error(`Cannot delete: ${cameraCount} camera(s) assigned. Disable the floor instead.`);
-      return;
-    }
-    if (!window.confirm(`Delete floor "${floorName}"?`)) return;
+    const cams = cameraCount ?? 0;
+    const msg =
+      cams > 0
+        ? `Delete floor "${floorName}" AND permanently remove its ${cams} camera(s)? This cannot be undone.`
+        : `Delete floor "${floorName}"?`;
+    if (!window.confirm(msg)) return;
     setSaving(true);
     try {
       const q = new URLSearchParams({ site_id: siteId, building_id: buildingId });
@@ -337,7 +348,13 @@ export default function LocationMasterPanel({ sites, onUpdated }: LocationMaster
         { method: 'DELETE' },
       );
       if (!res.ok) await handleError(res, 'Failed to delete floor');
-      toast.success(`Deleted ${floorName}`);
+      const data = await res.json().catch(() => ({}));
+      const removed = Number(data.camerasDeleted || 0);
+      toast.success(
+        removed > 0
+          ? `Deleted ${floorName} and ${removed} camera(s)`
+          : `Deleted ${floorName}`,
+      );
       refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete floor');
@@ -352,8 +369,8 @@ export default function LocationMasterPanel({ sites, onUpdated }: LocationMaster
     <div className="space-y-6">
           <p className="text-sm text-gray-500 dark:text-gray-400">
             Manage Site/Unit → Building/Department/Area → Floor/Zone/Sub-area. Locations are stored in
-            the database and appear in camera forms immediately after save. Disable instead of delete when
-            cameras are assigned.
+            the database and appear in camera forms immediately after save. Deleting a location also
+            permanently removes all cameras under it.
           </p>
           <section>
             <h4 className="text-sm font-semibold text-gray-500 uppercase mb-3">Location hierarchy</h4>
@@ -415,12 +432,12 @@ export default function LocationMasterPanel({ sites, onUpdated }: LocationMaster
                           type="button"
                           title={
                             (site.camera_count ?? 0) > 0
-                              ? 'Cannot delete — cameras assigned. Disable instead.'
+                              ? `Delete site and its ${site.camera_count} camera(s)`
                               : 'Delete'
                           }
                           className="p-1.5 rounded hover:bg-red-900/30 text-red-400 disabled:opacity-30"
                           onClick={() => void deleteSite(site)}
-                          disabled={saving || (site.camera_count ?? 0) > 0}
+                          disabled={saving}
                         >
                           <Trash2 size={14} />
                         </button>
@@ -496,12 +513,12 @@ export default function LocationMasterPanel({ sites, onUpdated }: LocationMaster
                                 type="button"
                                 title={
                                   (b.camera_count ?? 0) > 0
-                                    ? 'Cannot delete — cameras assigned. Disable instead.'
+                                    ? `Delete building and its ${b.camera_count} camera(s)`
                                     : 'Delete'
                                 }
                                 className="p-1 rounded hover:bg-red-900/30 text-red-400 disabled:opacity-30"
                                 onClick={() => void deleteBuilding(site.id, b.id, b.name, b.camera_count)}
-                                disabled={saving || (b.camera_count ?? 0) > 0}
+                                disabled={saving}
                               >
                                 <Trash2 size={12} />
                               </button>
@@ -581,13 +598,13 @@ export default function LocationMasterPanel({ sites, onUpdated }: LocationMaster
                                   className="hover:text-red-400 disabled:opacity-30"
                                   title={
                                     (f.camera_count ?? 0) > 0
-                                      ? 'Cannot delete — cameras assigned. Disable instead.'
+                                      ? `Delete floor and its ${f.camera_count} camera(s)`
                                       : 'Delete'
                                   }
                                   onClick={() =>
                                     void deleteFloor(site.id, b.id, f.name, f.camera_count)
                                   }
-                                  disabled={saving || (f.camera_count ?? 0) > 0}
+                                  disabled={saving}
                                 >
                                   <Trash2 size={10} />
                                 </button>

@@ -5,7 +5,7 @@ import {
   ALL_CAMERAS_GROUP,
   type BuildingGroup,
 } from '../constants/corporateFloors';
-import { parseBuildingKey } from './cameraAccess';
+import { parseBuildingKey, buildingKey as toBuildingKey } from './cameraAccess';
 
 export function isKnownCameraGroup(
   buildings: BuildingGroup[],
@@ -40,8 +40,15 @@ export function resolveLiveViewFromUrl(
     return null;
   }
 
-  if (buildingKey) {
-    const parsed = parseBuildingKey(buildingKey);
+  const buildingScope = group ? parseBuildingScopeKey(group) : null;
+  const resolvedBuildingKey =
+    buildingKey ||
+    (buildingScope ? toBuildingKey(buildingScope.site, buildingScope.building) : null);
+  const resolvedSite =
+    site || (buildingScope ? buildingScope.site : null) || (parseSiteScopeKey(group || '') || null);
+
+  if (resolvedBuildingKey) {
+    const parsed = parseBuildingKey(resolvedBuildingKey);
     if (!parsed) return null;
     const exists = buildings.some(
       (b) => b.site === parsed.site && b.building === parsed.building,
@@ -49,13 +56,13 @@ export function resolveLiveViewFromUrl(
     if (!exists) return null;
   }
 
-  if (site && !buildings.some((b) => b.site === site)) {
+  if (resolvedSite && !buildings.some((b) => b.site === resolvedSite) && !parseSiteScopeKey(group || '')) {
     return null;
   }
 
   return {
-    site: site || null,
-    buildingKey: buildingKey || null,
+    site: resolvedSite || null,
+    buildingKey: resolvedBuildingKey || null,
     group: group || null,
   };
 }

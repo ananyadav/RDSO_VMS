@@ -88,11 +88,11 @@ async def delete_site_endpoint(request: web.Request) -> web.Response:
     if not is_admin(user):
         return web.json_response({"error": "Admin only"}, status=403)
     try:
-        await delete_site(site_id=request.match_info.get("siteId", ""))
+        result = await delete_site(site_id=request.match_info.get("siteId", ""))
         await sync_locations_catalog()
     except LocationStoreError as exc:
         return web.json_response({"error": exc.message}, status=exc.status)
-    return web.json_response({"status": "ok"})
+    return web.json_response({"status": "ok", **result})
 
 
 async def post_building_endpoint(request: web.Request) -> web.Response:
@@ -146,14 +146,14 @@ async def delete_building_endpoint(request: web.Request) -> web.Response:
         return web.json_response({"error": "Admin only"}, status=403)
     site_id = request.rel_url.query.get("site_id") or request.match_info.get("siteId", "")
     try:
-        await delete_building(
+        result = await delete_building(
             site_id=site_id,
             building_id=request.match_info.get("buildingId", ""),
         )
         await sync_locations_catalog()
     except LocationStoreError as exc:
         return web.json_response({"error": exc.message}, status=exc.status)
-    return web.json_response({"status": "ok"})
+    return web.json_response({"status": "ok", **result})
 
 
 async def post_floor_endpoint(request: web.Request) -> web.Response:
@@ -209,11 +209,11 @@ async def delete_floor_endpoint(request: web.Request) -> web.Response:
     building_id = request.rel_url.query.get("building_id") or ""
     floor_name = request.match_info.get("floorName", "")
     try:
-        await delete_floor(site_id=site_id, building_id=building_id, floor_name=floor_name)
+        result = await delete_floor(site_id=site_id, building_id=building_id, floor_name=floor_name)
         await sync_locations_catalog()
     except LocationStoreError as exc:
         return web.json_response({"error": exc.message}, status=exc.status)
-    return web.json_response({"status": "ok"})
+    return web.json_response({"status": "ok", **result})
 
 
 def setup_location_routes(app: web.Application) -> None:

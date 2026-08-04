@@ -1,14 +1,15 @@
 const path = require('path');
 const root = __dirname;
 
-const go2rtcBin = path.join(root, 'go2rtc', 'bin', 'go2rtc');
+/** Linux servers usually have python3 only; Windows dev typically uses python. */
+const pythonBin = process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
 
 module.exports = {
   apps: [
     {
       name: 'cctv-backend',
       cwd: root,
-      script: 'python',
+      script: pythonBin,
       args: '-m backend.app.main --api-port 10000',
       autorestart: true,
       watch: false,
@@ -23,27 +24,9 @@ module.exports = {
       autorestart: true,
       watch: false,
     },
-    // go2rtc worker 1 — worker 2+ configs are written by the backend on startup/sync.
-    {
-      name: 'go2rtc-worker-1',
-      cwd: root,
-      script: go2rtcBin,
-      args: '-config go2rtc/workers/1/go2rtc.yaml',
-      autorestart: true,
-      watch: false,
-      max_memory_restart: '1G',
-    },
-    // Worker 2 — required when active cameras exceed GO2RTC_MAX_CAMERAS_PER_WORKER (default 300).
-    // Config file is created by backend before first start; PM2 may restart until it exists.
-    // Worker 3 — when active cameras exceed 600 (3 × GO2RTC_MAX_CAMERAS_PER_WORKER default 300).
-    {
-      name: 'go2rtc-worker-3',
-      cwd: root,
-      script: go2rtcBin,
-      args: '-config go2rtc/workers/3/go2rtc.yaml',
-      autorestart: true,
-      watch: false,
-      max_memory_restart: '1G',
-    },
+    // go2rtc workers are NOT listed here. The backend writes
+    // go2rtc/workers/{N}/go2rtc.yaml then starts/reloads them via PM2
+    // (startup_workers / pm2_start_worker). That avoids crash-loops when
+    // YAML does not exist yet on a fresh host.
   ],
 };
