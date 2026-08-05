@@ -71,6 +71,7 @@ async def get_effective_user(request) -> Optional[dict]:
 
 
 _PUBLIC_API_PREFIXES = (
+    "/api/health",
     "/api/login",
     "/api/logout",
 )

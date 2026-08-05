@@ -2,12 +2,38 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import http from 'node:http';
+import os from 'node:os';
 
 /** Benign proxy errors during backend restart or stream teardown — avoid log spam. */
 const BENIGN_PROXY_CODES = new Set(['ECONNABORTED', 'ECONNRESET', 'EPIPE', 'ECONNREFUSED']);
 
-const BACKEND_HOST = '127.0.0.1';
+/**
+ * Cursor IDE binds 127.0.0.1:10000 on Windows and intercepts API calls meant for Python
+ * (which listens on 0.0.0.0:10000). Use the LAN address so the proxy reaches the real backend.
+ * Override with CCTV_BACKEND_HOST in .env if needed.
+ */
+function resolveBackendHost() {
+    if (process.env.CCTV_BACKEND_HOST) {
+        return process.env.CCTV_BACKEND_HOST;
+    }
+    if (process.platform === 'win32') {
+        for (const ifaces of Object.values(os.networkInterfaces())) {
+            for (const iface of ifaces || []) {
+                if (iface.family === 'IPv4' && !iface.internal) {
+                    return iface.address;
+                }
+            }
+        }
+    }
+    return '127.0.0.1';
+}
+
+const BACKEND_HOST = resolveBackendHost();
 const BACKEND_PORT = Number(process.env.CCTV_BACKEND_PORT || 10000);
+
+if (process.env.NODE_ENV !== 'production') {
+    console.log(`[vite] API proxy → http://${BACKEND_HOST}:${BACKEND_PORT}`);
+}
 
 function isHttpResponse(res) {
     return Boolean(res && typeof res.writeHead === 'function' && typeof res.end === 'function');

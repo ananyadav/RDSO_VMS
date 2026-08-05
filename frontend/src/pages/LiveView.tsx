@@ -11,7 +11,7 @@ import toast from 'react-hot-toast';
 import { flushAllUiConsumers } from '../lib/go2rtcConsumerRegistry';
 import { destroyAllGo2RtcPlayers } from '../lib/go2rtcPlayer';
 import { waitForGo2RtcReady } from '../lib/liveProvider';
-import { apiFetch, cameraQuery } from '../lib/api';
+import { apiErrorMessage, apiFetch, apiFetchWithRetry, cameraQuery, readJsonResponse } from '../lib/api';
 import {
   parseBuildingScopeKey,
   parseSiteScopeKey,
@@ -66,6 +66,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [groupsLoading, setGroupsLoading] = useState(true);
+  const [groupsLoadError, setGroupsLoadError] = useState<string | null>(null);
   const [camerasLoading, setCamerasLoading] = useState(false);
   const [go2rtcReady, setGo2rtcReady] = useState(false);
   const [fullscreenCamera, setFullscreenCamera] = useState<Camera | null>(null);
@@ -103,49 +104,72 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
     };
   }, []);
 
+  const loadGroups = useCallback(async () => {
+    setGroupsLoading(true);
+    setGroupsLoadError(null);
+    try {
+      const res = await apiFetchWithRetry('/api/cameras/groups?includeStats=false');
+      if (!res.ok) {
+        throw new Error(await apiErrorMessage(res, 'Failed to load locations'));
+      }
+      const data = await readJsonResponse<{
+        buildings?: BuildingGroup[];
+        sites?: Array<{ site?: string; name?: string }>;
+        cameraAccess?: PublicCameraAccess;
+      }>(res);
+      const list: BuildingGroup[] = data.buildings ?? [];
+      if (!list.length) {
+        throw new Error('No sites or buildings returned — check backend database connection.');
+      }
+      const access: PublicCameraAccess = data.cameraAccess ?? { all: true };
+      setBuildings(list);
+      setConfiguredSiteNames(
+        (data.sites ?? [])
+          .map((s) => (s.site || s.name || '').trim())
+          .filter(Boolean),
+      );
+
+      const fromUrl = resolveLiveViewFromUrl(initialParams.current!, list);
+      if (fromUrl) {
+        setSelectedSite(fromUrl.site);
+        setSelectedBuildingKey(fromUrl.buildingKey);
+        setSelectedGroup(fromUrl.group);
+      } else {
+        const initial = initialLiveViewSelection(list, access);
+        setSelectedSite(initial.site);
+        setSelectedBuildingKey(initial.buildingKey);
+        setSelectedGroup(initial.group);
+      }
+
+      const layoutLabel = initialParams.current!.get('layout');
+      const layoutMatch = layoutLabel
+        ? LIVE_LAYOUTS.find((l) => l.label === layoutLabel)
+        : undefined;
+      if (layoutMatch) setSelectedLayout(layoutMatch);
+
+      markHydrated();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load locations';
+      setGroupsLoadError(message);
+      toast.error(message);
+    } finally {
+      setGroupsLoading(false);
+    }
+  }, [markHydrated]);
+
   useEffect(() => {
-    const loadGroups = async () => {
-      setGroupsLoading(true);
-      try {
-        const res = await apiFetch('/api/cameras/groups?includeStats=false');
-        if (!res.ok) throw new Error('Failed to load locations');
-        const data = await res.json();
-        const list: BuildingGroup[] = data.buildings ?? [];
-        const access: PublicCameraAccess = data.cameraAccess ?? { all: true };
-        setBuildings(list);
-        setConfiguredSiteNames(
-          (data.sites ?? [])
-            .map((s: { site?: string }) => (s.site || '').trim())
-            .filter(Boolean),
-        );
+    void loadGroups();
+  }, [loadGroups]);
 
-        const fromUrl = resolveLiveViewFromUrl(initialParams.current!, list);
-        if (fromUrl) {
-          setSelectedSite(fromUrl.site);
-          setSelectedBuildingKey(fromUrl.buildingKey);
-          setSelectedGroup(fromUrl.group);
-        } else {
-          const initial = initialLiveViewSelection(list, access);
-          setSelectedSite(initial.site);
-          setSelectedBuildingKey(initial.buildingKey);
-          setSelectedGroup(initial.group);
-        }
-
-        const layoutLabel = initialParams.current!.get('layout');
-        const layoutMatch = layoutLabel
-          ? LIVE_LAYOUTS.find((l) => l.label === layoutLabel)
-          : undefined;
-        if (layoutMatch) setSelectedLayout(layoutMatch);
-
-        markHydrated();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to load locations');
-      } finally {
-        setGroupsLoading(false);
+  useEffect(() => {
+    const retryIfEmpty = () => {
+      if (document.visibilityState === 'visible' && buildings.length === 0 && !groupsLoading) {
+        void loadGroups();
       }
     };
-    void loadGroups();
-  }, []);
+    document.addEventListener('visibilitychange', retryIfEmpty);
+    return () => document.removeEventListener('visibilitychange', retryIfEmpty);
+  }, [buildings.length, groupsLoading, loadGroups]);
 
   const urlValues = useMemo(
     () => ({
@@ -317,6 +341,26 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3">
         <Loader2 className="animate-spin text-gray-500" size={48} />
+        <p className="text-sm text-gray-500">Loading sites and buildings…</p>
+      </div>
+    );
+  }
+
+  if (groupsLoadError && buildings.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4 px-6 text-center">
+        <p className="text-red-400 max-w-lg">{groupsLoadError}</p>
+        <p className="text-sm text-gray-500 max-w-lg">
+          The backend may still be connecting to MongoDB Atlas (wait 1–2 minutes after startup).
+          Ensure the backend is running on port 10000, then retry.
+        </p>
+        <button
+          type="button"
+          onClick={() => void loadGroups()}
+          className="rounded bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500"
+        >
+          Retry loading locations
+        </button>
       </div>
     );
   }

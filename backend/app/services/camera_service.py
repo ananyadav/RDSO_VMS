@@ -394,7 +394,11 @@ async def get_camera_groups(request) -> dict:
         }
 
     hierarchy = build_groups_hierarchy(cameras, location_buildings)
+    from app.services.camera_management import _merge_configured_sites, group_hierarchy_by_site
+
+    sites = await _merge_configured_sites(group_hierarchy_by_site(hierarchy))
     return {
+        "sites": sites,
         "buildings": hierarchy,
         "cameraAccess": camera_access_public(user),
     }

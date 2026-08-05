@@ -33,37 +33,35 @@ CCTV/
 
 ## Quick start (development)
 
-### 1. MongoDB
+**Windows (recommended):** one command starts backend + frontend and opens the UI:
 
-Ensure MongoDB is running (e.g. `mongodb://localhost:27017`).
-
-Optional: create a `.env` file in the **project root**:
-
-```env
-MONGODB_URI=mongodb://localhost:27017
-RECORDINGS_DIR=./Recordings
+```powershell
+.\start_dev.ps1
 ```
 
-### 2. Backend
+Then use **http://127.0.0.1:3000/** — do **not** use `localhost:3000` (Cursor IDE hijacks that port on some machines).
 
-```sh
-pip install -r backend/requirements.txt
-python -m backend.app.main --api-port 10000
+### Manual start
+
+1. Copy `.env.example` → `.env` and set your **MongoDB Atlas** URI (production fleet ~793 cameras).
+2. Backend (from `backend/`):
+
+```powershell
+python -m app.main --api-port 10000
 ```
 
-API and WebSocket: `http://localhost:10000` (same port).
+Wait until you see `Startup complete` in the log (Atlas can take 1–2 minutes).
 
-### 3. Frontend
+3. Frontend (second terminal, from `frontend/`):
 
-In a second terminal:
-
-```sh
-cd frontend
+```powershell
 npm install
 npm run dev
 ```
 
-Dev UI: `http://localhost:3000` (proxies `/api` and `/go2rtc` to the backend).
+Open **http://127.0.0.1:3000/** — login: `admin123` / `admin123`.
+
+The UI waits for `/api/health` before loading cameras or locations, so you should not see empty dropdowns while the backend is still starting.
 
 ## Production (single port)
 
@@ -101,6 +99,7 @@ This builds `frontend/`, copies assets to `backend/static/`, and starts the back
 - `GET/POST /api/recordings/*` — recording schedule and HLS segments
 - `GET/POST /api/go2rtc/*` — go2rtc worker status, sync, diagnostics
 - `GET /go2rtc/api/ws` — WebRTC/MSE live view (all workers, per-camera routing)
+- `GET /api/health` — backend readiness (MongoDB + migrations)
 - `GET /api/status` — system health
 
 More detail: [docs/RUNNING.md](docs/RUNNING.md)  

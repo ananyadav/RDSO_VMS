@@ -27,6 +27,7 @@ from app.routes.ptz import setup_ptz_routes
 
 from app.core.auth_context import session_middleware
 from app.core.http_utils import json_error_middleware
+from app.core.startup_state import STARTUP_KEY, health_handler, new_startup_state, startup_middleware
 from app.services.video_streaming import performance_monitor, get_video_decode_mode
 
 # --- Log configuration ---
@@ -41,7 +42,8 @@ logging.getLogger("aiortc").setLevel(logging.WARNING)
 
 async def create_app():
     """Application factory function."""
-    app = web.Application(middlewares=[json_error_middleware, session_middleware])
+    app = web.Application(middlewares=[json_error_middleware, startup_middleware, session_middleware])
+    app[STARTUP_KEY] = new_startup_state()
 
     setup_recording_routes(app)
     setup_playback_routes(app)
@@ -75,6 +77,7 @@ async def create_app():
     app.router.add_post("/api/login", login_endpoint)
     app.router.add_post("/api/logout", logout_endpoint)
     app.router.add_get("/api/auth/session", session_endpoint)
+    app.router.add_get("/api/health", health_handler)
 
     async def status_handler(_request):
         """Return server status including real system metrics."""
@@ -169,28 +172,31 @@ async def create_app():
     return app
 
 
-async def main():
-    parser = argparse.ArgumentParser(description="NVR Backend Server")
-    parser.add_argument("--api-port", type=int, default=10000, help="Port for the HTTP API server")
-    args = parser.parse_args()
-
-    print("\n" + "=" * 60)
-    print("NVR Backend Server Starting...")
-    print("=" * 60)
-
-    # Check MongoDB connection
+async def run_startup_tasks(app: web.Application) -> None:
+    """MongoDB ping, migrations, and go2rtc — runs after HTTP port is listening."""
+    state = app[STARTUP_KEY]
     try:
-        from app.core.database import client, DATABASE_NAME, backfill_all_camera_rtsp_urls, backfill_usernames
+        from app.core.database import (
+            client,
+            DATABASE_NAME,
+            backfill_all_camera_rtsp_urls,
+            backfill_usernames,
+            camera_collection,
+            ensure_database_indexes,
+        )
         from app.services.camera_service import backfill_camera_locations
         from app.services.camera_identity import (
             backfill_camera_uids,
             backfill_recording_sessions_identity,
             backfill_recording_storage_ids,
         )
-        await client.admin.command('ping')
+
+        state["phase"] = "mongodb"
+        await client.admin.command("ping")
+        state["mongodb"] = True
         print(f"[OK] MongoDB: Connected to database '{DATABASE_NAME}'")
+
         from app.services.location_catalog import sync_locations_catalog
-        from app.core.database import ensure_database_indexes
         from app.services.location_store import (
             bootstrap_location_config,
             consolidate_healthcare_into_rml6,
@@ -199,9 +205,12 @@ async def main():
             sync_all_camera_groups,
         )
 
+        state["phase"] = "migrations"
         await ensure_database_indexes()
         skip_migrations = os.getenv("SKIP_STARTUP_MIGRATIONS", "").strip().lower() in (
-            "1", "true", "yes",
+            "1",
+            "true",
+            "yes",
         )
         if skip_migrations:
             print("[OK] Startup migrations skipped (SKIP_STARTUP_MIGRATIONS=1)")
@@ -239,7 +248,9 @@ async def main():
             u_n = await backfill_usernames()
             if u_n:
                 print(f"[OK] Users: Backfilled username for {u_n} user(s)")
+
         from app.services.ffmpeg_util import ffmpeg_bin
+
         print(f"[OK] FFmpeg: {ffmpeg_bin()}")
         from app.services.ffmpeg_orphan_cleanup import cleanup_orphan_ffmpeg_on_startup
 
@@ -248,56 +259,73 @@ async def main():
             print(f"[OK] Orphan FFmpeg cleanup: killed {len(killed)} process(es) {killed}")
         else:
             print("[OK] Orphan FFmpeg cleanup: none found")
-        from app.services.go2rtc_service import schedule_go2rtc_stream_sync, start_go2rtc_on_startup
+
+        state["phase"] = "go2rtc"
+        from app.services.go2rtc_service import start_go2rtc_on_startup
 
         await start_go2rtc_on_startup()
-    except Exception as e:
-        print(f"[ERROR] MongoDB: Connection failed - {e}")
-        logging.error(f"MongoDB connection error: {e}")
 
-    # Report video decode mode (GPU vs CPU)
+        state["camera_count"] = await camera_collection.count_documents({})
+        state["phase"] = "ready"
+        state["ready"] = True
+        print(f"[OK] Startup complete — {state['camera_count']} camera(s) in database")
+    except Exception as e:
+        state["error"] = str(e)
+        state["phase"] = "failed"
+        print(f"[ERROR] Startup failed: {e}")
+        logging.error("Startup failed: %s", e)
+
+
+async def main():
+    parser = argparse.ArgumentParser(description="NVR Backend Server")
+    parser.add_argument("--api-port", type=int, default=10000, help="Port for the HTTP API server")
+    args = parser.parse_args()
+
+    print("\n" + "=" * 60)
+    print("NVR Backend Server Starting...")
+    print("=" * 60)
+
     decode_info = get_video_decode_mode()
     print(f"[INFO] Video decode: {decode_info['description']} (set VIDEO_HWACCEL=cuda to use GPU)")
 
-    # Start performance monitoring
     await performance_monitor.start_monitoring()
     print("[OK] Performance monitoring: Started")
 
-    # Create and setup app
     app = await create_app()
     print("[OK] Application: Initialized")
 
-    # Setup and start server (API + WebSocket on same port)
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', args.api_port)
+    site = web.TCPSite(runner, "0.0.0.0", args.api_port)
     try:
         await site.start()
     except OSError as exc:
         winerr = getattr(exc, "winerror", None)
         if winerr == 10048 or getattr(exc, "errno", None) in (98, 10048):
             print(f"[ERROR] Port {args.api_port} is already in use.")
-            print("        Another backend is already running. Stop it first, e.g.:")
-            print(f"          Get-NetTCPConnection -LocalPort {args.api_port} -State Listen")
-            print("          Stop-Process -Id <OwningProcess> -Force")
-            print(f"        Or start on a different port: --api-port <other>")
+            print("        Run .\\start_dev.ps1 or stop the existing python process first.")
             await runner.cleanup()
             raise SystemExit(1) from exc
         raise
 
-    print(f"[OK] Server: Running on http://localhost:{args.api_port}")
-    print(f"    API: http://localhost:{args.api_port}/api/*")
-    print(f"    WebSocket (go2rtc): ws://localhost:{args.api_port}/go2rtc/api/ws")
-    print("=" * 60)
-    print("Server is ready and waiting for requests...")
-    print("Press Ctrl+C to stop the server")
+    print(f"[OK] Server: Listening on http://0.0.0.0:{args.api_port} (startup continues in background)")
+    print(f"    Health: http://127.0.0.1:{args.api_port}/api/health")
     print("=" * 60 + "\n")
-    logging.info(f"Server running on http://0.0.0.0:{args.api_port} (API + WebSocket)")
+    logging.info("Server listening on http://0.0.0.0:%s", args.api_port)
 
-    from app.services.go2rtc_service import GO2RTC_ENABLED, schedule_go2rtc_stream_sync
+    asyncio.create_task(run_startup_tasks(app))
 
-    if GO2RTC_ENABLED:
-        schedule_go2rtc_stream_sync(reason="startup")
+    async def schedule_go2rtc_after_ready() -> None:
+        from app.services.go2rtc_service import GO2RTC_ENABLED, schedule_go2rtc_stream_sync
+
+        while not app[STARTUP_KEY].get("ready"):
+            if app[STARTUP_KEY].get("error"):
+                return
+            await asyncio.sleep(1)
+        if GO2RTC_ENABLED:
+            schedule_go2rtc_stream_sync(reason="startup")
+
+    asyncio.create_task(schedule_go2rtc_after_ready())
 
     try:
         await asyncio.Event().wait()
