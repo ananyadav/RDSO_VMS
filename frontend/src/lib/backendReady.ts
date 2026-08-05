@@ -16,7 +16,7 @@ export async function waitForBackendReady(maxWaitMs = DEFAULT_MAX_WAIT_MS): Prom
   const deadline = Date.now() + maxWaitMs;
   let last: BackendHealth | null = null;
 
-  while Date.now() < deadline) {
+  while (Date.now() < deadline) {
     try {
       const res = await fetch('/api/health', { cache: 'no-store', credentials: 'include' });
       if (res.ok) {
