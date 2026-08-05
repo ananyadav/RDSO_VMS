@@ -355,11 +355,9 @@ export default function CameraManagement() {
     if (selectedGroup) {
       params.camera_group = selectedGroup;
       if (selectedFloorNode?.floor) params.floor = selectedFloorNode.floor;
-    } else if (defaultSite) {
-      params.site = defaultSite;
     }
     return params;
-  }, [selectedGroup, selectedFloorNode?.floor, defaultSite]);
+  }, [selectedGroup, selectedFloorNode?.floor]);
 
   const fetchScopeCameras = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;

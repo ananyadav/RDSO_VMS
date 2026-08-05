@@ -75,7 +75,7 @@ export default function App(): React.ReactElement {
           if (!hadCachedUser) {
             beginSessionSync();
           }
-        } else {
+        } else if (hadCachedUser) {
           setCurrentUser(null);
         }
       } catch (err) {

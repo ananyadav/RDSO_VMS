@@ -31,24 +31,31 @@ export default function StorageDrives(): React.ReactElement {
         const data = await readJsonResponse<{ disk?: DriveInfo & { disk_total_gb?: number; disk_used_gb?: number; disk_free_gb?: number; disk_free_percent?: number; disk_percent?: number; status_level?: 'green' | 'yellow' | 'red'; status_label?: string } }>(res);
         const disk = data.disk;
         if (disk?.disk_total_gb != null) {
+          const totalGb = disk.disk_total_gb;
+          const usedGb = disk.disk_used_gb ?? 0;
+          const freeGb =
+            disk.disk_free_gb ??
+            Math.max(0, totalGb - usedGb);
           const freePct =
-            disk.disk_free_percent > 0
+            disk.disk_free_percent != null && disk.disk_free_percent > 0
               ? disk.disk_free_percent
-              : Math.round((disk.disk_free_gb / disk.disk_total_gb) * 1000) / 10;
+              : totalGb > 0
+                ? Math.round((freeGb / totalGb) * 1000) / 10
+                : 0;
           const level: 'green' | 'yellow' | 'red' =
-            disk.status_level ||
+            disk.status_level ??
             (freePct > 20 ? 'green' : freePct > 10 ? 'yellow' : 'red');
           const label =
-            disk.status_label ||
+            disk.status_label ??
             (level === 'green' ? 'Healthy' : level === 'yellow' ? 'Low' : 'Critical');
           setDrives([
             {
               name: 'Recordings volume',
-              total_gb: disk.disk_total_gb,
-              used_gb: disk.disk_used_gb,
-              free_gb: disk.disk_free_gb,
+              total_gb: totalGb,
+              used_gb: usedGb,
+              free_gb: freeGb,
               free_percent: freePct,
-              percent: disk.disk_percent,
+              percent: disk.disk_percent ?? 0,
               status_level: level,
               status_label: label,
             },

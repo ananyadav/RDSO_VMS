@@ -302,7 +302,7 @@ async def _merge_configured_sites(sites: List[dict]) -> List[dict]:
 
 async def get_management_hierarchy(cameras: List[dict]) -> dict:
     location_buildings = await list_buildings()
-    hierarchy = build_groups_hierarchy(cameras, location_buildings, cameras_only=True)
+    hierarchy = build_groups_hierarchy(cameras, location_buildings, cameras_only=False)
     stream_errors, live_rows = await _load_go2rtc_context(cameras)
     schedule = dict(recording_schedule)
     hierarchy = enrich_hierarchy_with_stats(

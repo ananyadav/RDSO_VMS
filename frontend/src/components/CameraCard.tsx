@@ -19,6 +19,7 @@ interface Camera {
 interface CameraCardProps {
   camera: Camera;
   eagerLive?: boolean;
+  bulkStreamMode?: boolean;
   streamsReady?: boolean;
   /** When false, tear down the tile player (e.g. same cam is in fullscreen). */
   liveActive?: boolean;
@@ -30,6 +31,7 @@ interface CameraCardProps {
 function CameraCard({
   camera,
   eagerLive = false,
+  bulkStreamMode = false,
   streamsReady = true,
   liveActive = true,
   isRecording,
@@ -50,6 +52,7 @@ function CameraCard({
       observeRef: tileRef,
       profile: 'sub',
       eager: eagerLive,
+      bulkStreamMode,
       active: liveActive && shouldTryStream,
       streamsReady,
     },

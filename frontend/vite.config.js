@@ -18,43 +18,64 @@ function isBenignProxyError(err) {
 }
 
 function proxyToBackend(req, res, next) {
-    const proxyReq = http.request(
-        {
-            hostname: BACKEND_HOST,
-            port: BACKEND_PORT,
-            path: req.url,
-            method: req.method,
-            headers: {
-                ...req.headers,
-                host: `${BACKEND_HOST}:${BACKEND_PORT}`,
-            },
-        },
-        (proxyRes) => {
-            if (isHttpResponse(res) && !res.headersSent) {
-                res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers);
-                proxyRes.pipe(res);
-            }
-        },
-    );
+    const method = (req.method || 'GET').toUpperCase();
+    const hasBody = method !== 'GET' && method !== 'HEAD';
 
-    proxyReq.on('error', (err) => {
-        if (isBenignProxyError(err)) {
-            if (isHttpResponse(res) && !res.headersSent) {
-                res.writeHead(503, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({
-                    error: 'Backend unavailable — start backend on port 10000',
-                }));
-            }
-            return;
+    const forward = (body) => {
+        const headers = {
+            ...req.headers,
+            host: `${BACKEND_HOST}:${BACKEND_PORT}`,
+        };
+        if (body?.length) {
+            headers['content-length'] = String(body.length);
+        } else {
+            delete headers['content-length'];
         }
-        next(err);
-    });
 
-    if (req.method === 'GET' || req.method === 'HEAD') {
+        const proxyReq = http.request(
+            {
+                hostname: BACKEND_HOST,
+                port: BACKEND_PORT,
+                path: req.url,
+                method,
+                headers,
+            },
+            (proxyRes) => {
+                if (isHttpResponse(res) && !res.headersSent) {
+                    res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers);
+                    proxyRes.pipe(res);
+                }
+            },
+        );
+
+        proxyReq.on('error', (err) => {
+            if (isBenignProxyError(err)) {
+                if (isHttpResponse(res) && !res.headersSent) {
+                    res.writeHead(503, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        error: 'Backend unavailable — start backend on port 10000',
+                    }));
+                }
+                return;
+            }
+            next(err);
+        });
+
+        if (body?.length) {
+            proxyReq.write(body);
+        }
         proxyReq.end();
-    } else {
-        req.pipe(proxyReq);
+    };
+
+    if (!hasBody) {
+        forward(null);
+        return;
     }
+
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => forward(Buffer.concat(chunks)));
+    req.on('error', (err) => next(err));
 }
 
 /**
@@ -119,7 +140,7 @@ function apiEarlyProxyPlugin() {
             handler(server) {
                 server.middlewares.use((req, res, next) => {
                     const path = (req.url ?? '').split('?')[0];
-                    if (!path.startsWith('/api')) {
+                    if (!path.startsWith('/api') && !path.startsWith('/media')) {
                         return next();
                     }
                     proxyToBackend(req, res, next);

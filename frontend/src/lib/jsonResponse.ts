@@ -6,9 +6,11 @@ export async function readJsonResponse<T>(response: Response): Promise<T> {
   }
   const text = (await response.text()).trimStart();
   if (text.startsWith('<!')) {
-    throw new Error(
-      'API returned HTML instead of JSON. Open http://127.0.0.1:3000 and ensure the backend is running.',
-    );
+    const hostHint =
+      typeof window !== 'undefined' && window.location.hostname === 'localhost'
+        ? ' Use http://127.0.0.1:3000/ — localhost is hijacked by Cursor on this machine.'
+        : ' Open http://127.0.0.1:3000/ and ensure the backend is running on port 10000.';
+    throw new Error(`API returned HTML instead of JSON.${hostHint}`);
   }
   throw new Error(`Unexpected API response (${response.status})`);
 }

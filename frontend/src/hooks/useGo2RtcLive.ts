@@ -29,6 +29,8 @@ interface UseGo2RtcLiveOptions {
   profile: 'sub' | 'main';
   active?: boolean;
   eager?: boolean;
+  /** Many cameras in one grid — connect fewer at once, wait longer, tighter scroll detection. */
+  bulkStreamMode?: boolean;
   sessionKey?: number;
   streamsReady?: boolean;
 }
@@ -149,7 +151,7 @@ function friendlyError(camera: Camera, _stream: string, raw: string): string {
     return `${label}: camera RTSP limit reached (453 Not Enough Bandwidth) — close other live viewers/NVR clients, then retry`;
   }
   if (lower.includes('timed out') || lower.includes('timeout')) {
-    return `${label}: connection timed out — check camera is online and RTSP credentials/path are correct`;
+    return `${label}: stream timed out — too many cameras loading at once, or RTSP path/credentials issue. Pick one floor and retry.`;
   }
   if (isAuthError(raw)) {
     return `${label}: wrong username or password for RTSP`;
@@ -221,6 +223,7 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
   const profile = options.profile;
   const active = options.active !== false;
   const eager = options.eager === true;
+  const bulkStreamMode = options.bulkStreamMode === true;
   const sessionKey = options.sessionKey ?? 0;
   const streamsReady = options.streamsReady !== false;
 
@@ -264,11 +267,13 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
 
     const observer = new IntersectionObserver(
       ([entry]) => setInView(entry.isIntersecting),
-      { root: null, rootMargin: '150px', threshold: 0.05 },
+      bulkStreamMode
+        ? { root: null, rootMargin: '0px', threshold: 0.4 }
+        : { root: null, rootMargin: '150px', threshold: 0.05 },
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [camera?.id, eager, observeRef]);
+  }, [camera?.id, eager, bulkStreamMode, observeRef]);
 
   useEffect(() => {
     const shouldConnect = Boolean(camera?.online && active && streamsReady && inView);
@@ -312,7 +317,14 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
         if (cancelled || session !== sessionRef.current) return;
 
         const mode = modes[Math.min(attempt, modes.length - 1)];
-        const timeoutMs = attempt === 0 ? CONNECT_TIMEOUT_MS : RETRY_TIMEOUT_MS;
+        const timeoutMs =
+          attempt === 0
+            ? bulkStreamMode
+              ? 24000
+              : CONNECT_TIMEOUT_MS
+            : bulkStreamMode
+              ? 18000
+              : RETRY_TIMEOUT_MS;
 
         try {
           const cleanup = await waitForFirstFrame(
@@ -397,6 +409,7 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
     sessionKey,
     streamsReady,
     retryKey,
+    bulkStreamMode,
   ]);
 
   useEffect(() => {

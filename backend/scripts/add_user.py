@@ -19,14 +19,23 @@ client = AsyncIOMotorClient(MONGO_DETAILS)
 database = client[DATABASE_NAME]
 user_collection = database.get_collection("users")
 
-async def add_user(name, password, role="Admin", email="", permissions=None):
+async def add_user(name, password, role="admin", email="", permissions=None):
+    name = (name or "").strip()
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
     new_user_doc = {
         "name": name,
+        "username": name,
         "role": role,
         "password": hashed_password,
         "email": email,
-        "permissions": permissions or []
+        "permissions": permissions or [],
+        "cameraAccess": {
+            "all": True,
+            "allowedCameraGroups": [],
+            "allowedCameraUids": [],
+        },
+        "status": "Active",
+        "lastLogin": "Never",
     }
     result = await user_collection.insert_one(new_user_doc)
     print(f"User {name} added with ID: {result.inserted_id}")

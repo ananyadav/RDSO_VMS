@@ -1,3 +1,4 @@
+import re
 import motor.motor_asyncio
 from bson.objectid import ObjectId
 from datetime import datetime, timezone
@@ -54,9 +55,12 @@ async def get_users():
     return users
 
 async def get_user_by_name(name: str):
-    """Find a single user by their name."""
-    user = await user_collection.find_one({"name": name})
-    return user
+    """Find a single user by display name or login username (case-insensitive)."""
+    key = (name or "").strip()
+    if not key:
+        return None
+    pattern = {"$regex": f"^{re.escape(key)}$", "$options": "i"}
+    return await user_collection.find_one({"$or": [{"name": pattern}, {"username": pattern}]})
 
 async def get_user_by_id(user_id: str):
     """Find a single user by MongoDB id."""
@@ -70,13 +74,28 @@ async def backfill_usernames() -> int:
     updated = 0
     async for user in user_collection.find({}):
         name = (user.get("name") or "").strip()
-        username = user.get("username")
-        if name and (not username or username != name):
-            await user_collection.update_one(
-                {"_id": user["_id"]},
-                {"$set": {"username": name, "name": name}},
+        username = (user.get("username") or "").strip()
+        if not name or username == name:
+            continue
+        conflict = await user_collection.find_one(
+            {
+                "_id": {"$ne": user["_id"]},
+                "$or": [{"username": name}, {"name": name}],
+            }
+        )
+        if conflict:
+            logging.warning(
+                "Skipping username backfill for user %s: '%s' already used by %s",
+                user["_id"],
+                name,
+                conflict.get("_id"),
             )
-            updated += 1
+            continue
+        await user_collection.update_one(
+            {"_id": user["_id"]},
+            {"$set": {"username": name, "name": name}},
+        )
+        updated += 1
     if updated:
         logging.info("Backfilled username for %s user(s)", updated)
     return updated

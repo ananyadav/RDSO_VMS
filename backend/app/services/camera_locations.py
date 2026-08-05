@@ -51,6 +51,8 @@ def camera_group_key_for_document(cam: dict) -> str:
     floor = (cam.get("floor") or cam.get("floor_group") or "").strip()
     if building and floor:
         return camera_group_for_site_building_floor(site, building, floor)
+    if site:
+        return camera_group_for_site_building_floor(site, building or "General", floor or "General")
     return ""
 
 

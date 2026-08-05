@@ -259,6 +259,11 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
   // N×N resolution: first screen shows cols×cols tiles; extra cams scroll.
   const gridCols = selectedLayout.cols;
   const gridCapacity = gridCols * gridCols;
+  const isBulkScope =
+    isSiteAllCameras ||
+    isBuildingAllCameras ||
+    cameras.length > 30;
+  const eagerLiveLimit = isBulkScope ? Math.min(4, gridCapacity) : gridCapacity;
 
   const sortedCameras = useMemo(
     () =>
@@ -385,7 +390,8 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
           {isBuildingAllCameras && !camerasLoading && cameras.length > 0 && parsedBuilding && (
             <div className="shrink-0 rounded-lg border border-amber-700/40 bg-amber-950/25 px-4 py-2 text-xs text-amber-200">
               Showing all {cameras.length} cameras in {parsedBuilding.building}. Pick a single floor
-              to reduce load.
+              to reduce load. &quot;Online&quot; means the camera is not confirmed dead — live video
+              may still time out when too many streams start at once.
             </div>
           )}
 
@@ -424,7 +430,8 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
                     <div className="absolute inset-0">
                       <CameraCard
                         camera={camera}
-                        eagerLive={index < gridCapacity}
+                        eagerLive={index < eagerLiveLimit}
+                        bulkStreamMode={isBulkScope}
                         streamsReady={go2rtcReady}
                         liveActive={
                           !(

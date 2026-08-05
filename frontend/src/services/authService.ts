@@ -50,11 +50,13 @@ function endSession(): void {
 
 export const authService = {
   async login(username: string, password: string): Promise<User> {
+    const name = username.trim();
+    const passTrimmed = password.trim();
     const res = await fetch('/api/login', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: username, password }),
+      body: JSON.stringify({ name, password: passTrimmed }),
     });
     if (!res.ok) {
       const err = await readJsonResponse<{ error?: string }>(res).catch(() => ({} as { error?: string }));

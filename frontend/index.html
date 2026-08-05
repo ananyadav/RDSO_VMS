@@ -8,6 +8,13 @@
     <!-- go2rtc player loads at runtime via go2rtcPlayer.ts (/go2rtc/video-stream.js) -->
   </head>
   <body>
+    <script>
+      // Cursor IDE binds localhost:3000 on IPv6 and serves HTML — API calls then fail with
+      // "Unexpected token '<'". Always use 127.0.0.1 in dev so Vite's /api proxy is hit.
+      if (location.hostname === 'localhost') {
+        location.replace(location.href.replace('//localhost', '//127.0.0.1'));
+      }
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
