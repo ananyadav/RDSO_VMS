@@ -193,6 +193,37 @@ async def go2rtc_client_error(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "health": result})
 
 
+async def go2rtc_client_ok(request: web.Request) -> web.Response:
+    """Live View got video — mark camera Online in stream health."""
+    try:
+        user = await require_user(request)
+    except web.HTTPUnauthorized:
+        return web.json_response({"ok": False, "error": "Authentication required"}, status=401)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+
+    camera_id = str(body.get("cameraId") or "").strip()
+    camera_uid = str(body.get("cameraUid") or "").strip()
+    stream = str(body.get("stream") or "").strip()
+    ref = camera_id or camera_uid or parse_stream_camera_id(stream) or ""
+    cam_doc = await get_camera_by_ref(ref) if ref else None
+    if cam_doc is None and stream:
+        cam_doc = await get_camera_by_ref(parse_stream_camera_id(stream) or "")
+    if cam_doc is None:
+        return web.json_response({"ok": False, "error": "Camera not found"}, status=404)
+
+    if not is_admin(user) and not user_can_access_stream(user, stream or ref, cam_doc):
+        return web.json_response({"ok": False, "error": "Camera access denied"}, status=403)
+
+    from app.services.stream_health import record_stream_health
+
+    result = record_stream_health(cam_doc, ok=True, message="")
+    return web.json_response({"ok": True, "health": result})
+
+
 async def live_config(request: web.Request) -> web.Response:
     try:
         await require_user(request)
@@ -450,6 +481,7 @@ def setup_go2rtc_routes(app: web.Application) -> None:
     app.router.add_get("/api/go2rtc/sync", go2rtc_sync)
     app.router.add_post("/api/go2rtc/consumer", go2rtc_consumer)
     app.router.add_post("/api/go2rtc/client-error", go2rtc_client_error)
+    app.router.add_post("/api/go2rtc/client-ok", go2rtc_client_ok)
     app.router.add_get("/api/go2rtc/workers", go2rtc_workers_list)
     app.router.add_post("/api/go2rtc/workers/heal", go2rtc_workers_heal)
     app.router.add_post("/api/go2rtc/workers/rebalance", go2rtc_workers_rebalance)

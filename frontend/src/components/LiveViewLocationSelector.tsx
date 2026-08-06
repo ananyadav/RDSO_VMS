@@ -34,7 +34,7 @@ const selectClass =
 
 function confirmBulkLoad(label: string, count: number): boolean {
   return window.confirm(
-    `${label}\n\nThis will load ${count} camera stream${count === 1 ? '' : 's'} at once and may affect performance.\n\nContinue?`,
+    `${label}\n\nLoading ${count} camera${count === 1 ? '' : 's'} at once can slow down streaming and reduce overall performance. For faster loading, select a building or floor instead.\n\nContinue anyway?`,
   );
 }
 

@@ -310,24 +310,48 @@ def _location_filters(
     return q
 
 
+_LIVE_CAMERA_PROJECTION = {
+    "_id": 1,
+    "name": 1,
+    "ip_address": 1,
+    "camera_uid": 1,
+    "site": 1,
+    "building": 1,
+    "floor": 1,
+    "floor_group": 1,
+    "camera_group": 1,
+    "location_path": 1,
+    "is_active": 1,
+    "ptz": 1,
+    "activity": 1,
+    "worker_id": 1,
+}
+
+
 async def query_cameras(
     user: Optional[dict],
     filters: Optional[Dict[str, Any]] = None,
     *,
     management: bool = False,
+    lean: bool = False,
 ) -> List[dict]:
-    """Query cameras with location filters, active filter, and access control."""
+    """Query cameras with location filters, active filter, and access control.
+
+    lean=True (Live View): skip location-catalog round-trip and use a thin Mongo
+    projection so large site/building scopes return quickly.
+    """
     filters = filters or {}
     include_inactive = bool(filters.get("include_inactive")) and is_admin(user)
     active_only = bool(filters.get("active_only"))
 
     floor_meta = None
-    if (
+    needs_meta = bool(
         filters.get("camera_group")
         or filters.get("building")
         or filters.get("floor")
         or filters.get("site")
-    ):
+    )
+    if needs_meta and not lean:
         from app.services.location_store import list_buildings
 
         floor_meta = build_floor_group_meta(await list_buildings())
@@ -345,8 +369,10 @@ async def query_cameras(
         build_access_filter(user) if user is not None else {},
     )
 
+    projection = None if management else _LIVE_CAMERA_PROJECTION
     cameras: List[dict] = []
-    async for cam in camera_collection.find(query).sort("name", 1):
+    cursor = camera_collection.find(query, projection).sort("name", 1)
+    async for cam in cursor:
         cameras.append(cam)
 
     if management:
@@ -413,7 +439,7 @@ async def get_camera_info(request=None, filters: Optional[Dict[str, Any]] = None
     if request and not filters:
         filters = _parse_filters(request)
 
-    cameras = await query_cameras(user, filters)
+    cameras = await query_cameras(user, filters, lean=True)
 
     for cam_id, source in CAMERA_SOURCES.items():
         if user is not None and not is_admin(user):
@@ -434,8 +460,8 @@ async def get_camera_info(request=None, filters: Optional[Dict[str, Any]] = None
             "is_active": True,
         })
 
+    # Online = RTSP probe OK / not confirmed dead. Disabled stays offline for Live.
     _, live_rows = await _load_go2rtc_context(cameras)
-    # Live View: try to connect like Hikvision — only block confirmed offline.
     apply_stream_online_status(cameras, live_rows, playable_for_live=True)
 
     for_playback = (
@@ -472,7 +498,6 @@ async def get_configured_cameras_for_user(request) -> List[dict]:
     if online_filter is True or live_status_filter == "online":
         cameras = [c for c in cameras if c.get("liveStatus") == "online"]
     elif online_filter is False or live_status_filter == "offline":
-        # Offline filter = confirmed offline only (alert-ready).
         cameras = [c for c in cameras if c.get("liveStatus") == "offline" or c.get("confirmedOffline")]
 
     schedule = dict(recording_schedule)
@@ -480,13 +505,11 @@ async def get_configured_cameras_for_user(request) -> List[dict]:
         cid = str(item.get("_id") or item.get("id") or "")
         uid = item.get("camera_uid") or item.get("cameraUid") or ""
         item["recordingActive"] = bool(schedule.get(cid))
-        # lastError only for confirmed offline.
         if item.get("confirmedOffline"):
             item["lastError"] = stream_errors.get(cid) or stream_errors.get(uid) or item.get("lastError")
         else:
             item["lastError"] = None
         if item.get("is_active") is False:
-            # Disabled is not an alertable outage.
             item["liveStatus"] = "disabled"
             item["confirmedOffline"] = False
             item["alertEligible"] = False
@@ -495,6 +518,7 @@ async def get_configured_cameras_for_user(request) -> List[dict]:
         elif not item.get("liveStatus"):
             item["liveStatus"] = "online" if item.get("online") else "offline"
         item["alertEligible"] = bool(item.get("confirmedOffline"))
+
     return cameras
 
 

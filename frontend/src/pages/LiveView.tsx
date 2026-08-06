@@ -11,7 +11,7 @@ import toast from 'react-hot-toast';
 import { flushAllUiConsumers } from '../lib/go2rtcConsumerRegistry';
 import { destroyAllGo2RtcPlayers } from '../lib/go2rtcPlayer';
 import { waitForGo2RtcReady } from '../lib/liveProvider';
-import { apiErrorMessage, apiFetch, apiFetchWithRetry, cameraQuery, readJsonResponse } from '../lib/api';
+import { apiFetch, cameraQuery } from '../lib/api';
 import {
   parseBuildingScopeKey,
   parseSiteScopeKey,
@@ -31,7 +31,6 @@ const LIVE_LAYOUTS = [
   { cols: 3, label: '3x3' },
   { cols: 4, label: '4x4' },
   { cols: 5, label: '5x5' },
-  { cols: 6, label: '6x6' },
 ] as const;
 
 type LiveLayout = (typeof LIVE_LAYOUTS)[number];
@@ -66,7 +65,6 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [groupsLoading, setGroupsLoading] = useState(true);
-  const [groupsLoadError, setGroupsLoadError] = useState<string | null>(null);
   const [camerasLoading, setCamerasLoading] = useState(false);
   const [go2rtcReady, setGo2rtcReady] = useState(false);
   const [fullscreenCamera, setFullscreenCamera] = useState<Camera | null>(null);
@@ -104,72 +102,49 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
     };
   }, []);
 
-  const loadGroups = useCallback(async () => {
-    setGroupsLoading(true);
-    setGroupsLoadError(null);
-    try {
-      const res = await apiFetchWithRetry('/api/cameras/groups?includeStats=false');
-      if (!res.ok) {
-        throw new Error(await apiErrorMessage(res, 'Failed to load locations'));
-      }
-      const data = await readJsonResponse<{
-        buildings?: BuildingGroup[];
-        sites?: Array<{ site?: string; name?: string }>;
-        cameraAccess?: PublicCameraAccess;
-      }>(res);
-      const list: BuildingGroup[] = data.buildings ?? [];
-      if (!list.length) {
-        throw new Error('No sites or buildings returned — check backend database connection.');
-      }
-      const access: PublicCameraAccess = data.cameraAccess ?? { all: true };
-      setBuildings(list);
-      setConfiguredSiteNames(
-        (data.sites ?? [])
-          .map((s) => (s.site || s.name || '').trim())
-          .filter(Boolean),
-      );
-
-      const fromUrl = resolveLiveViewFromUrl(initialParams.current!, list);
-      if (fromUrl) {
-        setSelectedSite(fromUrl.site);
-        setSelectedBuildingKey(fromUrl.buildingKey);
-        setSelectedGroup(fromUrl.group);
-      } else {
-        const initial = initialLiveViewSelection(list, access);
-        setSelectedSite(initial.site);
-        setSelectedBuildingKey(initial.buildingKey);
-        setSelectedGroup(initial.group);
-      }
-
-      const layoutLabel = initialParams.current!.get('layout');
-      const layoutMatch = layoutLabel
-        ? LIVE_LAYOUTS.find((l) => l.label === layoutLabel)
-        : undefined;
-      if (layoutMatch) setSelectedLayout(layoutMatch);
-
-      markHydrated();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load locations';
-      setGroupsLoadError(message);
-      toast.error(message);
-    } finally {
-      setGroupsLoading(false);
-    }
-  }, [markHydrated]);
-
   useEffect(() => {
-    void loadGroups();
-  }, [loadGroups]);
+    const loadGroups = async () => {
+      setGroupsLoading(true);
+      try {
+        const res = await apiFetch('/api/cameras/groups?includeStats=false');
+        if (!res.ok) throw new Error('Failed to load locations');
+        const data = await res.json();
+        const list: BuildingGroup[] = data.buildings ?? [];
+        const access: PublicCameraAccess = data.cameraAccess ?? { all: true };
+        setBuildings(list);
+        setConfiguredSiteNames(
+          (data.sites ?? [])
+            .map((s: { site?: string; name?: string }) => (s.site || s.name || '').trim())
+            .filter(Boolean),
+        );
 
-  useEffect(() => {
-    const retryIfEmpty = () => {
-      if (document.visibilityState === 'visible' && buildings.length === 0 && !groupsLoading) {
-        void loadGroups();
+        const fromUrl = resolveLiveViewFromUrl(initialParams.current!, list);
+        if (fromUrl) {
+          setSelectedSite(fromUrl.site);
+          setSelectedBuildingKey(fromUrl.buildingKey);
+          setSelectedGroup(fromUrl.group);
+        } else {
+          const initial = initialLiveViewSelection(list, access);
+          setSelectedSite(initial.site);
+          setSelectedBuildingKey(initial.buildingKey);
+          setSelectedGroup(initial.group);
+        }
+
+        const layoutLabel = initialParams.current!.get('layout');
+        const layoutMatch = layoutLabel
+          ? LIVE_LAYOUTS.find((l) => l.label === layoutLabel)
+          : undefined;
+        if (layoutMatch) setSelectedLayout(layoutMatch);
+
+        markHydrated();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to load locations');
+      } finally {
+        setGroupsLoading(false);
       }
     };
-    document.addEventListener('visibilitychange', retryIfEmpty);
-    return () => document.removeEventListener('visibilitychange', retryIfEmpty);
-  }, [buildings.length, groupsLoading, loadGroups]);
+    void loadGroups();
+  }, [markHydrated]);
 
   const urlValues = useMemo(
     () => ({
@@ -283,11 +258,6 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
   // N×N resolution: first screen shows cols×cols tiles; extra cams scroll.
   const gridCols = selectedLayout.cols;
   const gridCapacity = gridCols * gridCols;
-  const isBulkScope =
-    isSiteAllCameras ||
-    isBuildingAllCameras ||
-    cameras.length > 30;
-  const eagerLiveLimit = isBulkScope ? Math.min(4, gridCapacity) : gridCapacity;
 
   const sortedCameras = useMemo(
     () =>
@@ -301,7 +271,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
     const update = () => {
       const gap = 2; // gap-0.5 ≈ 2px
       const h = el.clientHeight;
-      const minRow = gridCols >= 6 ? 52 : gridCols >= 5 ? 64 : 80;
+      const minRow = gridCols >= 5 ? 64 : 80;
       if (h > 0) setRowHeightPx(Math.max(minRow, Math.floor((h - gap * (gridCols - 1)) / gridCols)));
     };
     update();
@@ -341,26 +311,6 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3">
         <Loader2 className="animate-spin text-gray-500" size={48} />
-        <p className="text-sm text-gray-500">Loading sites and buildings…</p>
-      </div>
-    );
-  }
-
-  if (groupsLoadError && buildings.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 px-6 text-center">
-        <p className="text-red-400 max-w-lg">{groupsLoadError}</p>
-        <p className="text-sm text-gray-500 max-w-lg">
-          The backend may still be connecting to MongoDB Atlas (wait 1–2 minutes after startup).
-          Ensure the backend is running on port 10000, then retry.
-        </p>
-        <button
-          type="button"
-          onClick={() => void loadGroups()}
-          className="rounded bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500"
-        >
-          Retry loading locations
-        </button>
       </div>
     );
   }
@@ -434,8 +384,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
           {isBuildingAllCameras && !camerasLoading && cameras.length > 0 && parsedBuilding && (
             <div className="shrink-0 rounded-lg border border-amber-700/40 bg-amber-950/25 px-4 py-2 text-xs text-amber-200">
               Showing all {cameras.length} cameras in {parsedBuilding.building}. Pick a single floor
-              to reduce load. &quot;Online&quot; means the camera is not confirmed dead — live video
-              may still time out when too many streams start at once.
+              to reduce load.
             </div>
           )}
 
@@ -474,8 +423,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
                     <div className="absolute inset-0">
                       <CameraCard
                         camera={camera}
-                        eagerLive={index < eagerLiveLimit}
-                        bulkStreamMode={isBulkScope}
+                        eagerLive={index < gridCapacity}
                         streamsReady={go2rtcReady}
                         liveActive={
                           !(

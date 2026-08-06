@@ -75,9 +75,9 @@ export default function FloorSummaryCards({
         const isActive = activeFilter === filter;
         const title =
           filter === 'offline'
-            ? 'Confirmed offline only — alert-ready (power cut / unreachable after retries)'
+            ? 'Confirmed RTSP/stream probe failure (fresh health check)'
             : filter === 'online'
-              ? 'Not confirmed offline (includes cameras still being probed)'
+              ? 'RTSP probe OK or not yet confirmed offline'
               : filter === 'disabled'
                 ? 'Cameras manually disabled in Camera Management'
                 : floorLabel;

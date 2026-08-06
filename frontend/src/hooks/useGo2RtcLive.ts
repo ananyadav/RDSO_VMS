@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { go2rtcStreamName, reportGo2RtcClientError } from '../lib/liveProvider';
+import { go2rtcStreamName, reportGo2RtcClientError, reportGo2RtcClientOk } from '../lib/liveProvider';
 import { acquireGo2RtcSlot, releaseGo2RtcSlot } from '../lib/go2rtcConnectionLimiter';
 import { registerUiConsumer, unregisterUiConsumer } from '../lib/go2rtcConsumerRegistry';
 import { mountGo2RtcPlayer } from '../lib/go2rtcPlayer';
-import { cameraTileLabel } from '../lib/cameraLabel';
 
 interface Camera {
   id: string;
@@ -19,9 +18,8 @@ export type Go2RtcStreamStatus = 'idle' | 'connecting' | 'playing' | 'error';
 
 /** First attempt — cameras often need a few seconds for RTSP SETUP. */
 const CONNECT_TIMEOUT_MS = 16000;
-/** Single conditional retry for transient faults. */
+/** Later retries while tile keeps showing Connecting… */
 const RETRY_TIMEOUT_MS = 10000;
-const MAX_ATTEMPTS = 2;
 
 interface UseGo2RtcLiveOptions {
   containerRef: RefObject<HTMLElement | null>;
@@ -29,14 +27,8 @@ interface UseGo2RtcLiveOptions {
   profile: 'sub' | 'main';
   active?: boolean;
   eager?: boolean;
-  /** Many cameras in one grid — connect fewer at once, wait longer, tighter scroll detection. */
-  bulkStreamMode?: boolean;
   sessionKey?: number;
   streamsReady?: boolean;
-}
-
-function cameraStreamLabel(camera: Camera): string {
-  return cameraTileLabel(camera);
 }
 
 function isAuthError(raw: string): boolean {
@@ -102,27 +94,6 @@ function isTemporaryError(raw: string): boolean {
   );
 }
 
-/** Errors that will not heal with a short wait — fail immediately. */
-function isNonRetryableError(raw: string): boolean {
-  const lower = raw.toLowerCase();
-  return (
-    isAuthError(raw) ||
-    isPermissionError(raw) ||
-    isDisabledCameraError(raw) ||
-    isCodecError(raw) ||
-    isGo2RtcStreamMissing(raw) ||
-    isSetupError(raw) ||
-    lower.includes('453') ||
-    lower.includes('not enough bandwidth') ||
-    lower.includes('session expired')
-  );
-}
-
-function shouldRetryConnection(raw: string): boolean {
-  if (isNonRetryableError(raw)) return false;
-  return isTemporaryError(raw);
-}
-
 /** True missing go2rtc stream name — not ONVIF/HTTP 404 or camera SETUP errors. */
 function isGo2RtcStreamMissing(raw: string): boolean {
   const lower = raw.toLowerCase();
@@ -140,36 +111,21 @@ function isGo2RtcStreamMissing(raw: string): boolean {
   );
 }
 
-function friendlyError(camera: Camera, _stream: string, raw: string): string {
-  const label = cameraStreamLabel(camera);
+/** Errors that will not heal with a short wait — report once, still keep Connecting… */
+function isNonRetryableError(raw: string): boolean {
   const lower = raw.toLowerCase();
-  if (isGo2RtcStreamMissing(raw)) {
-    return `${label}: stream not registered in go2rtc — use Diagnostics → Reload`;
-  }
-  // Hikvision concurrent RTSP limit — path is fine; free slots on NVR/other viewers.
-  if (lower.includes('453') || lower.includes('not enough bandwidth')) {
-    return `${label}: camera RTSP limit reached (453 Not Enough Bandwidth) — close other live viewers/NVR clients, then retry`;
-  }
-  if (lower.includes('timed out') || lower.includes('timeout')) {
-    return `${label}: stream timed out — too many cameras loading at once, or RTSP path/credentials issue. Pick one floor and retry.`;
-  }
-  if (isAuthError(raw)) {
-    return `${label}: wrong username or password for RTSP`;
-  }
-  if (
-    (lower.includes('eof') && lower.includes('setup')) ||
-    lower.includes('wrong response on setup') ||
-    (lower.includes('onvif') && lower.includes('404'))
-  ) {
-    return `${label}: RTSP SETUP failed (wrong Make/path — Hikvision URL may not match this camera) — edit protocol in Camera Management`;
-  }
-  if (lower.includes('refused') || lower.includes('unreachable')) {
-    return `${label}: camera unreachable at RTSP port (network or firewall)`;
-  }
-  return raw.includes(label) ? raw : `${label}: ${raw}`;
+  return (
+    isAuthError(raw) ||
+    isPermissionError(raw) ||
+    isDisabledCameraError(raw) ||
+    isCodecError(raw) ||
+    isGo2RtcStreamMissing(raw) ||
+    isSetupError(raw) ||
+    lower.includes('453') ||
+    lower.includes('not enough bandwidth') ||
+    lower.includes('session expired')
+  );
 }
-
-const RETRY_DELAY_MS = 800;
 
 async function waitForFirstFrame(
   container: HTMLElement,
@@ -223,7 +179,6 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
   const profile = options.profile;
   const active = options.active !== false;
   const eager = options.eager === true;
-  const bulkStreamMode = options.bulkStreamMode === true;
   const sessionKey = options.sessionKey ?? 0;
   const streamsReady = options.streamsReady !== false;
 
@@ -267,13 +222,11 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
 
     const observer = new IntersectionObserver(
       ([entry]) => setInView(entry.isIntersecting),
-      bulkStreamMode
-        ? { root: null, rootMargin: '0px', threshold: 0.4 }
-        : { root: null, rootMargin: '150px', threshold: 0.05 },
+      { root: null, rootMargin: '150px', threshold: 0.05 },
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [camera?.id, eager, bulkStreamMode, observeRef]);
+  }, [camera?.id, eager, observeRef]);
 
   useEffect(() => {
     const shouldConnect = Boolean(camera?.online && active && streamsReady && inView);
@@ -313,18 +266,10 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
       setIsConnecting(true);
       setStreamStatus('connecting');
 
-      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
-        if (cancelled || session !== sessionRef.current) return;
-
+      let attempt = 0;
+      while (!cancelled && session === sessionRef.current) {
         const mode = modes[Math.min(attempt, modes.length - 1)];
-        const timeoutMs =
-          attempt === 0
-            ? bulkStreamMode
-              ? 24000
-              : CONNECT_TIMEOUT_MS
-            : bulkStreamMode
-              ? 18000
-              : RETRY_TIMEOUT_MS;
+        const timeoutMs = attempt === 0 ? CONNECT_TIMEOUT_MS : RETRY_TIMEOUT_MS;
 
         try {
           const cleanup = await waitForFirstFrame(
@@ -348,37 +293,40 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
           setIsConnecting(false);
           setStreamStatus('playing');
           setError(null);
+          reportGo2RtcClientOk({
+            cameraId: camera.id,
+            cameraUid: camera.cameraUid,
+            stream,
+          });
           return;
         } catch (err) {
           stopPlayer(true);
           if (cancelled || session !== sessionRef.current) return;
 
           const raw = err instanceof Error ? err.message : 'Failed to connect';
-          const message = friendlyError(camera, stream, raw);
-          const canRetry = attempt < MAX_ATTEMPTS - 1 && shouldRetryConnection(raw);
+          // Never show timeout/error text on live tiles — keep Connecting… and retry.
+          setError(null);
+          setIsConnecting(true);
+          setStreamStatus('connecting');
 
-          if (canRetry) {
-            setError(`${message} — retrying…`);
-            await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
-            await acquireGo2RtcSlot();
-            if (cancelled || session !== sessionRef.current) {
-              releaseGo2RtcSlot();
-              return;
-            }
-            slotHeldRef.current = true;
-            continue;
+          if (!isTemporaryError(raw) && isNonRetryableError(raw)) {
+            reportGo2RtcClientError({
+              cameraId: camera.id,
+              cameraUid: camera.cameraUid,
+              stream,
+              message: raw,
+            });
           }
 
-          setError(message);
-          setIsConnecting(false);
-          setStreamStatus('error');
-          reportGo2RtcClientError({
-            cameraId: camera.id,
-            cameraUid: camera.cameraUid,
-            stream,
-            message: raw,
-          });
-          return;
+          const delayMs = isTemporaryError(raw) ? 1500 : 4000;
+          await new Promise((r) => setTimeout(r, delayMs));
+          await acquireGo2RtcSlot();
+          if (cancelled || session !== sessionRef.current) {
+            releaseGo2RtcSlot();
+            return;
+          }
+          slotHeldRef.current = true;
+          attempt += 1;
         }
       }
     };
@@ -409,7 +357,6 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
     sessionKey,
     streamsReady,
     retryKey,
-    bulkStreamMode,
   ]);
 
   useEffect(() => {

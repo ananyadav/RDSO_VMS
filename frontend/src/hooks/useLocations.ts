@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiErrorMessage, apiFetchWithRetry, readJsonResponse } from '../lib/api';
+import { apiFetch, readJsonResponse } from '../lib/api';
 import { readSessionCache, UI_CACHE_TTL_MS, writeSessionCache } from '../lib/sessionCache';
 import type { LocationBuilding, LocationSite } from '../constants/corporateFloors';
 
@@ -21,10 +21,8 @@ export function useLocations() {
   const reload = useCallback(async () => {
     setError(null);
     try {
-      const res = await apiFetchWithRetry('/api/locations?includeInactive=true&includeStats=true');
-      if (!res.ok) {
-        throw new Error(await apiErrorMessage(res, 'Failed to load locations'));
-      }
+      const res = await apiFetch('/api/locations?includeInactive=true&includeStats=true');
+      if (!res.ok) throw new Error('Failed to load locations');
       const data = await readJsonResponse<{ sites?: LocationSite[]; buildings?: LocationBuilding[] }>(res);
       const nextSites = data.sites ?? [];
       const nextBuildings = data.buildings ?? [];

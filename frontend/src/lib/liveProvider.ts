@@ -132,3 +132,16 @@ export function reportGo2RtcClientError(payload: {
     body: JSON.stringify(payload),
   }).catch(() => {});
 }
+
+/** Live View got a video frame — mark camera Online for Camera Management. */
+export function reportGo2RtcClientOk(payload: {
+  cameraId: string;
+  cameraUid?: string;
+  stream?: string;
+}): void {
+  apiFetch('/api/go2rtc/client-ok', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).catch(() => {});
+}

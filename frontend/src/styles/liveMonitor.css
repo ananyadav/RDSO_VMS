@@ -6,12 +6,15 @@
   width: 100% !important;
   height: 100% !important;
   display: block;
+  overflow: hidden;
+  background: #000;
 }
 
 .live-monitor-player video {
   pointer-events: none;
-  object-fit: cover;
-  background: #000;
+  /* Full frame, edge-to-edge: no letterbox bars, no crop/zoom. */
+  object-fit: fill;
+  object-position: center;
 }
 
 .live-monitor-player video::-webkit-media-controls {

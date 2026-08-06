@@ -471,8 +471,25 @@ def ensure_stream_health_scan() -> dict:
 
 
 def get_stream_health(camera_id: str, camera_uid: str = "") -> Optional[dict]:
+    """Return latest probe result; drop stale failure alarms so CM/Live stay accurate."""
     ensure_stream_health_hydrated()
-    return _results.get(camera_id) or (camera_uid and _results.get(camera_uid)) or None
+    result = _results.get(camera_id) or (camera_uid and _results.get(camera_uid)) or None
+    if not result:
+        return None
+    if result.get("ok") or not result.get("alarm"):
+        return result
+    checked_dt = _parse_checked_at(result.get("checkedAt"))
+    if checked_dt is None:
+        return None
+    age_h = (_now() - checked_dt).total_seconds() / 3600.0
+    if age_h > FAILURE_MAX_AGE_HOURS:
+        # Stale failure — do not keep showing Offline forever.
+        for key in (camera_id, camera_uid, result.get("cameraId"), result.get("cameraUid")):
+            k = str(key or "")
+            if k and _results.get(k) is result:
+                _results.pop(k, None)
+        return None
+    return result
 
 
 def record_stream_health(

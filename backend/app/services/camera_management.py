@@ -129,11 +129,10 @@ def _stats_for_cameras(
         elif stream_confirmed_offline(cam, row):
             stats["offline"] += 1
         else:
-            # Not confirmed dead → Online (includes probe-pending cameras).
+            # Not confirmed dead → Online (includes not-yet-probed).
             stats["online"] += 1
 
         uid = cam.get("camera_uid") or make_camera_uid(cam.get("ip_address") or "") or cid
-        # Errors = confirmed offline only.
         if stream_errors.get(uid) or stream_errors.get(cid):
             stats["errors"] += 1
 

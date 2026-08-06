@@ -28,7 +28,6 @@ import Maintenance from "./pages/Maintenance";
 import type { User } from './services/authService';
 import { authService } from './services/authService';
 import { apiFetch } from './lib/api';
-import { waitForBackendReady } from './lib/backendReady';
 import { LocationsProvider } from './context/LocationsContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useVisibilityInterval } from './hooks/useVisibilityInterval';
@@ -38,10 +37,7 @@ type RecordingScheduleType = Record<string, boolean>;
 export default function App(): React.ReactElement {
   // --- State Management ---
   const [currentUser, setCurrentUser] = useState<User | null>(() => authService.getCurrentUser());
-  const [backendReady, setBackendReady] = useState(false);
-  const [backendError, setBackendError] = useState<string | null>(null);
-  const [backendCameraCount, setBackendCameraCount] = useState<number | null>(null);
-  const [sessionReady, setSessionReady] = useState(false);
+  const [sessionReady, setSessionReady] = useState(() => Boolean(authService.getCurrentUser()));
   const stopSessionSyncRef = useRef<(() => void) | null>(null);
 
   const beginSessionSync = useCallback(() => {
@@ -64,37 +60,21 @@ export default function App(): React.ReactElement {
   // --- Theme Hook ---
   const [theme, toggleTheme] = useTheme();
 
-  // --- Wait for backend (MongoDB + migrations) before any API calls ---
-  useEffect(() => {
-    let cancelled = false;
-    const connect = async () => {
-      try {
-        const health = await waitForBackendReady();
-        if (cancelled) return;
-        setBackendCameraCount(health.cameraCount);
-        setBackendReady(true);
-      } catch (err) {
-        if (cancelled) return;
-        setBackendError(err instanceof Error ? err.message : 'Backend unavailable');
-      }
-    };
-    void connect();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   // --- Restore and validate session from localStorage ---
   useEffect(() => {
-    if (!backendReady) return;
-
     const initSession = async () => {
       const hadCachedUser = Boolean(authService.getCurrentUser());
+      if (hadCachedUser) {
+        setSessionReady(true);
+        beginSessionSync();
+      }
       try {
         const fresh = await authService.refreshSession();
         if (fresh) {
           setCurrentUser(fresh);
-          beginSessionSync();
+          if (!hadCachedUser) {
+            beginSessionSync();
+          }
         } else if (hadCachedUser) {
           setCurrentUser(null);
         }
@@ -110,7 +90,7 @@ export default function App(): React.ReactElement {
 
     void initSession();
     return () => endSessionSync();
-  }, [backendReady, beginSessionSync, endSessionSync]);
+  }, [beginSessionSync, endSessionSync]);
 
   // --- Data Fetching ---
   const userId = currentUser?.id;
@@ -218,35 +198,10 @@ export default function App(): React.ReactElement {
   };
 
   // --- Render Logic ---
-  if (backendError) {
+  if (!sessionReady) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300 gap-4 px-6 text-center">
-        <p className="text-red-500 max-w-lg">{backendError}</p>
-        <p className="text-sm max-w-lg">
-          Run <code className="rounded bg-gray-800 px-2 py-1">.\start_dev.ps1</code> from the project root,
-          or start the backend manually and wait for Atlas to connect.
-        </p>
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="rounded bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
-
-  if (!backendReady || !sessionReady) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300 gap-3">
-        <p>{backendReady ? 'Checking session…' : 'Connecting to server…'}</p>
-        {!backendReady && (
-          <p className="text-sm text-gray-500">MongoDB Atlas sync can take 1–2 minutes on first load.</p>
-        )}
-        {backendCameraCount != null && backendCameraCount > 0 && (
-          <p className="text-sm text-emerald-600 dark:text-emerald-400">{backendCameraCount} cameras loaded</p>
-        )}
+      <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300">
+        Checking session…
       </div>
     );
   }

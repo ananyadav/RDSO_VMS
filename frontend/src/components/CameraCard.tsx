@@ -9,17 +9,12 @@ interface Camera {
   displayName?: string;
   ip_address?: string;
   cameraUid?: string;
-  /** True when Live View should attempt a stream (not confirmed offline). */
   online: boolean;
-  liveStatus?: string;
-  confirmedOffline?: boolean;
-  lastError?: string | null;
 }
 
 interface CameraCardProps {
   camera: Camera;
   eagerLive?: boolean;
-  bulkStreamMode?: boolean;
   streamsReady?: boolean;
   /** When false, tear down the tile player (e.g. same cam is in fullscreen). */
   liveActive?: boolean;
@@ -31,7 +26,6 @@ interface CameraCardProps {
 function CameraCard({
   camera,
   eagerLive = false,
-  bulkStreamMode = false,
   streamsReady = true,
   liveActive = true,
   isRecording,
@@ -41,29 +35,20 @@ function CameraCard({
   const tileRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<HTMLDivElement>(null);
 
-  const confirmedOffline = Boolean(camera.confirmedOffline) || camera.liveStatus === 'offline';
-  // Like Hikvision: try connect unless confirmed dead.
-  const shouldTryStream = !confirmedOffline && camera.online !== false;
-
-  const { isConnecting, isQueued, error, streamStatus, inView } = useGo2RtcLive(
-    shouldTryStream ? camera : null,
+  const { isConnecting, isQueued, streamStatus, inView } = useGo2RtcLive(
+    camera.online ? camera : null,
     {
       containerRef: playerRef,
       observeRef: tileRef,
       profile: 'sub',
       eager: eagerLive,
-      bulkStreamMode,
-      active: liveActive && shouldTryStream,
+      active: liveActive && camera.online,
       streamsReady,
     },
   );
 
-  const showStreamMessage = Boolean(error);
-  const statusLabel = confirmedOffline ? 'Offline' : 'Online';
-
-  const statusClass = confirmedOffline || streamStatus === 'error'
-    ? 'text-red-800 bg-red-200'
-    : 'text-green-800 bg-green-200';
+  const showConnecting =
+    camera.online && streamStatus !== 'playing' && (isQueued || isConnecting || !inView);
 
   const handleDoubleClick = () => {
     if (onFullscreen) onFullscreen(camera);
@@ -79,28 +64,11 @@ function CameraCard({
         onDoubleClick={handleDoubleClick}
       >
         <div className="absolute inset-0">
-          {shouldTryStream ? (
+          {camera.online ? (
             <>
-              {isQueued && !isConnecting && !showStreamMessage && (
-                <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-xs bg-gray-900/80 px-2 text-center z-10">
-                  Waiting for connect slot…
-                </div>
-              )}
+              <div ref={playerRef} className="live-monitor-player absolute inset-0" />
 
-              {!inView && !isConnecting && !isQueued && !showStreamMessage && (
-                <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-xs bg-gray-900 px-2 text-center z-10">
-                  Scroll into view for live feed
-                </div>
-              )}
-
-              <div
-                ref={playerRef}
-                className={`live-monitor-player absolute inset-0 ${
-                  showStreamMessage ? 'opacity-0 pointer-events-none' : ''
-                }`}
-              />
-
-              {isConnecting && !showStreamMessage && (
+              {showConnecting && (
                 <div className="absolute inset-0 animate-pulse bg-gray-800/60 z-10">
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="flex items-center gap-2 text-gray-200 text-sm">
@@ -110,21 +78,11 @@ function CameraCard({
                   </div>
                 </div>
               )}
-
-              {showStreamMessage && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-100 text-xs text-center px-3 bg-gray-900 z-20 gap-2">
-                  <VideoOff size={36} className="text-gray-500" />
-                  <p className="max-w-[95%] leading-relaxed">{error}</p>
-                </div>
-              )}
             </>
           ) : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 px-3 text-center gap-2">
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
               <VideoOff size={48} />
-              <p className="font-medium text-gray-400">Camera Offline</p>
-              {camera.lastError && (
-                <p className="text-xs text-red-300/90 max-w-[95%] leading-relaxed">{camera.lastError}</p>
-              )}
+              <p>Camera Offline</p>
             </div>
           )}
         </div>
@@ -140,8 +98,12 @@ function CameraCard({
             <h3 className="font-bold text-white text-sm truncate">{cameraTileLabel(camera)}</h3>
           </div>
 
-          <span className={`flex-shrink-0 px-2 py-0.5 text-xs font-semibold rounded-full ${statusClass}`}>
-            {statusLabel}
+          <span
+            className={`flex-shrink-0 px-2 py-0.5 text-xs font-semibold rounded-full ${
+              camera.online ? 'text-green-800 bg-green-200' : 'text-red-800 bg-red-200'
+            }`}
+          >
+            {camera.online ? 'Online' : 'Offline'}
           </span>
         </div>
 
@@ -161,7 +123,6 @@ function CameraCard({
           <div className="flex items-center space-x-2">
             {onFullscreen && (
               <button
-                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onFullscreen(camera);
@@ -174,7 +135,6 @@ function CameraCard({
             )}
 
             <button
-              type="button"
               onClick={() => onToggleRecording(camera.id)}
               className={`flex items-center space-x-1.5 py-1 px-2 rounded transition-colors bg-black/30 backdrop-blur-sm ${
                 isRecording ? 'text-red-400' : 'text-gray-200 hover:bg-white/20'
