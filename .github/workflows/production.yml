@@ -173,3 +173,17 @@ jobs:
             pm2 list
             curl -fsS "http://127.0.0.1:${{ env.API_PORT }}/api/health"
             echo
+
+            # Task 11: backup + ensure Nginx direct-media (/media/wN → go2rtc)
+            export SERVER_DEPLOY_PATH="${{ env.SERVER_DEPLOY_PATH }}"
+            export PM2_BACKEND_NAME="${{ env.PM2_BACKEND_NAME }}"
+            export API_PORT="${{ env.API_PORT }}"
+            export PUBLIC_BIND_IP="${{ secrets.PUBLIC_BIND_IP }}"
+            if [ -z "${PUBLIC_BIND_IP}" ]; then PUBLIC_BIND_IP="192.168.17.150"; fi
+            export PUBLIC_BIND_IP
+            chmod +x deploy/task11_server_deploy.sh
+            bash deploy/task11_server_deploy.sh
+            echo
+            if [ -f deploy/task11-deploy-report.json ]; then
+              cat deploy/task11-deploy-report.json
+            fi
