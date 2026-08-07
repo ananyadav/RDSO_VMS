@@ -1,0 +1,630 @@
+{
+  "label": "h264",
+  "cold": [
+    {
+      "phase": "cold",
+      "run": 1,
+      "ip": "192.168.41.106",
+      "cameraUid": "ip_192_168_41_106",
+      "workerId": 1,
+      "profile": "sub",
+      "queue_wait_ms": 4,
+      "player_start_ms": 0,
+      "transport_ms": 594,
+      "metadata_ms": 633,
+      "playing_ms": 814,
+      "first_frame_ms": 903,
+      "total_visible_ms": 907
+    },
+    {
+      "phase": "cold",
+      "run": 1,
+      "ip": "192.168.41.13",
+      "cameraUid": "ip_192_168_41_13",
+      "workerId": 1,
+      "profile": "sub",
+      "queue_wait_ms": 2,
+      "player_start_ms": 0,
+      "transport_ms": 619,
+      "metadata_ms": 647,
+      "playing_ms": 865,
+      "first_frame_ms": 906,
+      "total_visible_ms": 908
+    },
+    {
+      "phase": "cold",
+      "run": 1,
+      "ip": "192.168.41.41",
+      "cameraUid": "ip_192_168_41_41",
+      "workerId": 1,
+      "profile": "sub",
+      "queue_wait_ms": 2,
+      "player_start_ms": 0,
+      "transport_ms": 703,
+      "metadata_ms": 739,
+      "playing_ms": 883,
+      "first_frame_ms": 909,
+      "total_visible_ms": 911
+    },
+    {
+      "phase": "cold",
+      "run": 1,
+      "ip": "192.168.41.24",
+      "cameraUid": "ip_192_168_41_24",
+      "workerId": 1,
+      "profile": "sub",
+      "queue_wait_ms": 2,
+      "player_start_ms": 0,
+      "transport_ms": 621,
+      "metadata_ms": 651,
+      "playing_ms": 839,
+      "first_frame_ms": 1109,
+      "total_visible_ms": 1111
+    },
+    {
+      "phase": "cold",
+      "run": 1,
+      "ip": "192.168.41.23",
+      "cameraUid": "ip_192_168_41_23",
+      "workerId": 1,
+      "profile": "sub",
+      "queue_wait_ms": 2,
+      "player_start_ms": 0,
+      "transport_ms": 619,
+      "metadata_ms": 647,
+      "playing_ms": 851,
+      "first_frame_ms": 1110,
+      "total_visible_ms": 1113
+    },
+    {
+      "phase": "cold",
+      "run": 2,
+      "ip": "192.168.41.106",
+      "cameraUid": "ip_192_168_41_106",
+      "workerId": 1,
+      "profile": "sub",
+      "queue_wait_ms": 2,
+      "player_start_ms": 0,
+      "transport_ms": 150,
+      "metadata_ms": 171,
+      "playing_ms": 329,
+      "first_frame_ms": 387,
+      "total_visible_ms": 390
+    },
+    {
+      "phase": "cold",
+      "run": 2,
+      "ip": "192.168.41.13",
+      "cameraUid": "ip_192_168_41_13",
+      "workerId": 1,
+      "profile": "sub",
+      "queue_wait_ms": 2,
+      "player_start_ms": 0,
+      "transport_ms": 282,
+      "metadata_ms": 315,
+      "playing_ms": 463,
+      "first_frame_ms": 509,
+      "total_visible_ms": 511
+    },
+    {
+      "phase": "cold",
+      "run": 2,
+      "ip": "192.168.41.23",
+      "cameraUid": "ip_192_168_41_23",
+      "workerId": 1,
+      "profile": "sub",
+      "queue_wait_ms": 2,
+      "player_start_ms": 0,
+      "transport_ms": 421,
+      "metadata_ms": 449,
+      "playing_ms": 579,
+      "first_frame_ms": 588,
+      "total_visible_ms": 590
+    },
+    {
+      "phase": "cold",
+      "run": 2,
+      "ip": "192.168.41.24",
+      "cameraUid": "ip_192_168_41_24",
+      "workerId": 1,
+      "profile": "sub",
+      "queue_wait_ms": 2,
+      "player_start_ms": 0,
+      "transport_ms": 564,
+      "metadata_ms": 594,
+      "playing_ms": 765,
+      "first_frame_ms": 814,
+      "total_visible_ms": 816
+    },
+    {
+      "phase": "cold",
+      "run": 2,
+      "ip": "192.168.41.41",
+      "cameraUid": "ip_192_168_41_41",
+      "workerId": 1,
+      "profile": "sub",
+      "queue_wait_ms": 2,
+      "player_start_ms": 0,
+      "transport_ms": 719,
+      "metadata_ms": 749,
+      "playing_ms": 1078,
+      "first_frame_ms": 1116,
+      "total_visible_ms": 1118
+    },
+    {
+      "phase": "cold",
+      "run": 3,
+      "ip": "192.168.41.106",
+      "cameraUid": "ip_192_168_41_106",
+      "workerId": 1,
+      "profile": "sub",
+      "queue_wait_ms": 6,
+      "player_start_ms": 0,
+      "transport_ms": 171,
+      "metadata_ms": 199,
+      "playing_ms": 330,
+      "first_frame_ms": 341,
+      "total_visible_ms": 347
+    },
+    {
+      "phase": "cold",
+      "run": 3,
+      "ip": "192.168.41.13",
+      "cameraUid": "ip_192_168_41_13",
+      "workerId": 1,
+      "profile": "sub",
+      "queue_wait_ms": 6,
+      "player_start_ms": 0,
+      "transport_ms": 307,
+      "metadata_ms": 340,
+      "playing_ms": 487,
+      "first_frame_ms": 491,
+      "total_visible_ms": 496
+    },
+    {
+      "phase": "cold",
+      "run": 3,
+      "ip": "192.168.41.23",
+      "cameraUid": "ip_192_168_41_23",
+      "workerId": 1,
+      "profile": "sub",
+      "queue_wait_ms": 5,
+      "player_start_ms": 0,
+      "transport_ms": 455,
+      "metadata_ms": 490,
+      "playing_ms": 637,
+      "first_frame_ms": 673,
+      "total_visible_ms": 679
+    },
+    {
+      "phase": "cold",
+      "run": 3,
+      "ip": "192.168.41.24",
+      "cameraUid": "ip_192_168_41_24",
+      "workerId": 1,
+      "profile": "sub",
+      "queue_wait_ms": 5,
+      "player_start_ms": 0,
+      "transport_ms": 569,
+      "metadata_ms": 596,
+      "playing_ms": 771,
+      "first_frame_ms": 811,
+      "total_visible_ms": 816
+    },
+    {
+      "phase": "cold",
+      "run": 3,
+      "ip": "192.168.41.41",
+      "cameraUid": "ip_192_168_41_41",
+      "workerId": 1,
+      "profile": "sub",
+      "queue_wait_ms": 5,
+      "player_start_ms": 0,
+      "transport_ms": 828,
+      "metadata_ms": 852,
+      "playing_ms": 1033,
+      "first_frame_ms": 1091,
+      "total_visible_ms": 1096
+    }
+  ],
+  "warm": [
+    {
+      "phase": "warm",
+      "ip": "192.168.41.106",
+      "cameraUid": "ip_192_168_41_106",
+      "workerId": 1,
+      "profile": "sub",
+      "queue_wait_ms": 4,
+      "player_start_ms": 0,
+      "transport_ms": 148,
+      "metadata_ms": 196,
+      "playing_ms": 385,
+      "first_frame_ms": 388,
+      "total_visible_ms": 392
+    },
+    {
+      "phase": "warm",
+      "ip": "192.168.41.13",
+      "cameraUid": "ip_192_168_41_13",
+      "workerId": 1,
+      "profile": "sub",
+      "queue_wait_ms": 3,
+      "player_start_ms": 0,
+      "transport_ms": 292,
+      "metadata_ms": 316,
+      "playing_ms": 461,
+      "first_frame_ms": 465,
+      "total_visible_ms": 469
+    },
+    {
+      "phase": "warm",
+      "ip": "192.168.41.23",
+      "cameraUid": "ip_192_168_41_23",
+      "workerId": 1,
+      "profile": "sub",
+      "queue_wait_ms": 3,
+      "player_start_ms": 0,
+      "transport_ms": 406,
+      "metadata_ms": 450,
+      "playing_ms": 603,
+      "first_frame_ms": 622,
+      "total_visible_ms": 625
+    },
+    {
+      "phase": "warm",
+      "ip": "192.168.41.24",
+      "cameraUid": "ip_192_168_41_24",
+      "workerId": 1,
+      "profile": "sub",
+      "queue_wait_ms": 3,
+      "player_start_ms": 0,
+      "transport_ms": 521,
+      "metadata_ms": 543,
+      "playing_ms": 721,
+      "first_frame_ms": 772,
+      "total_visible_ms": 775
+    },
+    {
+      "phase": "warm",
+      "ip": "192.168.41.41",
+      "cameraUid": "ip_192_168_41_41",
+      "workerId": 1,
+      "profile": "sub",
+      "queue_wait_ms": 3,
+      "player_start_ms": 0,
+      "transport_ms": 650,
+      "metadata_ms": 679,
+      "playing_ms": 881,
+      "first_frame_ms": 915,
+      "total_visible_ms": 918
+    }
+  ],
+  "coldSummary": {
+    "queue_wait_ms": {
+      "n": 15,
+      "p50": 2,
+      "p95": 6,
+      "max": 6,
+      "all": [
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        4,
+        5,
+        5,
+        5,
+        6,
+        6
+      ]
+    },
+    "player_start_ms": {
+      "n": 15,
+      "p50": 0,
+      "p95": 0,
+      "max": 0,
+      "all": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "transport_ms": {
+      "n": 15,
+      "p50": 569,
+      "p95": 828,
+      "max": 828,
+      "all": [
+        150,
+        171,
+        282,
+        307,
+        421,
+        455,
+        564,
+        569,
+        594,
+        619,
+        619,
+        621,
+        703,
+        719,
+        828
+      ]
+    },
+    "metadata_ms": {
+      "n": 15,
+      "p50": 596,
+      "p95": 852,
+      "max": 852,
+      "all": [
+        171,
+        199,
+        315,
+        340,
+        449,
+        490,
+        594,
+        596,
+        633,
+        647,
+        647,
+        651,
+        739,
+        749,
+        852
+      ]
+    },
+    "playing_ms": {
+      "n": 15,
+      "p50": 771,
+      "p95": 1078,
+      "max": 1078,
+      "all": [
+        329,
+        330,
+        463,
+        487,
+        579,
+        637,
+        765,
+        771,
+        814,
+        839,
+        851,
+        865,
+        883,
+        1033,
+        1078
+      ]
+    },
+    "first_frame_ms": {
+      "n": 15,
+      "p50": 814,
+      "p95": 1116,
+      "max": 1116,
+      "all": [
+        341,
+        387,
+        491,
+        509,
+        588,
+        673,
+        811,
+        814,
+        903,
+        906,
+        909,
+        1091,
+        1109,
+        1110,
+        1116
+      ]
+    },
+    "total_visible_ms": {
+      "n": 15,
+      "p50": 816,
+      "p95": 1118,
+      "max": 1118,
+      "all": [
+        347,
+        390,
+        496,
+        511,
+        590,
+        679,
+        816,
+        816,
+        907,
+        908,
+        911,
+        1096,
+        1111,
+        1113,
+        1118
+      ]
+    }
+  },
+  "warmSummary": {
+    "queue_wait_ms": {
+      "n": 5,
+      "p50": 3,
+      "p95": 4,
+      "max": 4,
+      "all": [
+        3,
+        3,
+        3,
+        3,
+        4
+      ]
+    },
+    "player_start_ms": {
+      "n": 5,
+      "p50": 0,
+      "p95": 0,
+      "max": 0,
+      "all": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "transport_ms": {
+      "n": 5,
+      "p50": 406,
+      "p95": 650,
+      "max": 650,
+      "all": [
+        148,
+        292,
+        406,
+        521,
+        650
+      ]
+    },
+    "metadata_ms": {
+      "n": 5,
+      "p50": 450,
+      "p95": 679,
+      "max": 679,
+      "all": [
+        196,
+        316,
+        450,
+        543,
+        679
+      ]
+    },
+    "playing_ms": {
+      "n": 5,
+      "p50": 603,
+      "p95": 881,
+      "max": 881,
+      "all": [
+        385,
+        461,
+        603,
+        721,
+        881
+      ]
+    },
+    "first_frame_ms": {
+      "n": 5,
+      "p50": 622,
+      "p95": 915,
+      "max": 915,
+      "all": [
+        388,
+        465,
+        622,
+        772,
+        915
+      ]
+    },
+    "total_visible_ms": {
+      "n": 5,
+      "p50": 625,
+      "p95": 918,
+      "max": 918,
+      "all": [
+        392,
+        469,
+        625,
+        775,
+        918
+      ]
+    }
+  },
+  "directMediaLogs": 75,
+  "browserCodec": {
+    "hints": [
+      "avc1.4D0029",
+      "stream.onmessge {type: mse, value: video/mp4; codecs=\"avc1.4D0029\"}",
+      "hvc1.1.6.L153.B0",
+      "stream.onmessge {type: mse, value: video/mp4; codecs=\"hvc1.1.6.L153.B0\"}"
+    ],
+    "mseFromPage": [
+      {
+        "src": "",
+        "mseCodec": null
+      },
+      {
+        "src": "",
+        "mseCodec": null
+      },
+      {
+        "src": "",
+        "mseCodec": null
+      },
+      {
+        "src": "",
+        "mseCodec": null
+      },
+      {
+        "src": "",
+        "mseCodec": null
+      },
+      {
+        "src": "",
+        "mseCodec": null
+      },
+      {
+        "src": "",
+        "mseCodec": null
+      },
+      {
+        "src": "",
+        "mseCodec": null
+      },
+      {
+        "src": "",
+        "mseCodec": null
+      },
+      {
+        "src": "",
+        "mseCodec": null
+      },
+      {
+        "src": "",
+        "mseCodec": null
+      },
+      {
+        "src": "",
+        "mseCodec": null
+      },
+      {
+        "src": "",
+        "mseCodec": null
+      },
+      {
+        "src": "",
+        "mseCodec": null
+      },
+      {
+        "src": "",
+        "mseCodec": null
+      }
+    ]
+  },
+  "consoleErrors": []
+}

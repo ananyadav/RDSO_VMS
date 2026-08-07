@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import CameraCard from '../components/CameraCard';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import FullscreenCameraModal from '../components/FullscreenCameraModal';
 import CameraSelector from '../components/CameraSelector';
+import LiveCameraGrid from '../components/LiveCameraGrid';
 import LiveViewLocationSelector, {
   type BuildingGroup,
 } from '../components/LiveViewLocationSelector';
@@ -9,7 +9,7 @@ import PageHeader from '../components/PageHeader';
 import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { flushAllUiConsumers } from '../lib/go2rtcConsumerRegistry';
-import { destroyAllGo2RtcPlayers } from '../lib/go2rtcPlayer';
+import { destroyAllGo2RtcPlayers, ensureGo2RtcPlayer } from '../lib/go2rtcPlayer';
 import { waitForGo2RtcReady } from '../lib/liveProvider';
 import { apiFetch, cameraQuery } from '../lib/api';
 import {
@@ -71,8 +71,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
   const [showFullscreenModal, setShowFullscreenModal] = useState(false);
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
   const [selectedLayout, setSelectedLayout] = useState<LiveLayout>(LIVE_LAYOUTS[1]);
-  const gridViewportRef = useRef<HTMLDivElement>(null);
-  const [rowHeightPx, setRowHeightPx] = useState(0);
+  const camerasFetchDoneAtRef = useRef<number | null>(null);
 
   const openFullscreen = (camera: Camera) => {
     setFullscreenCamera(camera);
@@ -87,6 +86,11 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
   useEffect(() => {
     let cancelled = false;
     setGo2rtcReady(false);
+    // Preload player JS immediately (in parallel with readiness) so T2→T3
+    // does not wait on a cold /go2rtc/video-stream.js download.
+    void ensureGo2RtcPlayer().catch(() => {
+      // Mount path will surface the error if load still fails.
+    });
     void waitForGo2RtcReady().finally(() => {
       if (!cancelled) setGo2rtcReady(true);
     });
@@ -214,8 +218,11 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
         { signal: controller.signal },
       );
       if (!res.ok) throw new Error('Failed to fetch cameras');
-      setCameras(await res.json());
+      const data = await res.json();
+      camerasFetchDoneAtRef.current = performance.now();
+      setCameras(data);
     } catch (err) {
+      camerasFetchDoneAtRef.current = null;
       const message =
         err instanceof Error && err.name === 'AbortError'
           ? 'Backend not responding — restart the server and refresh.'
@@ -257,7 +264,6 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
 
   // N×N resolution: first screen shows cols×cols tiles; extra cams scroll.
   const gridCols = selectedLayout.cols;
-  const gridCapacity = gridCols * gridCols;
 
   const sortedCameras = useMemo(
     () =>
@@ -265,20 +271,20 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
     [cameras],
   );
 
+  // Temporary Task-2 timing: API JSON received → first grid paint.
   useEffect(() => {
-    const el = gridViewportRef.current;
-    if (!el) return;
-    const update = () => {
-      const gap = 2; // gap-0.5 ≈ 2px
-      const h = el.clientHeight;
-      const minRow = gridCols >= 5 ? 64 : 80;
-      if (h > 0) setRowHeightPx(Math.max(minRow, Math.floor((h - gap * (gridCols - 1)) / gridCols)));
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [gridCols, selectedGroup, camerasLoading, go2rtcReady, groupsLoading]);
+    if (camerasLoading || sortedCameras.length === 0) return;
+    const started = camerasFetchDoneAtRef.current;
+    if (started == null) return;
+    const raf = requestAnimationFrame(() => {
+      const ms = performance.now() - started;
+      console.info(
+        `[live-grid] api_to_paint_ms=${ms.toFixed(1)} cameras=${sortedCameras.length} cols=${gridCols}`,
+      );
+      camerasFetchDoneAtRef.current = null;
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [camerasLoading, sortedCameras.length, gridCols]);
 
   const subtitle = (() => {
     if (!selectedGroup) {
@@ -402,44 +408,18 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
           )}
 
           {selectedGroup && !camerasLoading && sortedCameras.length > 0 && (
-            <div ref={gridViewportRef} className="flex-1 min-h-0 overflow-y-auto bg-black">
-              <div
-                className="grid gap-0.5"
-                style={{
-                  gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`,
-                  gridAutoRows: rowHeightPx > 0 ? `${rowHeightPx}px` : undefined,
-                }}
-              >
-                {sortedCameras.map((camera, index) => (
-                  <div
-                    key={camera.id}
-                    className={`relative min-w-0 ${
-                      selectedCamera?.id === camera.id
-                        ? 'ring-2 ring-blue-400 dark:ring-blue-500 z-10'
-                        : ''
-                    }`}
-                    style={rowHeightPx > 0 ? { height: rowHeightPx } : { aspectRatio: '16 / 9' }}
-                  >
-                    <div className="absolute inset-0">
-                      <CameraCard
-                        camera={camera}
-                        eagerLive={index < gridCapacity}
-                        streamsReady={go2rtcReady}
-                        liveActive={
-                          !(
-                            showFullscreenModal &&
-                            fullscreenCamera?.id === camera.id
-                          )
-                        }
-                        isRecording={recordingSchedule[camera.id] || false}
-                        onToggleRecording={() => onToggleRecording(camera.id)}
-                        onFullscreen={openFullscreen}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <LiveCameraGrid
+              cameras={sortedCameras}
+              gridCols={gridCols}
+              streamsReady={go2rtcReady}
+              selectedCameraId={selectedCamera?.id ?? null}
+              fullscreenCameraId={fullscreenCamera?.id ?? null}
+              showFullscreenModal={showFullscreenModal}
+              recordingSchedule={recordingSchedule}
+              onToggleRecording={onToggleRecording}
+              onFullscreen={openFullscreen}
+              scrollResetKey={selectedGroup}
+            />
           )}
         </div>
       </div>

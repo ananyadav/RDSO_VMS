@@ -205,6 +205,35 @@ async def _load_go2rtc_context_from_health(
     return stream_errors, live_rows
 
 
+def live_rows_from_memory_cache(cameras: List[dict]) -> Dict[str, dict]:
+    """Immediate in-memory health only — never awaits hydrate / go2rtc / RTSP."""
+    from app.services.stream_health import peek_stream_health
+
+    live_rows: Dict[str, dict] = {}
+    for cam in cameras:
+        cid = str(cam.get("_id") or cam.get("id") or "")
+        if not cid:
+            continue
+        uid = (
+            cam.get("camera_uid")
+            or cam.get("cameraUid")
+            or make_camera_uid(cam.get("ip_address") or "")
+            or ""
+        )
+        health = peek_stream_health(cid, uid)
+        if health and health.get("alarm"):
+            live_rows[cid] = {
+                "cameraId": cid,
+                "cameraUid": uid,
+                "issueCategory": "offline",
+                "confirmedOffline": True,
+                "issueMessage": (health.get("message") or "").strip()
+                or ISSUE_LABELS.get((health.get("category") or "offline"), "Not streaming"),
+            }
+        # Missing/unknown → omit row; Live View treats as playable/online.
+    return live_rows
+
+
 async def _load_go2rtc_context(
     cameras: Optional[List[dict]] = None,
     *,

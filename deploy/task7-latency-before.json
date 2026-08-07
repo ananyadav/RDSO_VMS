@@ -1,0 +1,38 @@
+{
+  "label": "before",
+  "group": "rml_6_corporate_office_2nd_floor",
+  "targetUids": [
+    "ip_192_168_41_106",
+    "ip_192_168_41_13",
+    "ip_192_168_41_23",
+    "ip_192_168_41_24",
+    "ip_192_168_41_41"
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "samples": [],
+      "allCount": 1
+    },
+    {
+      "run": 2,
+      "samples": [],
+      "allCount": 1
+    },
+    {
+      "run": 3,
+      "samples": [
+        {
+          "cameraId": "6a38daf9c8082fc3075823f9",
+          "cameraUid": "ip_192_168_41_24",
+          "workerId": 1,
+          "metadata_ms": 616,
+          "first_frame_ms": 3486,
+          "total_visible_ms": 4158,
+          "queue_wait_ms": 2
+        }
+      ],
+      "allCount": 2
+    }
+  ]
+}

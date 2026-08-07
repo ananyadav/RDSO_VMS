@@ -183,7 +183,7 @@ export default defineConfig({
         port: 3000,
         strictPort: true,
         proxy: {
-            // WebSocket for go2rtc live view (and PTZ).
+            // HTTP assets under /go2rtc (player JS). Live video WS is /media/wN via Nginx — not here.
             '/go2rtc': {
                 target: `http://${BACKEND_HOST}:${BACKEND_PORT}`,
                 changeOrigin: true,

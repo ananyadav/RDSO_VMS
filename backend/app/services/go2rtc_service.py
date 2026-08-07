@@ -1300,12 +1300,37 @@ async def start_go2rtc_on_startup() -> None:
 
 
 def get_live_config() -> Dict[str, Any]:
-    from app.services.go2rtc_workers import WORKERS_ENABLED
+    """Live View always uses Nginx → /media/w{id} → go2rtc (direct media)."""
+    from app.services.go2rtc_workers import WORKERS_ENABLED, worker_ports
 
-    direct_media = os.getenv("GO2RTC_DIRECT_MEDIA", "").strip().lower() in ("1", "true", "yes")
+    media_workers: list[dict] = []
+    if WORKERS_ENABLED:
+        for wid in range(1, 4):
+            api_port, _rtsp, webrtc_port = worker_ports(wid)
+            media_workers.append(
+                {
+                    "workerId": wid,
+                    "apiPort": api_port,
+                    "webrtcPort": webrtc_port,
+                    "mediaPath": f"/media/w{wid}",
+                }
+            )
+    else:
+        api_port = GO2RTC_API_PORT
+        media_workers.append(
+            {
+                "workerId": 1,
+                "apiPort": api_port,
+                "webrtcPort": int(os.getenv("GO2RTC_WEBRTC_PORT", "8555")),
+                "mediaPath": "/media/w1",
+            }
+        )
+
     return {
         "provider": "go2rtc",
         "go2rtcEnabled": GO2RTC_ENABLED,
         "go2rtcWorkersEnabled": WORKERS_ENABLED,
-        "directMediaEnabled": direct_media,
+        # Always true — Python live WS proxy was removed (Task 4B).
+        "directMediaEnabled": True,
+        "mediaWorkers": media_workers,
     }

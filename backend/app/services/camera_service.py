@@ -102,8 +102,12 @@ def _camera_list_item(cam: dict, *, admin: bool = False) -> dict:
         "activity": bool(cam.get("activity")),
     }
     wid = cam.get("worker_id")
-    if wid is not None and wid != "":
-        item["workerId"] = wid
+    try:
+        from app.services.go2rtc_workers import normalize_worker_id
+
+        item["workerId"] = normalize_worker_id(wid) or 1
+    except Exception:
+        item["workerId"] = 1 if wid in (None, "") else wid
     if admin:
         item["ip_address"] = ip
         item["camera_uid"] = uid
@@ -340,10 +344,13 @@ async def query_cameras(
     lean=True (Live View): skip location-catalog round-trip and use a thin Mongo
     projection so large site/building scopes return quickly.
     """
+    import time as _time
+
     filters = filters or {}
     include_inactive = bool(filters.get("include_inactive")) and is_admin(user)
     active_only = bool(filters.get("active_only"))
 
+    t_loc0 = _time.perf_counter()
     floor_meta = None
     needs_meta = bool(
         filters.get("camera_group")
@@ -355,6 +362,7 @@ async def query_cameras(
         from app.services.location_store import list_buildings
 
         floor_meta = build_floor_group_meta(await list_buildings())
+    location_ms = (_time.perf_counter() - t_loc0) * 1000
 
     if active_only:
         active_filter = active_camera_filter(False)
@@ -371,14 +379,29 @@ async def query_cameras(
 
     projection = None if management else _LIVE_CAMERA_PROJECTION
     cameras: List[dict] = []
+    t_mongo0 = _time.perf_counter()
     cursor = camera_collection.find(query, projection).sort("name", 1)
     async for cam in cursor:
         cameras.append(cam)
+    mongo_ms = (_time.perf_counter() - t_mongo0) * 1000
 
+    t_map0 = _time.perf_counter()
     if management:
-        return [_camera_management_item(c) for c in cameras]
-    admin = is_admin(user)
-    return [_camera_list_item(c, admin=admin) for c in cameras]
+        items = [_camera_management_item(c) for c in cameras]
+    else:
+        admin = is_admin(user)
+        items = [_camera_list_item(c, admin=admin) for c in cameras]
+    mapping_ms = (_time.perf_counter() - t_map0) * 1000
+
+    # Temporary TASK-1 timing — Live View lean path only.
+    if lean and not management:
+        query_cameras._last_timings = {  # type: ignore[attr-defined]
+            "mongo_ms": mongo_ms,
+            "location_ms": location_ms,
+            "mapping_ms": mapping_ms,
+            "camera_count": len(items),
+        }
+    return items
 
 
 async def get_camera_groups(request) -> dict:
@@ -432,15 +455,24 @@ async def get_camera_groups(request) -> dict:
 
 async def get_camera_info(request=None, filters: Optional[Dict[str, Any]] = None):
     """Camera list for live view / playback with optional filters."""
-    from app.services.camera_management import _load_go2rtc_context, apply_stream_online_status
+    import time as _time
+
+    from app.services.camera_management import (
+        apply_stream_online_status,
+        live_rows_from_memory_cache,
+    )
+    from app.services.stream_health import ensure_stream_health_hydrated
     from app.services.video_streaming import CAMERA_SOURCES
 
+    t_total0 = _time.perf_counter()
     user = await get_effective_user(request) if request else None
     if request and not filters:
         filters = _parse_filters(request)
 
     cameras = await query_cameras(user, filters, lean=True)
+    timings = dict(getattr(query_cameras, "_last_timings", {}) or {})
 
+    t_src0 = _time.perf_counter()
     for cam_id, source in CAMERA_SOURCES.items():
         if user is not None and not is_admin(user):
             access = build_access_filter(user)
@@ -459,10 +491,16 @@ async def get_camera_info(request=None, filters: Optional[Dict[str, Any]] = None
             "location_path": "",
             "is_active": True,
         })
+    timings["sources_ms"] = (_time.perf_counter() - t_src0) * 1000
 
-    # Online = RTSP probe OK / not confirmed dead. Disabled stays offline for Live.
-    _, live_rows = await _load_go2rtc_context(cameras)
+    # Live View must not wait for DB hydrate / go2rtc / RTSP probes.
+    # Use in-memory health if already warm; otherwise return cameras as playable.
+    t_health0 = _time.perf_counter()
+    ensure_stream_health_hydrated()  # fire-and-forget background hydrate
+    live_rows = live_rows_from_memory_cache(cameras)
     apply_stream_online_status(cameras, live_rows, playable_for_live=True)
+    timings["health_ms"] = (_time.perf_counter() - t_health0) * 1000
+    timings["go2rtc_ms"] = 0.0  # no go2rtc worker fan-out on this path
 
     for_playback = (
         request
@@ -471,6 +509,20 @@ async def get_camera_info(request=None, filters: Optional[Dict[str, Any]] = None
     if for_playback and is_admin(user) and await has_unmapped_recordings():
         cameras.append(legacy_playback_camera_item())
 
+    timings["total_ms"] = (_time.perf_counter() - t_total0) * 1000
+    timings["camera_count"] = len(cameras)
+    logger.info(
+        "[camera-list] mongo_ms=%.1f location_ms=%.1f go2rtc_ms=%.1f health_ms=%.1f "
+        "mapping_ms=%.1f total_ms=%.1f camera_count=%s",
+        timings.get("mongo_ms", 0),
+        timings.get("location_ms", 0),
+        timings.get("go2rtc_ms", 0),
+        timings.get("health_ms", 0),
+        timings.get("mapping_ms", 0),
+        timings.get("total_ms", 0),
+        timings.get("camera_count", 0),
+    )
+    get_camera_info._last_timings = timings  # type: ignore[attr-defined]
     return cameras
 
 

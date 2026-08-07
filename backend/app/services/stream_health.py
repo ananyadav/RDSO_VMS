@@ -473,6 +473,11 @@ def ensure_stream_health_scan() -> dict:
 def get_stream_health(camera_id: str, camera_uid: str = "") -> Optional[dict]:
     """Return latest probe result; drop stale failure alarms so CM/Live stay accurate."""
     ensure_stream_health_hydrated()
+    return peek_stream_health(camera_id, camera_uid)
+
+
+def peek_stream_health(camera_id: str, camera_uid: str = "") -> Optional[dict]:
+    """Non-blocking in-memory lookup only — never awaits DB hydrate or probes."""
     result = _results.get(camera_id) or (camera_uid and _results.get(camera_uid)) or None
     if not result:
         return None

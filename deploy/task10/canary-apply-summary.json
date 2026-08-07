@@ -1,0 +1,49 @@
+{
+  "inspected": 25,
+  "attempted": 22,
+  "success": 22,
+  "failed": 0,
+  "skipped_already_1s": 0,
+  "ch101_all_unchanged_on_success": true,
+  "distributions_before": {
+    "fps": {
+      "25.0": 10,
+      "15.0": 9,
+      "20.0": 2,
+      "10.0": 1
+    },
+    "GovLength": {
+      "50": 21,
+      "5": 1
+    },
+    "keyFrameInterval": {
+      "2000": 10,
+      "3333": 9,
+      "2500": 2,
+      "500": 1
+    },
+    "codec": {
+      "H.265": 19,
+      "H.264": 3
+    },
+    "settings_by_fps": {
+      "25.0": {
+        "GovLength": 25,
+        "keyFrameInterval": 1000
+      },
+      "15.0": {
+        "GovLength": 15,
+        "keyFrameInterval": 1000
+      },
+      "20.0": {
+        "GovLength": 20,
+        "keyFrameInterval": 1000
+      },
+      "10.0": {
+        "GovLength": 10,
+        "keyFrameInterval": 1000
+      }
+    }
+  },
+  "failures": []
+}

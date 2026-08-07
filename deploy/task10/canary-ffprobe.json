@@ -1,0 +1,182 @@
+[
+  {
+    "ip": "192.168.41.31",
+    "codec_name": "hevc",
+    "width": 640,
+    "height": 360,
+    "avg_frame_rate": "25/1",
+    "frames": 152,
+    "i_frames": 7,
+    "gaps_frames": [
+      25,
+      25,
+      25,
+      25,
+      25,
+      25
+    ],
+    "gaps_sec_est": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "gap_median_sec": 1.0,
+    "fps_used": 25.0,
+    "workerId": 1,
+    "cameraUid": "ip_192_168_41_31"
+  },
+  {
+    "ip": "192.168.41.33",
+    "codec_name": "hevc",
+    "width": 640,
+    "height": 360,
+    "avg_frame_rate": "15/1",
+    "frames": 92,
+    "i_frames": 8,
+    "gaps_frames": [
+      1,
+      15,
+      15,
+      15,
+      15,
+      15,
+      15
+    ],
+    "gaps_sec_est": [
+      0.067,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "gap_median_sec": 1.0,
+    "fps_used": 15.0,
+    "workerId": 1,
+    "cameraUid": "ip_192_168_41_33"
+  },
+  {
+    "ip": "192.168.46.49",
+    "codec_name": "h264",
+    "width": 640,
+    "height": 360,
+    "avg_frame_rate": "25/1",
+    "frames": 152,
+    "i_frames": 8,
+    "gaps_frames": [
+      1,
+      25,
+      25,
+      25,
+      25,
+      25,
+      25
+    ],
+    "gaps_sec_est": [
+      0.04,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "gap_median_sec": 1.0,
+    "fps_used": 25.0,
+    "workerId": 2,
+    "cameraUid": "ip_192_168_46_49"
+  },
+  {
+    "ip": "192.168.44.170",
+    "codec_name": "h264",
+    "width": 640,
+    "height": 360,
+    "avg_frame_rate": "20/1",
+    "frames": 122,
+    "i_frames": 8,
+    "gaps_frames": [
+      1,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20
+    ],
+    "gaps_sec_est": [
+      0.05,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "gap_median_sec": 1.0,
+    "fps_used": 20.0,
+    "workerId": 2,
+    "cameraUid": "ip_192_168_44_170"
+  },
+  {
+    "ip": "192.168.9.36",
+    "codec_name": "hevc",
+    "width": 640,
+    "height": 360,
+    "avg_frame_rate": "25/1",
+    "frames": 152,
+    "i_frames": 7,
+    "gaps_frames": [
+      25,
+      25,
+      25,
+      25,
+      25,
+      25
+    ],
+    "gaps_sec_est": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "gap_median_sec": 1.0,
+    "fps_used": 25.0,
+    "workerId": 3,
+    "cameraUid": "ip_192_168_9_36"
+  },
+  {
+    "ip": "192.168.8.71",
+    "codec_name": "hevc",
+    "width": 640,
+    "height": 360,
+    "avg_frame_rate": "15/1",
+    "frames": 91,
+    "i_frames": 7,
+    "gaps_frames": [
+      1,
+      15,
+      15,
+      15,
+      15,
+      15
+    ],
+    "gaps_sec_est": [
+      0.067,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "gap_median_sec": 1.0,
+    "fps_used": 15.0,
+    "workerId": 3,
+    "cameraUid": "ip_192_168_8_71"
+  }
+]

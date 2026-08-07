@@ -1,11 +1,11 @@
 """
-go2rtc Phase 1 routes — status, start, reverse proxy for dev UI.
+go2rtc routes — status, start, HTTP reverse proxy for player assets / control.
+Live video WebSockets go Browser → Nginx /media/wN → go2rtc (not through Python).
 """
 
-import asyncio
 import logging
 
-from aiohttp import ClientSession, ClientTimeout, WSMsgType, web
+from aiohttp import ClientSession, ClientTimeout, web
 
 from app.core.access_control import require_admin, require_user
 from app.core.auth_context import get_effective_user
@@ -42,28 +42,12 @@ from app.services.stream_health import (
 
 logger = logging.getLogger(__name__)
 
-_BENIGN_WS_PHRASES = (
-    "cannot write to closing transport",
-    "connection closed",
-    "connection reset",
-    "closing transport",
-    "broken pipe",
-    "websocket connection is closed",
-)
-
 _GO2RTC_PLAYER_ASSETS = frozenset(
     {
         "video-stream.js",
         "video-rtc.js",
     }
 )
-
-
-def _benign_ws_disconnect(exc: BaseException) -> bool:
-    if isinstance(exc, (asyncio.CancelledError, ConnectionResetError, ConnectionAbortedError)):
-        return True
-    msg = str(exc).lower()
-    return any(phrase in msg for phrase in _BENIGN_WS_PHRASES)
 
 
 async def _admin_only(request: web.Request) -> web.Response | None:
@@ -232,6 +216,30 @@ async def live_config(request: web.Request) -> web.Response:
     return web.json_response(get_live_config())
 
 
+async def go2rtc_media_auth(request: web.Request) -> web.Response:
+    """Nginx auth_request target for /media/w{id}/* — session + stream ACL, no video bytes."""
+    user = await get_effective_user(request)
+    if user is None:
+        return web.Response(status=401, text="Authentication required")
+
+    src = (request.query.get("src") or "").strip()
+    if not src:
+        # Allow generic worker asset probes only for admins; live players always pass src.
+        if is_admin(user):
+            return web.Response(status=200, text="ok")
+        return web.Response(status=403, text="src query parameter required")
+
+    stream_ref = parse_stream_camera_id(src)
+    if not stream_ref:
+        return web.Response(status=403, text="Invalid stream")
+    cam_doc = await get_camera_by_ref(stream_ref)
+    if cam_doc and cam_doc.get("is_active") is False:
+        return web.Response(status=403, text="Camera disabled")
+    if not user_can_access_stream(user, src, cam_doc):
+        return web.Response(status=403, text="Camera access denied")
+    return web.Response(status=200, text="ok")
+
+
 async def go2rtc_start(request: web.Request) -> web.Response:
     denied = await _admin_only(request)
     if denied is not None:
@@ -384,91 +392,26 @@ async def go2rtc_proxy(request: web.Request) -> web.StreamResponse:
     return await _proxy_to_go2rtc(request, path, api_url=api_url)
 
 
-async def go2rtc_ws_proxy(request: web.Request) -> web.WebSocketResponse:
-    """WebSocket proxy for go2rtc /api/ws (WebRTC/MSE signaling)."""
-    src = request.query.get("src", "")
-    user = await get_effective_user(request)
-    if user is None:
-        raise web.HTTPUnauthorized(text="Authentication required")
+async def go2rtc_ws_removed(request: web.Request) -> web.Response:
+    """Former Python live-video WebSocket proxy — permanently removed (Task 4B).
 
-    if not src:
-        raise web.HTTPForbidden(text="src query parameter required")
-
-    stream_ref = parse_stream_camera_id(src)
-    if not stream_ref:
-        raise web.HTTPForbidden(text="Invalid stream")
-    cam_doc = await get_camera_by_ref(stream_ref)
-    if cam_doc and cam_doc.get("is_active") is False:
-        raise web.HTTPForbidden(text="Camera disabled")
-    if not user_can_access_stream(user, src, cam_doc):
-        raise web.HTTPForbidden(text="Camera access denied")
-
-    api_url = await get_api_url_for_camera_doc(cam_doc)
-    ws_base = api_url.replace("http://", "ws://", 1).replace("https://", "wss://", 1)
-    target = (
-        f"{ws_base}/api/ws?{request.query_string}"
-        if request.query_string
-        else f"{ws_base}/api/ws"
+    Live View must use Nginx → go2rtc: /media/w{workerId}/api/ws
+    """
+    return web.json_response(
+        {
+            "error": "Direct media route required",
+            "message": (
+                "Python live-video WebSocket proxy was removed. "
+                "Use /media/w{workerId}/api/ws via Nginx (see deploy/nginx-cctv-direct-media.conf)."
+            ),
+        },
+        status=410,
     )
-
-    client_ws = web.WebSocketResponse()
-    await client_ws.prepare(request)
-
-    timeout = ClientTimeout(total=None)
-    try:
-        async with ClientSession(timeout=timeout) as session:
-            async with session.ws_connect(target) as upstream_ws:
-
-                async def forward_to_client() -> None:
-                    try:
-                        async for msg in upstream_ws:
-                            if client_ws.closed:
-                                break
-                            if msg.type == WSMsgType.TEXT:
-                                await client_ws.send_str(msg.data)
-                            elif msg.type == WSMsgType.BINARY:
-                                await client_ws.send_bytes(msg.data)
-                            elif msg.type in (WSMsgType.CLOSE, WSMsgType.ERROR):
-                                break
-                    except Exception as exc:
-                        if not _benign_ws_disconnect(exc):
-                            logger.warning(
-                                "[go2rtc] WS client forward error src=%s: %s", src, exc
-                            )
-
-                async def forward_to_upstream() -> None:
-                    try:
-                        async for msg in client_ws:
-                            if upstream_ws.closed:
-                                break
-                            if msg.type == WSMsgType.TEXT:
-                                await upstream_ws.send_str(msg.data)
-                            elif msg.type == WSMsgType.BINARY:
-                                await upstream_ws.send_bytes(msg.data)
-                            elif msg.type in (WSMsgType.CLOSE, WSMsgType.ERROR):
-                                break
-                    except Exception as exc:
-                        if not _benign_ws_disconnect(exc):
-                            logger.warning(
-                                "[go2rtc] WS upstream forward error src=%s: %s", src, exc
-                            )
-
-                await asyncio.gather(
-                    forward_to_client(),
-                    forward_to_upstream(),
-                    return_exceptions=True,
-                )
-    except Exception as exc:
-        if not _benign_ws_disconnect(exc):
-            logger.warning("[go2rtc] WS proxy error src=%s: %s", src, exc)
-    finally:
-        if not client_ws.closed:
-            await client_ws.close()
-    return client_ws
 
 
 def setup_go2rtc_routes(app: web.Application) -> None:
     app.router.add_get("/api/go2rtc/live-config", live_config)
+    app.router.add_get("/api/go2rtc/media-auth", go2rtc_media_auth)
     app.router.add_get("/api/go2rtc/status", go2rtc_status)
     app.router.add_get("/api/go2rtc/diagnostics", go2rtc_diagnostics)
     app.router.add_get("/api/go2rtc/health-scan", go2rtc_health_scan)
@@ -486,6 +429,7 @@ def setup_go2rtc_routes(app: web.Application) -> None:
     app.router.add_post("/api/go2rtc/workers/heal", go2rtc_workers_heal)
     app.router.add_post("/api/go2rtc/workers/rebalance", go2rtc_workers_rebalance)
     app.router.add_post("/api/go2rtc/workers/{worker_id}/sync", go2rtc_worker_sync)
-    app.router.add_get("/go2rtc/api/ws", go2rtc_ws_proxy)
+    # Explicit reject — do not fall through to HTTP go2rtc_proxy for live WS.
+    app.router.add_get("/go2rtc/api/ws", go2rtc_ws_removed)
     for method in ("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"):
         app.router.add_route(method, "/go2rtc/{path:.*}", go2rtc_proxy)

@@ -1,0 +1,175 @@
+# Production deploy → rml-srv-2 (/home/vms/cctv_ananya/CCTV)
+#
+# Flow:
+#   1. CI builds frontend → backend/static
+#   2. CI runs backend unit tests
+#   3. rsync (preserves server .env, Recordings/, go2rtc/, tools/)
+#   4. SSH: install deps, recreate PM2 cctv-backend, ensure go2rtc workers
+#
+# Required GitHub secrets: SSH_HOST, SSH_USER, SSH_PRIVATE_KEY
+# Optional: SSH_PORT (default 22)
+
+name: production deploy
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: cctv-production
+  cancel-in-progress: false
+
+env:
+  SERVER_DEPLOY_PATH: /home/vms/cctv_ananya/CCTV
+  PM2_BACKEND_NAME: cctv-backend-new
+  NODE_VERSION: "20"
+  API_PORT: "10000"
+
+jobs:
+  test-build-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend into backend/static
+        run: |
+          set -euo pipefail
+          cd frontend
+          npm ci
+          npm run build
+          mkdir -p ../backend/static
+          rm -rf ../backend/static/*
+          cp -r dist/* ../backend/static/
+          test -f ../backend/static/index.html
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install Python dependencies
+        run: python3 -m pip install -r backend/requirements.txt
+
+      - name: Run backend unit tests
+        env:
+          PYTHONPATH: backend
+        run: python3 -m unittest discover -s backend/tests -p "test_*.py"
+
+      - name: Configure SSH
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          PORT="${{ secrets.SSH_PORT }}"
+          if [ -z "$PORT" ]; then PORT=22; fi
+          ssh-keyscan -p "$PORT" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Rsync to server
+        env:
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          set -euo pipefail
+          PORT="${SSH_PORT:-22}"
+          RSYNC_SSH="ssh -i ~/.ssh/deploy_key -p ${PORT} -o StrictHostKeyChecking=accept-new"
+          rsync -avz --delete \
+            -e "$RSYNC_SSH" \
+            --exclude '.env' \
+            --exclude '.env.*' \
+            --exclude 'Recordings/' \
+            --exclude 'recordings/' \
+            --exclude 'go2rtc/' \
+            --exclude 'tools/' \
+            --exclude 'node_modules/' \
+            --exclude 'frontend/node_modules/' \
+            --exclude 'frontend/dist/' \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude '.venv/' \
+            --exclude 'venv/' \
+            --exclude '.pytest_cache/' \
+            --exclude '__pycache__/' \
+            --exclude '*.pyc' \
+            --exclude 'deploy/nginx-win/' \
+            --exclude 'hooks/' \
+            ./ "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.SERVER_DEPLOY_PATH }}/"
+
+      - name: Deploy on server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          command_timeout: 15m
+          script: |
+            set -euo pipefail
+            cd "${{ env.SERVER_DEPLOY_PATH }}"
+            test -f backend/static/index.html
+            test -f .env
+
+            # Load server env (Mongo URI, GO2RTC_*, etc.)
+            set -a
+            # shellcheck disable=SC1091
+            . ./.env
+            set +a
+
+            if [ -z "${GO2RTC_WEBRTC_HOST:-}" ]; then
+              GO2RTC_WEBRTC_HOST="$(hostname -I 2>/dev/null | awk '{print $1}')"
+            fi
+            export GO2RTC_WEBRTC_HOST
+            echo "GO2RTC_WEBRTC_HOST=${GO2RTC_WEBRTC_HOST}"
+
+            # Prefer existing server venv; otherwise install for current user
+            if [ -x .venv/bin/python ]; then
+              . .venv/bin/activate
+              python -m pip install -r backend/requirements.txt
+              PY=python
+            elif [ -x venv/bin/python ]; then
+              . venv/bin/activate
+              python -m pip install -r backend/requirements.txt
+              PY=python
+            else
+              python3 -m pip install --user -r backend/requirements.txt
+              PY=python3
+            fi
+
+            # Recreate PM2 process so shell env (GO2RTC_WEBRTC_HOST) is applied
+            if pm2 describe "${{ env.PM2_BACKEND_NAME }}" >/dev/null 2>&1; then
+              pm2 delete "${{ env.PM2_BACKEND_NAME }}"
+            fi
+            pm2 start "$PY" \
+              --name "${{ env.PM2_BACKEND_NAME }}" \
+              --cwd "${{ env.SERVER_DEPLOY_PATH }}" \
+              -- -m backend.app.main --api-port "${{ env.API_PORT }}"
+
+            # Wait for API health
+            ok=0
+            for i in $(seq 1 30); do
+              if curl -fsS "http://127.0.0.1:${{ env.API_PORT }}/api/health" >/dev/null 2>&1; then
+                ok=1
+                break
+              fi
+              sleep 2
+            done
+            if [ "$ok" -ne 1 ]; then
+              echo "ERROR: backend health check failed"
+              pm2 logs "${{ env.PM2_BACKEND_NAME }}" --lines 80 --nostream || true
+              exit 1
+            fi
+
+            python3 backend/scripts/ensure_go2rtc_workers.py
+            pm2 save
+            pm2 list
+            curl -fsS "http://127.0.0.1:${{ env.API_PORT }}/api/health"
+            echo

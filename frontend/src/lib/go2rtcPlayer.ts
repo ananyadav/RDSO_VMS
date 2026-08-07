@@ -1,15 +1,14 @@
 /** Load go2rtc video-stream custom element (WebRTC + MSE). */
 
-import { apiFetch } from './api';
 import {
   destroyLiveMonitorVideo,
   LIVE_MONITOR_PLAYER_CLASS,
   watchGo2RtcVideo,
 } from './liveMonitorVideo';
-import { buildGo2RtcStreamSrc, isDirectMediaEnabled, normalizeWorkerId } from './mediaUrls';
+import type { LiveLatencySession } from './liveLatencyMetrics';
+import { buildGo2RtcStreamSrc, normalizeWorkerId } from './mediaUrls';
 
 const GO2RTC_PLAYER_MODULE = '/go2rtc/video-stream.js';
-const GO2RTC_RTC_MODULE = '/go2rtc/video-rtc.js';
 const REGISTER_WAIT_MS = 15_000;
 
 let loadPromise: Promise<void> | null = null;
@@ -41,21 +40,6 @@ async function waitForPlayerRegistration(timeoutMs: number): Promise<boolean> {
   return isPlayerRegistered();
 }
 
-async function preflightGo2RtcAssets(): Promise<void> {
-  for (const path of [GO2RTC_PLAYER_MODULE, GO2RTC_RTC_MODULE]) {
-    const res = await apiFetch(path, { headers: { Accept: 'text/javascript,*/*' } });
-    if (!res.ok) {
-      const hint =
-        res.status === 401
-          ? 'Session expired — log in again'
-          : res.status === 502 || res.status === 503
-            ? 'Backend cannot reach go2rtc — open go2rtc Diagnostics and click Start'
-            : `HTTP ${res.status}`;
-      throw new Error(`Failed to load ${path} (${hint})`);
-    }
-  }
-}
-
 async function loadGo2RtcModule(): Promise<void> {
   if (isPlayerRegistered()) return;
 
@@ -67,8 +51,9 @@ async function loadGo2RtcModule(): Promise<void> {
     return;
   }
 
-  await preflightGo2RtcAssets();
-
+  // Load the module once via <script type="module">.
+  // Do NOT preflight-fetch the JS bodies first — that doubled download cost
+  // (~1.3s through Nginx→Python→go2rtc) and sat on the T2→T3 path.
   await new Promise<void>((resolve, reject) => {
     const script = document.createElement('script');
     script.type = 'module';
@@ -80,7 +65,12 @@ async function loadGo2RtcModule(): Promise<void> {
         else reject(new Error('Failed to register go2rtc video-stream custom element'));
       });
     };
-    script.onerror = () => reject(new Error(`Failed to load ${GO2RTC_PLAYER_MODULE}`));
+    script.onerror = () =>
+      reject(
+        new Error(
+          `Failed to load ${GO2RTC_PLAYER_MODULE} (check session / go2rtc Diagnostics)`,
+        ),
+      );
     document.head.appendChild(script);
   });
 }
@@ -106,6 +96,84 @@ export interface Go2RtcMountOptions {
   onFirstFrame?: (ms: number) => void;
   onModeLabel?: (label: string) => void;
   onError?: (message: string) => void;
+  /** Dev-only latency instrumentation (Task 6). */
+  latencySession?: LiveLatencySession | null;
+}
+
+function attachVideoLatencyHooks(
+  video: HTMLVideoElement,
+  session: LiveLatencySession | null | undefined,
+  onFirstFrame: () => void,
+): () => void {
+  if (!session) {
+    return () => {};
+  }
+
+  let rvfcId: number | null = null;
+  const cleanups: Array<() => void> = [];
+
+  const markT7Once = () => {
+    if (session.t7 != null) return;
+    session.markT7();
+    onFirstFrame();
+  };
+
+  const tryMarkT4 = () => {
+    if (session.t4 != null) return;
+    const stream = video.srcObject;
+    if (stream instanceof MediaStream && stream.getVideoTracks().some((t) => t.readyState === 'live')) {
+      session.markT4('srcObject-live');
+      return;
+    }
+    if (video.networkState === HTMLMediaElement.NETWORK_LOADING && video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      session.markT4('media-loading');
+    }
+  };
+
+  const onLoadStart = () => {
+    if (session.t4 == null) session.markT4('loadstart');
+  };
+  const onLoadedMetadata = () => session.markT5();
+  const onPlaying = () => session.markT6();
+
+  video.addEventListener('loadstart', onLoadStart, { once: true });
+  video.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
+  video.addEventListener('playing', onPlaying, { once: true });
+  cleanups.push(() => {
+    video.removeEventListener('loadstart', onLoadStart);
+    video.removeEventListener('loadedmetadata', onLoadedMetadata);
+    video.removeEventListener('playing', onPlaying);
+  });
+
+  if (typeof video.requestVideoFrameCallback === 'function') {
+    rvfcId = video.requestVideoFrameCallback(() => {
+      if (video.videoWidth > 0) markT7Once();
+    });
+    cleanups.push(() => {
+      if (rvfcId != null && typeof video.cancelVideoFrameCallback === 'function') {
+        try {
+          video.cancelVideoFrameCallback(rvfcId);
+        } catch {
+          // ignore
+        }
+      }
+    });
+  }
+
+  const poll = window.setInterval(() => {
+    tryMarkT4();
+    if (session.t7 == null && video.videoWidth > 0 && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+      session.markT7();
+      onFirstFrame();
+      window.clearInterval(poll);
+    }
+  }, 100);
+  cleanups.push(() => window.clearInterval(poll));
+  tryMarkT4();
+
+  return () => {
+    for (const fn of cleanups) fn();
+  };
 }
 
 /** go2rtc VideoRTC internals — background=true skips DOM disconnect teardown. */
@@ -159,6 +227,9 @@ export async function mountGo2RtcPlayer(
   container: HTMLElement,
   options: Go2RtcMountOptions,
 ): Promise<() => void> {
+  // T3 = real start of mountGo2RtcPlayer (before any await inside).
+  options.latencySession?.markT3();
+
   await ensureGo2RtcPlayer();
   container.replaceChildren();
   container.classList.add(LIVE_MONITOR_PLAYER_CLASS);
@@ -166,6 +237,7 @@ export async function mountGo2RtcPlayer(
   const t0 = performance.now();
   let reported = false;
   let active = true;
+  let detachLatency: (() => void) | null = null;
 
   const el = document.createElement('video-stream') as VideoStreamEl;
 
@@ -178,22 +250,41 @@ export async function mountGo2RtcPlayer(
   el.style.display = 'block';
   el.style.width = '100%';
   el.style.height = '100%';
-  const directMedia = await isDirectMediaEnabled();
   const workerId = normalizeWorkerId(options.workerId);
-  el.src = buildGo2RtcStreamSrc(options.stream, workerId, directMedia);
+  let src: string;
+  try {
+    src = buildGo2RtcStreamSrc(options.stream, workerId);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Direct media route unavailable';
+    console.error(`[live-media] ${msg}`);
+    options.onError?.(msg);
+    throw err;
+  }
+  el.src = src;
+
+  if (import.meta.env.DEV) {
+    console.info(
+      `[live-media]\ncamera=${options.stream}\nworker=${workerId ?? 'n/a'}\nmode=direct\nurl=${src}`,
+    );
+  }
 
   const reportFrame = () => {
     if (reported) return;
     const video = el.video;
     if (!video || video.videoWidth === 0) return;
     reported = true;
+    if (options.latencySession?.t7 == null) {
+      options.latencySession?.markT7();
+    }
     options.onFirstFrame?.(Math.round(performance.now() - t0));
   };
 
-  const poll = window.setInterval(() => {
-    reportFrame();
-    if (reported) window.clearInterval(poll);
-  }, 100);
+  const poll = options.latencySession
+    ? null
+    : window.setInterval(() => {
+        reportFrame();
+        if (reported) window.clearInterval(poll!);
+      }, 100);
 
   const modeObserver = window.setInterval(() => {
     if (!active) return;
@@ -213,11 +304,16 @@ export async function mountGo2RtcPlayer(
 
   container.appendChild(el);
 
-  const unwatchVideo = watchGo2RtcVideo(container, () => active, () => reportFrame());
+  const unwatchVideo = watchGo2RtcVideo(container, () => active, (video) => {
+    detachLatency?.();
+    detachLatency = attachVideoLatencyHooks(video, options.latencySession, reportFrame);
+  });
 
   const cleanup = () => {
     active = false;
-    window.clearInterval(poll);
+    if (poll != null) window.clearInterval(poll);
+    detachLatency?.();
+    detachLatency = null;
     window.clearInterval(modeObserver);
     el.removeEventListener('error', onElError);
     unwatchVideo();

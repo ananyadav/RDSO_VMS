@@ -8,32 +8,31 @@ export function normalizeWorkerId(value: unknown): number | null {
 }
 
 /**
- * WebSocket base path for go2rtc playback.
- * When direct media is enabled (Nginx → worker), use /media/w{id}/api/ws.
- * Otherwise fall back to Python proxy /go2rtc/api/ws.
+ * WebSocket base path for go2rtc Live View playback.
+ * Always Nginx → go2rtc worker: /media/w{id}/api/ws
+ * Python /go2rtc/api/ws proxy was removed (Task 4B).
  */
-export function go2rtcWsPath(workerId?: number | null, directMedia?: boolean): string {
-  if (directMedia && workerId != null && workerId > 0) {
-    return `/media/w${workerId}/api/ws`;
+export function go2rtcWsPath(workerId?: number | null): string {
+  if (workerId == null || workerId <= 0) {
+    throw new Error(
+      'Direct media route unavailable — camera has no workerId (expected /media/w{N}/api/ws)',
+    );
   }
-  return '/go2rtc/api/ws';
+  return `/media/w${workerId}/api/ws`;
 }
 
 /** Full video-stream `src` for a camera stream name. */
-export function buildGo2RtcStreamSrc(
-  stream: string,
-  workerId?: number | null,
-  directMedia?: boolean,
-): string {
-  const path = go2rtcWsPath(workerId, directMedia);
+export function buildGo2RtcStreamSrc(stream: string, workerId?: number | null): string {
+  const path = go2rtcWsPath(workerId);
   return `${path}?src=${encodeURIComponent(stream)}`;
 }
 
-let directMediaCached: boolean | null = null;
-
-export async function isDirectMediaEnabled(): Promise<boolean> {
-  if (directMediaCached !== null) return directMediaCached;
+/**
+ * Optional readiness check — Live View always uses direct media.
+ * Returns true when backend advertises media worker routes (Nginx expected).
+ * Does not enable a Python fallback when false.
+ */
+export async function isDirectMediaReady(): Promise<boolean> {
   const config = await fetchLiveConfig();
-  directMediaCached = Boolean(config.directMediaEnabled);
-  return directMediaCached;
+  return Boolean(config.directMediaEnabled);
 }

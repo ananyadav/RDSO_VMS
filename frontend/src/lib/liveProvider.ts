@@ -5,12 +5,13 @@ import { apiFetch } from './api';
 export interface LiveConfig {
   go2rtcEnabled: boolean;
   go2rtcWorkersEnabled?: boolean;
-  /** When true, WebSocket playback uses /media/w{workerId}/api/ws (Nginx direct). */
+  /** Always true — Live View uses Nginx /media/w{N}/api/ws only. */
   directMediaEnabled?: boolean;
 }
 
 const DEFAULT: LiveConfig = {
   go2rtcEnabled: true,
+  directMediaEnabled: true,
 };
 
 let cached: LiveConfig | null = null;
@@ -27,7 +28,8 @@ export async function fetchLiveConfig(): Promise<LiveConfig> {
         cached = {
           go2rtcEnabled: Boolean(data.go2rtcEnabled),
           go2rtcWorkersEnabled: Boolean(data.go2rtcWorkersEnabled),
-          directMediaEnabled: Boolean(data.directMediaEnabled),
+          // Live View never falls back to Python WS proxy.
+          directMediaEnabled: true,
         };
         return cached;
       }

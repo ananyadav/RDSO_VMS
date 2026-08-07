@@ -1,0 +1,256 @@
+{
+  "selected": 25,
+  "candidate_healthy": 773,
+  "workers": {
+    "1": 9,
+    "2": 8,
+    "3": 8
+  },
+  "models": {
+    "unknown": 23,
+    "HIKVISION": 1,
+    "HONEYWELL": 1
+  },
+  "groups": {
+    "rml_6_corporate_office_4th_floor": 1,
+    "rml_6_isp_sinter": 1,
+    "rml_7_kocpl_kocpl_all": 1,
+    "rml_6_corporate_office_6th_floor": 4,
+    "rml_6_rml_dip_sdp_7": 4,
+    "rml_3_kipl_kipl_all": 1,
+    "rml_6_corporate_office_7th_floor": 2,
+    "rml_6_rml_dip_sdp_6": 1,
+    "rml_6_rml_dip_bl5_6": 1,
+    "rml_6_corporate_office_5th_floor": 2,
+    "rml_6_rml_dip_sdp_8": 5,
+    "rml_6_rml_dip_bl7_8": 1,
+    "rml_6_rml_dip_bl3_4": 1
+  },
+  "cameras": [
+    {
+      "ip": "192.168.41.31",
+      "id": "6a38c7808ca33214031596f9",
+      "cameraUid": "ip_192_168_41_31",
+      "workerId": 1,
+      "model": "unknown",
+      "camera_group": "rml_6_corporate_office_4th_floor",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.46.49",
+      "id": "6a4b7565b6a42e83880b64d7",
+      "cameraUid": "ip_192_168_46_49",
+      "workerId": 2,
+      "model": "unknown",
+      "camera_group": "rml_6_isp_sinter",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.9.36",
+      "id": "6a4e2f169243e2b5ff10a861",
+      "cameraUid": "ip_192_168_9_36",
+      "workerId": 3,
+      "model": "unknown",
+      "camera_group": "rml_7_kocpl_kocpl_all",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.41.33",
+      "id": "6a34d36355d123688ee34130",
+      "cameraUid": "ip_192_168_41_33",
+      "workerId": 1,
+      "model": "unknown",
+      "camera_group": "rml_6_corporate_office_6th_floor",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.44.170",
+      "id": "6a4b841fb6a42e83880b651c",
+      "cameraUid": "ip_192_168_44_170",
+      "workerId": 2,
+      "model": "unknown",
+      "camera_group": "rml_6_rml_dip_sdp_7",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.8.71",
+      "id": "6a4e30929243e2b5ff10a864",
+      "cameraUid": "ip_192_168_8_71",
+      "workerId": 3,
+      "model": "unknown",
+      "camera_group": "rml_3_kipl_kipl_all",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.41.59",
+      "id": "6a34d3b355d123688ee3413d",
+      "cameraUid": "ip_192_168_41_59",
+      "workerId": 1,
+      "model": "unknown",
+      "camera_group": "rml_6_corporate_office_7th_floor",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.44.125",
+      "id": "6a4b85c7b6a42e83880b654b",
+      "cameraUid": "ip_192_168_44_125",
+      "workerId": 2,
+      "model": "unknown",
+      "camera_group": "rml_6_rml_dip_sdp_6",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.7.76",
+      "id": "6a4e30929243e2b5ff10a872",
+      "cameraUid": "ip_192_168_7_76",
+      "workerId": 3,
+      "model": "HIKVISION",
+      "camera_group": "rml_6_rml_dip_bl5_6",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.41.69",
+      "id": "6a38ca08c8082fc3075823da",
+      "cameraUid": "ip_192_168_41_69",
+      "workerId": 1,
+      "model": "unknown",
+      "camera_group": "rml_6_corporate_office_5th_floor",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.44.65",
+      "id": "6a4b89c7b6a42e83880b65ae",
+      "cameraUid": "ip_192_168_44_65",
+      "workerId": 2,
+      "model": "unknown",
+      "camera_group": "rml_6_rml_dip_sdp_8",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.44.227",
+      "id": "6a54b2199e918ec6312dfa52",
+      "cameraUid": "ip_192_168_44_227",
+      "workerId": 3,
+      "model": "HONEYWELL",
+      "camera_group": "rml_6_rml_dip_sdp_7",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.41.50",
+      "id": "6a34d3b355d123688ee3413c",
+      "cameraUid": "ip_192_168_41_50",
+      "workerId": 1,
+      "model": "unknown",
+      "camera_group": "rml_6_corporate_office_7th_floor",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.44.66",
+      "id": "6a4b89c7b6a42e83880b65af",
+      "cameraUid": "ip_192_168_44_66",
+      "workerId": 2,
+      "model": "unknown",
+      "camera_group": "rml_6_rml_dip_sdp_8",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.43.18",
+      "id": "6a577948608cd73e5f441cc7",
+      "cameraUid": "ip_192_168_43_18",
+      "workerId": 3,
+      "model": "unknown",
+      "camera_group": "rml_6_rml_dip_bl7_8",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.41.17",
+      "id": "6a34d36355d123688ee3412b",
+      "cameraUid": "ip_192_168_41_17",
+      "workerId": 1,
+      "model": "unknown",
+      "camera_group": "rml_6_corporate_office_6th_floor",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.44.110",
+      "id": "6a4b89c7b6a42e83880b65b0",
+      "cameraUid": "ip_192_168_44_110",
+      "workerId": 2,
+      "model": "unknown",
+      "camera_group": "rml_6_rml_dip_sdp_8",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.44.215",
+      "id": "6a577948608cd73e5f441cec",
+      "cameraUid": "ip_192_168_44_215",
+      "workerId": 3,
+      "model": "unknown",
+      "camera_group": "rml_6_rml_dip_sdp_7",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.41.35",
+      "id": "6a34d36355d123688ee34131",
+      "cameraUid": "ip_192_168_41_35",
+      "workerId": 1,
+      "model": "unknown",
+      "camera_group": "rml_6_corporate_office_6th_floor",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.44.111",
+      "id": "6a4b89c7b6a42e83880b65b1",
+      "cameraUid": "ip_192_168_44_111",
+      "workerId": 2,
+      "model": "unknown",
+      "camera_group": "rml_6_rml_dip_sdp_8",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.44.223",
+      "id": "6a577948608cd73e5f441cf4",
+      "cameraUid": "ip_192_168_44_223",
+      "workerId": 3,
+      "model": "unknown",
+      "camera_group": "rml_6_rml_dip_sdp_7",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.41.208",
+      "id": "6a38cc04c8082fc3075823e9",
+      "cameraUid": "ip_192_168_41_208",
+      "workerId": 1,
+      "model": "unknown",
+      "camera_group": "rml_6_corporate_office_5th_floor",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.44.112",
+      "id": "6a4b89c7b6a42e83880b65b2",
+      "cameraUid": "ip_192_168_44_112",
+      "workerId": 2,
+      "model": "unknown",
+      "camera_group": "rml_6_rml_dip_sdp_8",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.7.136",
+      "id": "6a577948608cd73e5f441cb6",
+      "cameraUid": "ip_192_168_7_136",
+      "workerId": 3,
+      "model": "unknown",
+      "camera_group": "rml_6_rml_dip_bl3_4",
+      "site": "RML - 6"
+    },
+    {
+      "ip": "192.168.41.79",
+      "id": "6a34d36355d123688ee34136",
+      "cameraUid": "ip_192_168_41_79",
+      "workerId": 1,
+      "model": "unknown",
+      "camera_group": "rml_6_corporate_office_6th_floor",
+      "site": "RML - 6"
+    }
+  ]
+}

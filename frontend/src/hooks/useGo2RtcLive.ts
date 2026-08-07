@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { go2rtcStreamName, reportGo2RtcClientError, reportGo2RtcClientOk } from '../lib/liveProvider';
-import { acquireGo2RtcSlot, releaseGo2RtcSlot } from '../lib/go2rtcConnectionLimiter';
+import {
+  acquireGo2RtcSlot,
+  isGo2RtcSlotAbortError,
+  releaseGo2RtcSlot,
+} from '../lib/go2rtcConnectionLimiter';
+import { createLiveLatencySession, type LiveLatencySession } from '../lib/liveLatencyMetrics';
 import { registerUiConsumer, unregisterUiConsumer } from '../lib/go2rtcConsumerRegistry';
-import { mountGo2RtcPlayer } from '../lib/go2rtcPlayer';
+import { ensureGo2RtcPlayer, mountGo2RtcPlayer } from '../lib/go2rtcPlayer';
 
 interface Camera {
   id: string;
@@ -133,41 +138,66 @@ async function waitForFirstFrame(
   mode: 'webrtc' | 'mse',
   timeoutMs: number,
   workerId?: number | string | null,
+  signal?: AbortSignal,
+  latencySession?: LiveLatencySession | null,
 ): Promise<() => void> {
+  if (signal?.aborted) {
+    throw new DOMException('go2rtc connect aborted', 'AbortError');
+  }
+
   return new Promise((resolve, reject) => {
     let cleanup: (() => void) | null = null;
     let frameSeen = false;
 
+    const onAbort = () => {
+      clearTimeout(timeoutId);
+      cleanup?.();
+      cleanup = null;
+      reject(new DOMException('go2rtc connect aborted', 'AbortError'));
+    };
+
     const timeoutId = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
       cleanup?.();
       reject(new Error('Connection timed out'));
     }, timeoutMs);
 
     const finish = () => {
       clearTimeout(timeoutId);
+      signal?.removeEventListener('abort', onAbort);
       if (cleanup) resolve(cleanup);
     };
+
+    signal?.addEventListener('abort', onAbort, { once: true });
 
     void mountGo2RtcPlayer(container, {
       stream,
       mode,
       workerId,
+      latencySession,
       onFirstFrame: () => {
         frameSeen = true;
         finish();
       },
       onError: (msg: string) => {
         clearTimeout(timeoutId);
+        signal?.removeEventListener('abort', onAbort);
         cleanup?.();
         reject(new Error(msg || 'go2rtc playback error'));
       },
     })
       .then((fn) => {
+        if (signal?.aborted) {
+          fn();
+          onAbort();
+          return;
+        }
         cleanup = fn;
         if (frameSeen) finish();
       })
       .catch((err: unknown) => {
         clearTimeout(timeoutId);
+        signal?.removeEventListener('abort', onAbort);
         reject(err instanceof Error ? err : new Error('Failed to load go2rtc player'));
       });
   });
@@ -193,15 +223,16 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
   const teardownRef = useRef<(() => void) | null>(null);
   const trackedStreamRef = useRef<string | null>(null);
   const slotHeldRef = useRef(false);
+  const latencySessionRef = useRef<LiveLatencySession | null>(null);
 
-  const releaseSlot = () => {
+  const releaseSlot = (label?: string) => {
     if (slotHeldRef.current) {
-      releaseGo2RtcSlot();
+      releaseGo2RtcSlot(label);
       slotHeldRef.current = false;
     }
   };
 
-  const stopPlayer = (unregister = true) => {
+  const stopPlayer = (unregister = true, label?: string) => {
     const stream = trackedStreamRef.current;
     teardownRef.current?.();
     teardownRef.current = null;
@@ -209,7 +240,7 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
       unregisterUiConsumer(stream);
       trackedStreamRef.current = null;
     }
-    releaseSlot();
+    releaseSlot(label);
   };
 
   useEffect(() => {
@@ -244,30 +275,100 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
     if (!container || !camera) return;
 
     const stream = go2rtcStreamName(camera.cameraUid || camera.id, profile);
+    const label = camera.id;
     const session = ++sessionRef.current;
+    const abortController = new AbortController();
     let cancelled = false;
     const modes: Array<'webrtc' | 'mse'> = ['mse'];
 
+    const isStale = () =>
+      cancelled || session !== sessionRef.current || abortController.signal.aborted;
+
     const run = async () => {
-      stopPlayer(true);
+      stopPlayer(true, label);
       setIsConnecting(false);
       setIsQueued(true);
       setError(null);
       setStreamStatus('idle');
 
-      await acquireGo2RtcSlot();
-      if (cancelled || session !== sessionRef.current) {
-        releaseGo2RtcSlot();
+      const latencySession = createLiveLatencySession({
+        cameraId: camera.id,
+        cameraUid: camera.cameraUid,
+        workerId: camera.workerId,
+        profile,
+        stream,
+      });
+      latencySessionRef.current = latencySession;
+      latencySession?.markT0();
+
+      // Start player JS load in parallel with the connection-slot wait so it
+      // does not sit on the T2→T3 path after the slot is already held.
+      const playerReady = ensureGo2RtcPlayer();
+
+      try {
+        latencySession?.markT1();
+        await acquireGo2RtcSlot({ signal: abortController.signal, label });
+      } catch (err) {
+        if (isGo2RtcSlotAbortError(err) || isStale()) {
+          latencySession?.cancel('queue-abort');
+          latencySessionRef.current = null;
+          setIsQueued(false);
+          return;
+        }
+        latencySession?.cancel('queue-error');
+        latencySessionRef.current = null;
         setIsQueued(false);
         return;
       }
+
+      // Race: became eligible while unmounting — never start the player.
+      if (isStale()) {
+        releaseGo2RtcSlot(label);
+        latencySession?.cancel('stale-after-queue');
+        latencySessionRef.current = null;
+        setIsQueued(false);
+        return;
+      }
+      latencySession?.markT2();
       slotHeldRef.current = true;
       setIsQueued(false);
       setIsConnecting(true);
       setStreamStatus('connecting');
 
+      try {
+        const ensureStarted = performance.now();
+        await playerReady;
+        if (import.meta.env.DEV) {
+          const ensureMs = Math.round(performance.now() - ensureStarted);
+          if (ensureMs >= 20) {
+            console.info(
+              `[live-latency] post-slot player-ensure camera=${label} ensure_after_slot=${ensureMs}ms`,
+            );
+          }
+        }
+      } catch (err) {
+        releaseSlot(label);
+        latencySession?.fail(err instanceof Error ? err.message : 'Player load failed');
+        latencySessionRef.current = null;
+        setIsConnecting(false);
+        setStreamStatus('error');
+        return;
+      }
+
+      if (isStale()) {
+        releaseSlot(label);
+        latencySession?.cancel('stale-after-player-ensure');
+        latencySessionRef.current = null;
+        return;
+      }
+
       let attempt = 0;
-      while (!cancelled && session === sessionRef.current) {
+      while (!isStale()) {
+        if (abortController.signal.aborted) {
+          releaseSlot(label);
+          return;
+        }
+
         const mode = modes[Math.min(attempt, modes.length - 1)];
         const timeoutMs = attempt === 0 ? CONNECT_TIMEOUT_MS : RETRY_TIMEOUT_MS;
 
@@ -278,18 +379,24 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
             mode,
             timeoutMs,
             camera.workerId,
+            abortController.signal,
+            latencySession,
           );
-          if (cancelled || session !== sessionRef.current) {
+          if (isStale()) {
             cleanup();
+            releaseSlot(label);
+            latencySession?.cancel('stale-after-frame');
+            latencySessionRef.current = null;
             return;
           }
 
           // Free the connect slot so later tiles (last cam in the grid) can start.
-          releaseSlot();
+          releaseSlot(label);
 
           registerUiConsumer(stream);
           trackedStreamRef.current = stream;
           teardownRef.current = cleanup;
+          latencySessionRef.current = null;
           setIsConnecting(false);
           setStreamStatus('playing');
           setError(null);
@@ -300,8 +407,19 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
           });
           return;
         } catch (err) {
-          stopPlayer(true);
-          if (cancelled || session !== sessionRef.current) return;
+          if (isGo2RtcSlotAbortError(err) || isStale()) {
+            releaseSlot(label);
+            latencySession?.cancel('connect-abort');
+            latencySessionRef.current = null;
+            return;
+          }
+
+          stopPlayer(true, label);
+          if (isStale()) {
+            latencySession?.cancel('stale-on-error');
+            latencySessionRef.current = null;
+            return;
+          }
 
           const raw = err instanceof Error ? err.message : 'Failed to connect';
           // Never show timeout/error text on live tiles — keep Connecting… and retry.
@@ -320,11 +438,33 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
 
           const delayMs = isTemporaryError(raw) ? 1500 : 4000;
           await new Promise((r) => setTimeout(r, delayMs));
-          await acquireGo2RtcSlot();
-          if (cancelled || session !== sessionRef.current) {
-            releaseGo2RtcSlot();
+          if (isStale()) {
+            latencySession?.cancel('stale-before-retry');
+            latencySessionRef.current = null;
             return;
           }
+
+          try {
+            latencySession?.markT1();
+            await acquireGo2RtcSlot({ signal: abortController.signal, label });
+          } catch (acquireErr) {
+            if (isGo2RtcSlotAbortError(acquireErr) || isStale()) {
+              latencySession?.cancel('retry-queue-abort');
+              latencySessionRef.current = null;
+              return;
+            }
+            latencySession?.cancel('retry-queue-error');
+            latencySessionRef.current = null;
+            return;
+          }
+          if (isStale()) {
+            releaseGo2RtcSlot(label);
+            latencySession?.cancel('stale-after-retry-queue');
+            latencySessionRef.current = null;
+            return;
+          }
+          latencySession?.markT2();
+          latencySession?.resetAttempt();
           slotHeldRef.current = true;
           attempt += 1;
         }
@@ -335,10 +475,13 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
 
     return () => {
       cancelled = true;
+      abortController.abort();
+      latencySessionRef.current?.cancel('unmounted');
+      latencySessionRef.current = null;
       if (session === sessionRef.current) {
         sessionRef.current += 1;
       }
-      stopPlayer(true);
+      stopPlayer(true, label);
       setIsConnecting(false);
       setIsQueued(false);
       setStreamStatus('idle');

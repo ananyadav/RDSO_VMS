@@ -40,5 +40,8 @@ python backend/scripts/ensure_go2rtc_workers.py
 - `GO2RTC_MAX_CAMERAS_PER_WORKER=300`
 - `GO2RTC_WEBRTC_HOST=<server LAN IP>` (auto-detected if unset)
 - `GO2RTC_ENABLED=true`
+- **Live View media:** always `Browser → Nginx /media/w{N} → go2rtc` — see `deploy/nginx-cctv-direct-media.conf`.
+  Python no longer proxies live video WebSockets. Local Live View must also go through Nginx
+  (Vite `:3000` alone cannot complete media WS).
 
 Download binary: [AlexxIT/go2rtc releases](https://github.com/AlexxIT/go2rtc/releases) → `go2rtc/bin/`
