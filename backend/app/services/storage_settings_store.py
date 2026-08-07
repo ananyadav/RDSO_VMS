@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -54,21 +55,58 @@ def get_effective_recordings_dir() -> Path:
     return normalize_recordings_path(raw)
 
 
+def _is_windows_abs_path(text: str) -> bool:
+    return bool(_WIN_ABS_RE.search(text)) or (len(text) >= 2 and text[1] == ":")
+
+
+def _is_posix_abs_path(text: str) -> bool:
+    return text.startswith("/") and not _is_windows_abs_path(text)
+
+
+def _path_usable_on_this_host(path_str: str) -> bool:
+    """True if the stored path is appropriate for the current OS."""
+    text = str(path_str).strip()
+    if not text:
+        return False
+    if sys.platform == "win32":
+        # Reject Linux absolute paths on Windows (shared Atlas / Linux deploy path).
+        if _is_posix_abs_path(text):
+            return False
+        return True
+    # Linux: reject pure Windows drive paths.
+    if _is_windows_abs_path(text) and not text.startswith("/"):
+        return False
+    return True
+
+
 def _repair_mixed_recordings_path(raw: str) -> str:
-    """Fix paths that accidentally concatenated POSIX + Windows segments."""
+    """Fix paths that accidentally concatenated POSIX + Windows segments.
+
+    On Linux, a pure Windows drive path cannot be used — returns "" so callers
+    can fall back to the env/project default.
+    """
     text = str(raw).strip().strip('"').strip("'")
     if not text:
         return text
 
     win_match = _WIN_ABS_RE.search(text)
     has_posix = text.startswith("/")
-    has_windows = bool(win_match) or (len(text) >= 2 and text[1] == ":")
+    has_windows = _is_windows_abs_path(text)
 
     if has_posix and has_windows:
         if os.name == "nt" and win_match:
             return win_match.group(1)
         # Linux host: keep the POSIX portion before any Windows drive letter.
         return re.split(r"[A-Za-z]:", text, maxsplit=1)[0].rstrip("/\\")
+
+    # Pure Windows path stored in Mongo while running on Linux (common after
+    # developing on Windows and deploying to the production Linux host).
+    if sys.platform != "win32" and has_windows and not has_posix:
+        return ""
+
+    # Pure Linux path while running on Windows — not usable here.
+    if sys.platform == "win32" and _is_posix_abs_path(text):
+        return ""
 
     return text
 
@@ -77,9 +115,15 @@ def normalize_recordings_path(path: str | Path) -> Path:
     """Resolve user input to one absolute folder path (never append to the old folder)."""
     repaired = _repair_mixed_recordings_path(str(path))
     if not repaired:
+        # Empty after repair (wrong-OS path) → project/env default.
+        repaired = _env_default_recordings_dir()
+    if not repaired:
         raise ValueError("Recording folder path is required")
 
-    if os.name == "nt" and len(repaired) >= 2 and repaired[1] == ":":
+    # Use sys.platform (not os.name): pathlib.Path picks WindowsPath when
+    # os.name == "nt", which raises NotImplementedError on Linux even if a
+    # caller temporarily patches os.name.
+    if sys.platform == "win32" and len(repaired) >= 2 and repaired[1] == ":":
         resolved = Path(repaired).resolve()
     else:
         resolved = Path(repaired).expanduser().resolve()
@@ -116,11 +160,25 @@ async def load_storage_settings() -> None:
     if doc.get("recordings_dir"):
         try:
             stored = str(doc["recordings_dir"])
-            repaired = _repair_mixed_recordings_path(stored)
-            resolved = apply_recordings_dir(repaired)
-            if repaired != stored:
+            persist_fix = False
+            if not _path_usable_on_this_host(stored):
+                repaired = _env_default_recordings_dir()
                 logger.warning(
-                    "[STORAGE] Repaired corrupt recordings_dir: %s -> %s",
+                    "[STORAGE] Ignoring wrong-OS recordings_dir for this host: %s -> %s",
+                    stored,
+                    repaired,
+                )
+                # Only heal Mongo when running on Linux (production). Keep the
+                # Linux path in Atlas if a Windows laptop loads settings.
+                persist_fix = sys.platform != "win32"
+            else:
+                repaired = _repair_mixed_recordings_path(stored) or stored
+                if repaired != stored:
+                    persist_fix = True
+            resolved = apply_recordings_dir(repaired)
+            if persist_fix and str(resolved) != stored:
+                logger.warning(
+                    "[STORAGE] Persisting repaired recordings_dir in MongoDB: %s -> %s",
                     stored,
                     resolved,
                 )
@@ -167,6 +225,11 @@ async def update_storage_settings(
     if recordings_dir is not None:
         folder = _repair_mixed_recordings_path(str(recordings_dir).strip())
         if not folder:
+            if sys.platform != "win32" and _is_windows_abs_path(str(recordings_dir)):
+                raise ValueError(
+                    "Windows recording path is not valid on this Linux server. "
+                    "Use a Linux path such as /home/vms/cctv_ananya/CCTV/Recordings"
+                )
             raise ValueError("Recording folder path is required")
         resolved = apply_recordings_dir(folder)
         if not resolved.is_dir():

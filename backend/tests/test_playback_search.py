@@ -98,13 +98,25 @@ class TestBuildRecordingEntry(unittest.TestCase):
 
 
 class TestPlaybackSearchService(unittest.IsolatedAsyncioTestCase):
+    @patch("app.services.playback_search.recording_session_mongo_filter", new_callable=AsyncMock)
+    @patch("app.services.playback_search.storage_folder_keys_for_uid", new_callable=AsyncMock)
+    @patch("app.services.playback_search.resolve_camera_uid", new_callable=AsyncMock)
     @patch("app.services.playback_search._resolve_camera_name", new_callable=AsyncMock)
     @patch("app.services.playback_search.recording_sessions_collection")
     @patch("app.services.playback_search.get_effective_recordings_dir")
     async def test_search_filters_by_date(
-        self, mock_recordings_dir, mock_collection, mock_camera_name
+        self,
+        mock_recordings_dir,
+        mock_collection,
+        mock_camera_name,
+        mock_resolve_uid,
+        mock_storage_folders,
+        mock_session_filter,
     ):
         mock_camera_name.return_value = "Cam10"
+        mock_resolve_uid.return_value = "cam1"
+        mock_storage_folders.return_value = ["cam1"]
+        mock_session_filter.return_value = {"camera_id": "cam1"}
         mock_recordings_dir.return_value.__truediv__ = MagicMock(
             return_value=MagicMock(is_dir=MagicMock(return_value=False))
         )
