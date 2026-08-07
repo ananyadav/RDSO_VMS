@@ -55,7 +55,6 @@ function LiveCameraGrid({
   const [scrollTop, setScrollTop] = useState(0);
   const rafScrollRef = useRef(0);
 
-  const gridCapacity = gridCols * gridCols;
   const totalRows = Math.ceil(cameras.length / gridCols) || 0;
   const rowStride = rowHeightPx > 0 ? rowHeightPx + GAP_PX : 0;
   const totalHeight =
@@ -115,6 +114,20 @@ function LiveCameraGrid({
     );
   }
 
+  // Strictly visible rows only (no overscan) — these may open go2rtc immediately.
+  let visibleStartRow = 0;
+  let visibleEndRow = -1;
+  if (rowStride > 0 && totalRows > 0 && viewportHeight > 0) {
+    visibleStartRow = Math.max(0, Math.floor(scrollTop / rowStride));
+    visibleEndRow = Math.min(
+      totalRows - 1,
+      Math.max(
+        visibleStartRow,
+        Math.ceil((scrollTop + viewportHeight) / rowStride) - 1,
+      ),
+    );
+  }
+
   const mountedRows: number[] = [];
   for (let r = startRow; r <= endRow; r += 1) mountedRows.push(r);
 
@@ -124,6 +137,14 @@ function LiveCameraGrid({
     return n + Math.min(gridCols, Math.max(0, cameras.length - start));
   }, 0);
 
+  let streamEligibleCount = 0;
+  if (visibleEndRow >= visibleStartRow) {
+    for (let r = visibleStartRow; r <= visibleEndRow; r += 1) {
+      const start = r * gridCols;
+      streamEligibleCount += Math.min(gridCols, Math.max(0, cameras.length - start));
+    }
+  }
+
   return (
     <div
       ref={viewportRef}
@@ -132,12 +153,14 @@ function LiveCameraGrid({
       data-live-grid-cols={gridCols}
       data-live-grid-total={cameras.length}
       data-live-grid-mounted={mountedCardCount}
+      data-live-grid-stream-eligible={streamEligibleCount}
     >
       <div className="relative w-full" style={{ height: totalHeight > 0 ? totalHeight : undefined }}>
         {mountedRows.map((row) => {
           const top = row * rowStride;
           const startIndex = row * gridCols;
           const rowCams = cameras.slice(startIndex, startIndex + gridCols);
+          const rowStrictlyVisible = row >= visibleStartRow && row <= visibleEndRow;
           return (
             <div
               key={`row-${row}`}
@@ -148,8 +171,9 @@ function LiveCameraGrid({
                 gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`,
               }}
             >
-              {rowCams.map((camera, col) => {
-                const index = startIndex + col;
+              {rowCams.map((camera) => {
+                const forceEager =
+                  rowStrictlyVisible || camera.id === selectedCameraId;
                 return (
                   <div
                     key={camera.id}
@@ -162,7 +186,10 @@ function LiveCameraGrid({
                     <div className="absolute inset-0">
                       <CameraCard
                         camera={camera}
-                        eagerLive={index < gridCapacity}
+                        // Mounted (incl. overscan) ≠ stream-eligible.
+                        // Only strictly visible / selected tiles connect eagerly.
+                        eagerLive={forceEager}
+                        observeRootRef={viewportRef}
                         streamsReady={streamsReady}
                         liveActive={
                           !(showFullscreenModal && fullscreenCameraId === camera.id)

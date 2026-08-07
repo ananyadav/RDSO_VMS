@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { go2rtcStreamName, reportGo2RtcClientError, reportGo2RtcClientOk } from '../lib/liveProvider';
 import {
   acquireGo2RtcSlot,
@@ -29,6 +29,8 @@ const RETRY_TIMEOUT_MS = 10000;
 interface UseGo2RtcLiveOptions {
   containerRef: RefObject<HTMLElement | null>;
   observeRef?: RefObject<HTMLElement | null>;
+  /** Scroll/viewport root for IntersectionObserver (e.g. live grid scroller). */
+  observeRootRef?: RefObject<HTMLElement | null>;
   profile: 'sub' | 'main';
   active?: boolean;
   eager?: boolean;
@@ -206,6 +208,7 @@ async function waitForFirstFrame(
 export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptions) {
   const containerRef = options.containerRef;
   const observeRef = options.observeRef ?? containerRef;
+  const observeRootRef = options.observeRootRef;
   const profile = options.profile;
   const active = options.active !== false;
   const eager = options.eager === true;
@@ -243,21 +246,48 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
     releaseSlot(label);
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (eager) {
       setInView(true);
       return;
     }
-    const el = observeRef.current;
-    if (!el) return;
 
-    const observer = new IntersectionObserver(
-      ([entry]) => setInView(entry.isIntersecting),
-      { root: null, rootMargin: '150px', threshold: 0.05 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [camera?.id, eager, observeRef]);
+    // Not parent-eligible (e.g. overscan-only): do not stream until the tile
+    // intersects the grid viewport. Keep the card mounted for scroll smoothness.
+    setInView(false);
+
+    let cancelled = false;
+    let observer: IntersectionObserver | null = null;
+    let raf = 0;
+
+    const attach = () => {
+      if (cancelled) return;
+      const el = observeRef.current;
+      if (!el) {
+        // Ref not committed yet — retry next frame (avoids permanent black tiles).
+        raf = requestAnimationFrame(attach);
+        return;
+      }
+      const root = observeRootRef?.current ?? null;
+      observer = new IntersectionObserver(
+        ([entry]) => {
+          if (cancelled) return;
+          // Strict visibility — no large rootMargin, so overscan outside the
+          // scroller does not open go2rtc WebSockets.
+          setInView(entry.isIntersecting && entry.intersectionRatio > 0);
+        },
+        { root, rootMargin: '0px', threshold: [0, 0.05, 0.15] },
+      );
+      observer.observe(el);
+    };
+
+    attach();
+    return () => {
+      cancelled = true;
+      if (raf) cancelAnimationFrame(raf);
+      observer?.disconnect();
+    };
+  }, [camera?.id, eager, observeRef, observeRootRef]);
 
   useEffect(() => {
     const shouldConnect = Boolean(camera?.online && active && streamsReady && inView);
@@ -271,8 +301,13 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
       return;
     }
 
-    const container = containerRef.current;
-    if (!container || !camera) return;
+    if (!camera) return;
+
+    // playerRef may still be null on the first effect pass after mount.
+    if (!containerRef.current) {
+      const raf = requestAnimationFrame(() => setRetryKey((k) => k + 1));
+      return () => cancelAnimationFrame(raf);
+    }
 
     const stream = go2rtcStreamName(camera.cameraUid || camera.id, profile);
     const label = camera.id;
@@ -362,6 +397,17 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
         return;
       }
 
+      // Container may have remounted between awaits — re-read ref.
+      const mountEl = containerRef.current;
+      if (!mountEl) {
+        releaseSlot(label);
+        latencySession?.cancel('missing-container');
+        latencySessionRef.current = null;
+        const raf = requestAnimationFrame(() => setRetryKey((k) => k + 1));
+        void raf;
+        return;
+      }
+
       let attempt = 0;
       while (!isStale()) {
         if (abortController.signal.aborted) {
@@ -374,7 +420,7 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
 
         try {
           const cleanup = await waitForFirstFrame(
-            container,
+            mountEl,
             stream,
             mode,
             timeoutMs,

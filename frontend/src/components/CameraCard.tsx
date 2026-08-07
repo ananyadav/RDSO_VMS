@@ -16,6 +16,8 @@ interface CameraCardProps {
   camera: Camera;
   eagerLive?: boolean;
   streamsReady?: boolean;
+  /** Scroll root for visibility (live grid viewport). */
+  observeRootRef?: React.RefObject<HTMLElement | null>;
   /** When false, tear down the tile player (e.g. same cam is in fullscreen). */
   liveActive?: boolean;
   isRecording: boolean;
@@ -27,6 +29,7 @@ function CameraCard({
   camera,
   eagerLive = false,
   streamsReady = true,
+  observeRootRef,
   liveActive = true,
   isRecording,
   onToggleRecording,
@@ -40,6 +43,7 @@ function CameraCard({
     {
       containerRef: playerRef,
       observeRef: tileRef,
+      observeRootRef,
       profile: 'sub',
       eager: eagerLive,
       active: liveActive && camera.online,
