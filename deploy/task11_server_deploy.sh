@@ -163,29 +163,59 @@ write_nginx "$TMP_NGINX"
 cp -a "$TMP_NGINX" "${BACKUP_DIR}/cctv-direct-media.generated.conf"
 
 NGINX_INSTALLED=0
+can_sudo() {
+  # Passwordless sudo only — CI user often has no TTY for sudo password
+  sudo -n true >/dev/null 2>&1
+}
+
+verify_media_routes() {
+  local ok=1
+  for w in 1 2 3; do
+    # Logged-out must not be open (401/403). Reachability of the route itself matters.
+    code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1/media/w${w}/api" || echo 000)"
+    echo "local /media/w${w}/api -> HTTP ${code}"
+    if [[ "$code" == "000" || "$code" == "404" || "$code" == "502" || "$code" == "503" ]]; then
+      ok=0
+    fi
+  done
+  return $((1 - ok))
+}
+
 if command -v nginx >/dev/null 2>&1; then
   NGINX_INSTALLED=1
-  # Prefer sites-available pattern; fall back to conf.d
-  if [[ -d /etc/nginx/sites-available ]]; then
-    sudo cp "$TMP_NGINX" "$SITE_AVAILABLE"
-    sudo ln -sfn "$SITE_AVAILABLE" "$SITE_ENABLED"
-    # Disable stock default only (often proxies wrong upstream)
-    if [[ -e /etc/nginx/sites-enabled/default ]]; then
-      sudo mv /etc/nginx/sites-enabled/default "${BACKUP_DIR}/disabled-site-default" 2>/dev/null \
-        || sudo rm -f /etc/nginx/sites-enabled/default || true
+  if can_sudo; then
+    # Prefer sites-available pattern; fall back to conf.d
+    if [[ -d /etc/nginx/sites-available ]]; then
+      sudo -n cp "$TMP_NGINX" "$SITE_AVAILABLE"
+      sudo -n ln -sfn "$SITE_AVAILABLE" "$SITE_ENABLED"
+      # Disable stock default only (often proxies wrong upstream)
+      if [[ -e /etc/nginx/sites-enabled/default ]]; then
+        sudo -n mv /etc/nginx/sites-enabled/default "${BACKUP_DIR}/disabled-site-default" 2>/dev/null \
+          || sudo -n rm -f /etc/nginx/sites-enabled/default || true
+      fi
+    elif [[ -d /etc/nginx/conf.d ]]; then
+      sudo -n cp "$TMP_NGINX" "$CONF_D"
+    else
+      echo "WARN: nginx present but no sites-available/conf.d"
     fi
-  elif [[ -d /etc/nginx/conf.d ]]; then
-    sudo cp "$TMP_NGINX" "$CONF_D"
-  else
-    echo "WARN: nginx present but no sites-available/conf.d"
-  fi
 
-  if sudo nginx -t; then
-    sudo systemctl reload nginx || sudo nginx -s reload
-    echo "Nginx reloaded OK"
+    if sudo -n nginx -t; then
+      sudo -n systemctl reload nginx || sudo -n nginx -s reload
+      echo "Nginx reloaded OK"
+    else
+      echo "ERROR: nginx -t failed — NOT reloading"
+      exit 1
+    fi
   else
-    echo "ERROR: nginx -t failed — NOT reloading"
-    exit 1
+    echo "WARN: passwordless sudo unavailable — leaving existing Nginx config untouched"
+    echo "Generated reference config at: ${TMP_NGINX}"
+    if verify_media_routes; then
+      echo "Existing /media/wN routes look healthy (no Nginx rewrite attempted)"
+    else
+      echo "ERROR: /media/wN routes not healthy and cannot update Nginx without sudo"
+      echo "Ask an admin to install ${TMP_NGINX} (see deploy/nginx-cctv-direct-media.conf) then: nginx -t && systemctl reload nginx"
+      exit 1
+    fi
   fi
 else
   echo "WARN: nginx binary not found"
