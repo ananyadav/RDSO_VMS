@@ -25,6 +25,10 @@ export type Go2RtcStreamStatus = 'idle' | 'connecting' | 'playing' | 'error';
 const CONNECT_TIMEOUT_MS = 16000;
 /** Later retries while tile keeps showing Connecting… */
 const RETRY_TIMEOUT_MS = 10000;
+/** Visible tile got "playing" or WS open but no usable frame — one bounded reconnect. */
+const POST_PLAY_STALL_MS = 4500;
+const MAX_POST_PLAY_RETRIES = 1;
+const PLAYBACK_MONITOR_INTERVAL_MS = 400;
 
 interface UseGo2RtcLiveOptions {
   containerRef: RefObject<HTMLElement | null>;
@@ -227,6 +231,22 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
   const trackedStreamRef = useRef<string | null>(null);
   const slotHeldRef = useRef(false);
   const latencySessionRef = useRef<LiveLatencySession | null>(null);
+  const playbackMonitorRef = useRef<number | null>(null);
+  const postPlayRetriesRef = useRef(0);
+  const lastVideoFrameAtRef = useRef(0);
+
+  const clearPlaybackMonitor = () => {
+    if (playbackMonitorRef.current != null) {
+      window.clearInterval(playbackMonitorRef.current);
+      playbackMonitorRef.current = null;
+    }
+  };
+
+  const gridDebug = (msg: string) => {
+    if (import.meta.env.DEV) {
+      console.info(`[grid-debug] camera=${camera?.id ?? '?'} ${msg}`);
+    }
+  };
 
   const releaseSlot = (label?: string) => {
     if (slotHeldRef.current) {
@@ -236,6 +256,7 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
   };
 
   const stopPlayer = (unregister = true, label?: string) => {
+    clearPlaybackMonitor();
     const stream = trackedStreamRef.current;
     teardownRef.current?.();
     teardownRef.current = null;
@@ -290,9 +311,15 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
   }, [camera?.id, eager, observeRef, observeRootRef]);
 
   useEffect(() => {
+    postPlayRetriesRef.current = 0;
+    lastVideoFrameAtRef.current = 0;
+  }, [camera?.id]);
+
+  useEffect(() => {
     const shouldConnect = Boolean(camera?.online && active && streamsReady && inView);
 
     if (!shouldConnect) {
+      postPlayRetriesRef.current = 0;
       stopPlayer(true);
       setIsConnecting(false);
       setIsQueued(false);
@@ -305,6 +332,9 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
 
     // playerRef may still be null on the first effect pass after mount.
     if (!containerRef.current) {
+      setIsConnecting(true);
+      setStreamStatus('connecting');
+      gridDebug('playerRef=pending retry=scheduled');
       const raf = requestAnimationFrame(() => setRetryKey((k) => k + 1));
       return () => cancelAnimationFrame(raf);
     }
@@ -446,6 +476,51 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
           setIsConnecting(false);
           setStreamStatus('playing');
           setError(null);
+          lastVideoFrameAtRef.current = performance.now();
+          gridDebug(
+            `mountCalled=1 wsOpened=1 firstFrame=1 profile=${profile} stream=${stream} worker=${camera.workerId ?? '?'}`,
+          );
+
+          // Post-play: go2rtc may error internally after first frame; onError is not
+          // wired once waitForFirstFrame resolves. Recover visible tiles once.
+          clearPlaybackMonitor();
+          playbackMonitorRef.current = window.setInterval(() => {
+            if (isStale()) return;
+            const el = containerRef.current;
+            if (!el) return;
+
+            const video = el.querySelector('video');
+            const mode =
+              el.querySelector('video-stream .mode')?.textContent?.trim() ?? '';
+            const statusText =
+              el.querySelector('video-stream .status')?.textContent?.trim() ?? '';
+
+            if (video instanceof HTMLVideoElement && video.videoWidth > 0) {
+              lastVideoFrameAtRef.current = performance.now();
+              return;
+            }
+
+            const errored = mode === 'error' || Boolean(statusText);
+            const stalled =
+              errored ||
+              performance.now() - lastVideoFrameAtRef.current > POST_PLAY_STALL_MS;
+
+            if (!stalled || postPlayRetriesRef.current >= MAX_POST_PLAY_RETRIES) {
+              return;
+            }
+
+            postPlayRetriesRef.current += 1;
+            gridDebug(
+              `stall-retry=1 metadata=${video?.readyState ?? 'n/a'} playing=${!video?.paused} mode=${mode} error=${statusText || 'none'}`,
+            );
+            clearPlaybackMonitor();
+            stopPlayer(true, label);
+            setStreamStatus('connecting');
+            setIsConnecting(true);
+            setError(null);
+            setRetryKey((k) => k + 1);
+          }, PLAYBACK_MONITOR_INTERVAL_MS);
+
           reportGo2RtcClientOk({
             cameraId: camera.id,
             cameraUid: camera.cameraUid,

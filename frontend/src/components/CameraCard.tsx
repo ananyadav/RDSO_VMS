@@ -52,7 +52,9 @@ function CameraCard({
   );
 
   const showConnecting =
-    camera.online && streamStatus !== 'playing' && (isQueued || isConnecting || !inView);
+    camera.online &&
+    streamStatus !== 'playing' &&
+    (isQueued || isConnecting || !streamsReady || (eagerLive && !inView));
 
   const handleDoubleClick = () => {
     if (onFullscreen) onFullscreen(camera);
