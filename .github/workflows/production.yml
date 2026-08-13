@@ -130,6 +130,10 @@ jobs:
             export GO2RTC_WEBRTC_HOST
             echo "GO2RTC_WEBRTC_HOST=${GO2RTC_WEBRTC_HOST}"
 
+            # Task 12A: backend API must bind localhost only (Nginx proxies /api/)
+            export API_HOST=127.0.0.1
+            echo "API_HOST=${API_HOST}"
+
             # Prefer existing server venv; otherwise install for current user
             if [ -x .venv/bin/python ]; then
               . .venv/bin/activate
@@ -151,7 +155,7 @@ jobs:
             pm2 start "$PY" \
               --name "${{ env.PM2_BACKEND_NAME }}" \
               --cwd "${{ env.SERVER_DEPLOY_PATH }}" \
-              -- -m backend.app.main --api-port "${{ env.API_PORT }}"
+              -- -m backend.app.main --api-host 127.0.0.1 --api-port "${{ env.API_PORT }}"
 
             # Wait for API health
             ok=0
@@ -186,4 +190,16 @@ jobs:
             echo
             if [ -f deploy/task11-deploy-report.json ]; then
               cat deploy/task11-deploy-report.json
+            fi
+
+            # Task 12A: verify localhost bind
+            export SERVER_DEPLOY_PATH="${{ env.SERVER_DEPLOY_PATH }}"
+            export PM2_BACKEND_NAME="${{ env.PM2_BACKEND_NAME }}"
+            export API_PORT="${{ env.API_PORT }}"
+            export API_HOST=127.0.0.1
+            chmod +x deploy/task12a_server_verify.sh
+            bash deploy/task12a_server_verify.sh
+            echo
+            if [ -f deploy/task12a-verify-report.json ]; then
+              cat deploy/task12a-verify-report.json
             fi

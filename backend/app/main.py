@@ -279,7 +279,15 @@ async def run_startup_tasks(app: web.Application) -> None:
 async def main():
     parser = argparse.ArgumentParser(description="NVR Backend Server")
     parser.add_argument("--api-port", type=int, default=10000, help="Port for the HTTP API server")
+    parser.add_argument(
+        "--api-host",
+        type=str,
+        default=None,
+        help="Bind address (default: API_HOST env or 127.0.0.1)",
+    )
     args = parser.parse_args()
+
+    api_host = (args.api_host or os.getenv("API_HOST", "127.0.0.1")).strip() or "127.0.0.1"
 
     print("\n" + "=" * 60)
     print("NVR Backend Server Starting...")
@@ -296,7 +304,7 @@ async def main():
 
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", args.api_port)
+    site = web.TCPSite(runner, api_host, args.api_port)
     try:
         await site.start()
     except OSError as exc:
@@ -308,10 +316,10 @@ async def main():
             raise SystemExit(1) from exc
         raise
 
-    print(f"[OK] Server: Listening on http://0.0.0.0:{args.api_port} (startup continues in background)")
+    print(f"[OK] Server: Listening on http://{api_host}:{args.api_port} (startup continues in background)")
     print(f"    Health: http://127.0.0.1:{args.api_port}/api/health")
     print("=" * 60 + "\n")
-    logging.info("Server listening on http://0.0.0.0:%s", args.api_port)
+    logging.info("Server listening on http://%s:%s", api_host, args.api_port)
 
     asyncio.create_task(run_startup_tasks(app))
 
