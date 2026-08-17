@@ -72,6 +72,7 @@ export default function FullscreenCameraModal({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        e.stopImmediatePropagation();
         onClose();
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
@@ -95,8 +96,8 @@ export default function FullscreenCameraModal({
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => document.removeEventListener('keydown', handleKeyDown, true);
   }, [currentIndex, allCameras, onClose, onChangeCamera]);
 
   const handleNext = () => {

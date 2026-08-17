@@ -6,7 +6,7 @@ import LiveViewLocationSelector, {
   type BuildingGroup,
 } from '../components/LiveViewLocationSelector';
 import PageHeader from '../components/PageHeader';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Maximize2, Minimize2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { flushAllUiConsumers } from '../lib/go2rtcConsumerRegistry';
 import { destroyAllGo2RtcPlayers, ensureGo2RtcPlayer } from '../lib/go2rtcPlayer';
@@ -24,6 +24,8 @@ import {
 import { cameraTileLabel } from '../lib/cameraLabel';
 import { useUrlHydration, useUrlSync } from '../hooks/useUrlSearchState';
 import { resolveLiveViewFromUrl } from '../lib/urlViewState';
+import { useLiveControlRoom } from '../context/LiveControlRoomContext';
+import type { LiveCameraGridHandle } from '../components/LiveCameraGrid';
 
 const LIVE_LAYOUTS = [
   { cols: 1, label: '1x1' },
@@ -31,6 +33,7 @@ const LIVE_LAYOUTS = [
   { cols: 3, label: '3x3' },
   { cols: 4, label: '4x4' },
   { cols: 5, label: '5x5' },
+  { cols: 6, label: '6x6' },
 ] as const;
 
 type LiveLayout = (typeof LIVE_LAYOUTS)[number];
@@ -57,6 +60,9 @@ interface LiveViewProps {
 
 function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
   const { params, setParams, initialParams, hydratedRef, markHydrated } = useUrlHydration();
+  const { controlRoom, setControlRoom } = useLiveControlRoom();
+  const gridRef = useRef<LiveCameraGridHandle>(null);
+  const savedScrollRowRef = useRef(0);
 
   const [buildings, setBuildings] = useState<BuildingGroup[]>([]);
   const [configuredSiteNames, setConfiguredSiteNames] = useState<string[]>([]);
@@ -82,6 +88,34 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
     setShowFullscreenModal(false);
     setFullscreenCamera(null);
   };
+
+  const enterControlRoom = useCallback(() => {
+    savedScrollRowRef.current = gridRef.current?.getVisibleStartRow() ?? 0;
+    setControlRoom(true);
+  }, [setControlRoom]);
+
+  const exitControlRoom = useCallback(() => {
+    savedScrollRowRef.current = gridRef.current?.getVisibleStartRow() ?? savedScrollRowRef.current;
+    setControlRoom(false);
+  }, [setControlRoom]);
+
+  useEffect(() => {
+    if (!controlRoom) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (showFullscreenModal) return;
+      e.preventDefault();
+      exitControlRoom();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [controlRoom, showFullscreenModal, exitControlRoom]);
+
+  useEffect(() => {
+    const row = savedScrollRowRef.current;
+    const id = window.setTimeout(() => gridRef.current?.restoreStartRow(row), 80);
+    return () => window.clearTimeout(id);
+  }, [controlRoom]);
 
   useEffect(() => {
     let cancelled = false;
@@ -321,9 +355,36 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
     );
   }
 
+  const layoutSelect = (
+    <select
+      value={selectedLayout.label}
+      onChange={(e) =>
+        setSelectedLayout(
+          LIVE_LAYOUTS.find((l) => l.label === e.target.value) ?? LIVE_LAYOUTS[1],
+        )
+      }
+      className={
+        controlRoom
+          ? 'bg-black/70 text-white border border-white/20 rounded px-2 py-1 text-xs'
+          : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-3 py-1'
+      }
+      title="Grid layout"
+    >
+      {LIVE_LAYOUTS.map((layout) => (
+        <option key={layout.label} value={layout.label}>
+          {layout.label}
+        </option>
+      ))}
+    </select>
+  );
+
   return (
     <>
-      <div className="flex flex-col h-full min-h-0">
+      <div
+        className="relative flex flex-col h-full min-h-0"
+        data-live-control-room={controlRoom ? 'true' : 'false'}
+      >
+        {!controlRoom && (
         <div className="shrink-0 px-3 pt-2 pb-2 border-b border-gray-300 dark:border-gray-700 bg-gray-200 dark:bg-gray-900 z-20">
           <PageHeader
             title="Live View"
@@ -337,21 +398,16 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
                     onSelect={setSelectedCamera}
                   />
                 )}
-                <select
-                  value={selectedLayout.label}
-                  onChange={(e) =>
-                    setSelectedLayout(
-                      LIVE_LAYOUTS.find((l) => l.label === e.target.value) ?? LIVE_LAYOUTS[1],
-                    )
-                  }
-                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-3 py-1"
+                {layoutSelect}
+                <button
+                  type="button"
+                  onClick={enterControlRoom}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 text-sm hover:bg-gray-50 dark:hover:bg-gray-700"
+                  title="Hide navigation and maximize the video wall"
                 >
-                  {LIVE_LAYOUTS.map((layout) => (
-                    <option key={layout.label} value={layout.label}>
-                      {layout.label}
-                    </option>
-                  ))}
-                </select>
+                  <Maximize2 size={14} />
+                  Control Room
+                </button>
               </div>
             }
           />
@@ -368,8 +424,13 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
             />
           </div>
         </div>
+        )}
 
-        <div className="flex-1 min-h-0 overflow-hidden p-2 flex flex-col gap-2">
+        <div
+          className={`flex-1 min-h-0 overflow-hidden flex flex-col ${
+            controlRoom ? 'gap-0 p-0 bg-black' : 'gap-2 p-2'
+          }`}
+        >
           {(awaitingSite || awaitingBuilding || awaitingFloor) && (
             <div className="flex items-center justify-center flex-1 text-gray-500 text-center px-4">
               {awaitingSite && 'Select a site / unit to begin.'}
@@ -380,14 +441,14 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
             </div>
           )}
 
-          {isSiteAllCameras && !camerasLoading && cameras.length > 0 && (
+          {!controlRoom && isSiteAllCameras && !camerasLoading && cameras.length > 0 && (
             <div className="shrink-0 rounded-lg border border-amber-700/40 bg-amber-950/25 px-4 py-2 text-xs text-amber-200">
               Showing all {cameras.length} cameras in {selectedSite}. Select a building and floor to
               reduce load.
             </div>
           )}
 
-          {isBuildingAllCameras && !camerasLoading && cameras.length > 0 && parsedBuilding && (
+          {!controlRoom && isBuildingAllCameras && !camerasLoading && cameras.length > 0 && parsedBuilding && (
             <div className="shrink-0 rounded-lg border border-amber-700/40 bg-amber-950/25 px-4 py-2 text-xs text-amber-200">
               Showing all {cameras.length} cameras in {parsedBuilding.building}. Pick a single floor
               to reduce load.
@@ -409,6 +470,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
 
           {selectedGroup && !camerasLoading && sortedCameras.length > 0 && (
             <LiveCameraGrid
+              ref={gridRef}
               cameras={sortedCameras}
               gridCols={gridCols}
               streamsReady={go2rtcReady}
@@ -422,6 +484,23 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
             />
           )}
         </div>
+
+        {controlRoom && (
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex justify-between p-2">
+            <div className="pointer-events-auto opacity-40 hover:opacity-100 focus-within:opacity-100 transition-opacity">
+              {layoutSelect}
+            </div>
+            <button
+              type="button"
+              onClick={exitControlRoom}
+              className="pointer-events-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-black/60 text-white text-xs border border-white/20 hover:bg-black/80"
+              title="Exit Control Room (Esc)"
+            >
+              <Minimize2 size={12} />
+              Exit
+            </button>
+          </div>
+        )}
       </div>
       {showFullscreenModal && fullscreenCamera && (
         <FullscreenCameraModal

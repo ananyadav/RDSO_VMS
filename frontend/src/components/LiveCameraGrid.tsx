@@ -1,4 +1,12 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import CameraCard from './CameraCard';
 
 const GAP_PX = 2; // matches Tailwind gap-0.5
@@ -33,22 +41,30 @@ interface LiveCameraGridProps {
   scrollResetKey: string | null;
 }
 
+export interface LiveCameraGridHandle {
+  getVisibleStartRow: () => number;
+  restoreStartRow: (row: number) => void;
+}
+
 /**
  * Row-based virtualized NxN live grid.
  * Full scroll height covers every camera; only nearby rows mount CameraCards.
  */
-function LiveCameraGrid({
-  cameras,
-  gridCols,
-  streamsReady,
-  selectedCameraId,
-  fullscreenCameraId,
-  showFullscreenModal,
-  recordingSchedule,
-  onToggleRecording,
-  onFullscreen,
-  scrollResetKey,
-}: LiveCameraGridProps) {
+const LiveCameraGrid = forwardRef<LiveCameraGridHandle, LiveCameraGridProps>(function LiveCameraGrid(
+  {
+    cameras,
+    gridCols,
+    streamsReady,
+    selectedCameraId,
+    fullscreenCameraId,
+    showFullscreenModal,
+    recordingSchedule,
+    onToggleRecording,
+    onFullscreen,
+    scrollResetKey,
+  },
+  ref,
+) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [rowHeightPx, setRowHeightPx] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
@@ -66,7 +82,7 @@ function LiveCameraGrid({
     const el = viewportRef.current;
     if (!el) return;
     const h = el.clientHeight;
-    const minRow = gridCols >= 5 ? 64 : 80;
+    const minRow = gridCols >= 6 ? 48 : gridCols >= 5 ? 64 : 80;
     const nextRow =
       h > 0 ? Math.max(minRow, Math.floor((h - GAP_PX * (gridCols - 1)) / gridCols)) : 0;
     setViewportHeight(h);
@@ -103,6 +119,22 @@ function LiveCameraGrid({
       if (rafScrollRef.current) cancelAnimationFrame(rafScrollRef.current);
     };
   }, []);
+
+  useImperativeHandle(ref, () => ({
+    getVisibleStartRow: () => {
+      const el = viewportRef.current;
+      if (!el || rowStride <= 0) return 0;
+      return Math.max(0, Math.floor(el.scrollTop / rowStride));
+    },
+    restoreStartRow: (row: number) => {
+      const el = viewportRef.current;
+      if (!el || rowStride <= 0) return;
+      const maxRow = Math.max(0, totalRows - 1);
+      const next = Math.min(maxRow, Math.max(0, row));
+      el.scrollTop = next * rowStride;
+      setScrollTop(el.scrollTop);
+    },
+  }), [rowStride, totalRows]);
 
   let startRow = 0;
   let endRow = -1;
@@ -208,6 +240,6 @@ function LiveCameraGrid({
       </div>
     </div>
   );
-}
+});
 
 export default React.memo(LiveCameraGrid);

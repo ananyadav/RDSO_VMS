@@ -29,6 +29,7 @@ import type { User } from './services/authService';
 import { authService } from './services/authService';
 import { apiFetch } from './lib/api';
 import { LocationsProvider } from './context/LocationsContext';
+import { LiveControlRoomProvider, useLiveControlRoom } from './context/LiveControlRoomContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useVisibilityInterval } from './hooks/useVisibilityInterval';
 
@@ -232,24 +233,81 @@ export default function App(): React.ReactElement {
     <>
       <Router>
         <LocationsProvider>
+        <LiveControlRoomProvider>
+          <AppShell
+            currentUser={currentUser}
+            liveView={liveView}
+            recordingSchedule={recordingSchedule}
+            isRecordingEnabled={isRecordingEnabled}
+            onScheduleChange={handleScheduleUpdate}
+            onToggleMasterRecording={handleSetMasterRecording}
+            onLogout={handleLogout}
+            theme={theme}
+            toggleTheme={toggleTheme}
+            accessProfileKey={accessProfileKey}
+          />
+        </LiveControlRoomProvider>
+        </LocationsProvider>
+      </Router>
+      <Toaster position="top-right" toastOptions={{
+        style: {
+          background: theme === 'dark' ? '#333' : '#fff',
+          color: theme === 'dark' ? '#fff' : '#333'
+        }
+      }}/>
+    </>
+  );
+}
+
+function AppShell({
+  currentUser,
+  liveView,
+  recordingSchedule,
+  isRecordingEnabled,
+  onScheduleChange,
+  onToggleMasterRecording,
+  onLogout,
+  theme,
+  toggleTheme,
+  accessProfileKey,
+}: {
+  currentUser: User;
+  liveView: React.ReactElement;
+  recordingSchedule: RecordingScheduleType;
+  isRecordingEnabled: boolean;
+  onScheduleChange: (
+    newSchedule: RecordingScheduleType,
+    options?: { quiet?: boolean },
+  ) => Promise<void>;
+  onToggleMasterRecording: (isEnabled: boolean) => Promise<void>;
+  onLogout: () => void;
+  theme: 'light' | 'dark';
+  toggleTheme: () => void;
+  accessProfileKey: string;
+}): React.ReactElement {
+  const { controlRoom } = useLiveControlRoom();
+
+  return (
         <div className="flex h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
-          <Sidebar user={currentUser} />
-          <div className="flex flex-1 flex-col min-h-0">
+          {!controlRoom && <Sidebar user={currentUser} />}
+          <div className="flex flex-1 flex-col min-h-0 min-w-0">
+            {!controlRoom && (
             <TopBar
               userName={currentUser.name}
               userRole={currentUser.role}
-              onLogout={handleLogout}
+              onLogout={onLogout}
               theme={theme}
               toggleTheme={toggleTheme}
             />
+            )}
             <main className="flex-1 min-h-0 overflow-hidden bg-gray-200 dark:bg-gray-900 flex flex-col">
-              <div className="flex-1 min-h-0 overflow-hidden">
+              <div className="flex-1 min-h-0 overflow-hidden relative">
               <ErrorBoundary>
               <Switch>
                 <Route exact path="/" render={() => renderHome(currentUser, liveView)} />
                 <Route path="/live" render={() => renderProtected(currentUser, PERMISSIONS.LIVE_VIEW, liveView)} />
                 <Route path="/storage" render={() => renderProtected(currentUser, PERMISSIONS.SYSTEM, (
-                  <Storage schedule={recordingSchedule} isRecordingEnabled={isRecordingEnabled} onScheduleChange={handleScheduleUpdate} onToggleMasterRecording={handleSetMasterRecording}/>
+                  <Storage schedule={recordingSchedule} isRecordingEnabled={isRecordingEnabled} onScheduleChange={onScheduleChange} onToggleMasterRecording={onToggleMasterRecording}/>
                 ))} />
                 <Route exact path="/ptz" render={() => renderProtected(currentUser, PERMISSIONS.LIVE_VIEW, <PTZ />)} />
                 <Route path="/ptz/:cameraId" render={() => renderProtected(currentUser, PERMISSIONS.LIVE_VIEW, <PTZ />)} />
@@ -269,14 +327,5 @@ export default function App(): React.ReactElement {
             </main>
           </div>
         </div>
-        </LocationsProvider>
-      </Router>
-      <Toaster position="top-right" toastOptions={{
-        style: {
-          background: theme === 'dark' ? '#333' : '#fff',
-          color: theme === 'dark' ? '#fff' : '#333'
-        }
-      }}/>
-    </>
   );
 }
