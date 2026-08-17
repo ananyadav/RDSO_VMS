@@ -84,7 +84,7 @@ const LiveCameraGrid = forwardRef<LiveCameraGridHandle, LiveCameraGridProps>(fun
     const h = el.clientHeight;
     const minRow = gridCols >= 6 ? 48 : gridCols >= 5 ? 64 : 80;
     const nextRow =
-      h > 0 ? Math.max(minRow, Math.floor((h - GAP_PX * (gridCols - 1)) / gridCols)) : 0;
+      h > 0 ? Math.max(minRow, Math.ceil((h - GAP_PX * (gridCols - 1)) / gridCols)) : 0;
     setViewportHeight(h);
     setRowHeightPx(nextRow);
   }, [gridCols]);
