@@ -103,7 +103,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
     try {
       if (anyEl.requestFullscreen) {
         void anyEl.requestFullscreen().catch(() => {
-          toast.error('Could not enter Control Room fullscreen');
+          toast.error('Could not enter fullscreen');
         });
       } else if (anyEl.webkitRequestFullscreen) {
         anyEl.webkitRequestFullscreen();
@@ -111,7 +111,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
         toast.error('Browser fullscreen is not available');
       }
     } catch {
-      toast.error('Could not enter Control Room fullscreen');
+      toast.error('Could not enter fullscreen');
     }
   }, []);
 
@@ -425,11 +425,11 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
                   type="button"
                   onClick={enterControlRoom}
                   disabled={!selectedGroup || camerasLoading || sortedCameras.length === 0}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Enter Control Room fullscreen video wall"
+                  className="inline-flex items-center justify-center p-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Fullscreen video wall"
+                  aria-label="Fullscreen video wall"
                 >
-                  <Maximize2 size={14} />
-                  Control Room
+                  <Maximize2 size={16} />
                 </button>
               </div>
             }
