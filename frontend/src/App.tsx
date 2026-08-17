@@ -249,12 +249,6 @@ export default function App(): React.ReactElement {
         </LiveControlRoomProvider>
         </LocationsProvider>
       </Router>
-      <Toaster position="top-right" toastOptions={{
-        style: {
-          background: theme === 'dark' ? '#333' : '#fff',
-          color: theme === 'dark' ? '#fff' : '#333'
-        }
-      }}/>
     </>
   );
 }
@@ -288,6 +282,7 @@ function AppShell({
   const { controlRoom } = useLiveControlRoom();
 
   return (
+    <>
         <div className="flex h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
           {!controlRoom && <Sidebar user={currentUser} />}
           <div className="flex flex-1 flex-col min-h-0 min-w-0">
@@ -300,7 +295,9 @@ function AppShell({
               toggleTheme={toggleTheme}
             />
             )}
-            <main className="flex-1 min-h-0 overflow-hidden bg-gray-200 dark:bg-gray-900 flex flex-col">
+            <main className={`flex-1 min-h-0 overflow-hidden flex flex-col ${
+              controlRoom ? 'bg-black' : 'bg-gray-200 dark:bg-gray-900'
+            }`}>
               <div className="flex-1 min-h-0 overflow-hidden relative">
               <ErrorBoundary>
               <Switch>
@@ -327,5 +324,14 @@ function AppShell({
             </main>
           </div>
         </div>
+        {!controlRoom && (
+        <Toaster position="top-right" toastOptions={{
+          style: {
+            background: theme === 'dark' ? '#333' : '#fff',
+            color: theme === 'dark' ? '#fff' : '#333'
+          }
+        }}/>
+        )}
+    </>
   );
 }

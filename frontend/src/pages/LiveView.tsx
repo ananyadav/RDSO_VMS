@@ -6,7 +6,7 @@ import LiveViewLocationSelector, {
   type BuildingGroup,
 } from '../components/LiveViewLocationSelector';
 import PageHeader from '../components/PageHeader';
-import { Loader2, Maximize2, Minimize2 } from 'lucide-react';
+import { Loader2, Maximize2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { flushAllUiConsumers } from '../lib/go2rtcConsumerRegistry';
 import { destroyAllGo2RtcPlayers, ensureGo2RtcPlayer } from '../lib/go2rtcPlayer';
@@ -62,6 +62,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
   const { params, setParams, initialParams, hydratedRef, markHydrated } = useUrlHydration();
   const { controlRoom, setControlRoom } = useLiveControlRoom();
   const gridRef = useRef<LiveCameraGridHandle>(null);
+  const wallRef = useRef<HTMLDivElement>(null);
   const savedScrollRowRef = useRef(0);
 
   const [buildings, setBuildings] = useState<BuildingGroup[]>([]);
@@ -90,26 +91,51 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
   };
 
   const enterControlRoom = useCallback(() => {
+    setShowFullscreenModal(false);
+    setFullscreenCamera(null);
     savedScrollRowRef.current = gridRef.current?.getVisibleStartRow() ?? 0;
-    setControlRoom(true);
-  }, [setControlRoom]);
-
-  const exitControlRoom = useCallback(() => {
-    savedScrollRowRef.current = gridRef.current?.getVisibleStartRow() ?? savedScrollRowRef.current;
-    setControlRoom(false);
-  }, [setControlRoom]);
+    const el = wallRef.current;
+    if (!el) return;
+    const anyEl = el as HTMLElement & {
+      requestFullscreen?: () => Promise<void>;
+      webkitRequestFullscreen?: () => void;
+    };
+    try {
+      if (anyEl.requestFullscreen) {
+        void anyEl.requestFullscreen().catch(() => {
+          toast.error('Could not enter Control Room fullscreen');
+        });
+      } else if (anyEl.webkitRequestFullscreen) {
+        anyEl.webkitRequestFullscreen();
+      } else {
+        toast.error('Browser fullscreen is not available');
+      }
+    } catch {
+      toast.error('Could not enter Control Room fullscreen');
+    }
+  }, []);
 
   useEffect(() => {
-    if (!controlRoom) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      if (showFullscreenModal) return;
-      e.preventDefault();
-      exitControlRoom();
+    const syncFullscreen = () => {
+      const doc = document as Document & { webkitFullscreenElement?: Element | null };
+      const fs = document.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+      const wall = wallRef.current;
+      const active = Boolean(wall && fs && (fs === wall || wall.contains(fs)));
+      if (active) {
+        setControlRoom(true);
+        return;
+      }
+      if (!controlRoom) return;
+      savedScrollRowRef.current = gridRef.current?.getVisibleStartRow() ?? savedScrollRowRef.current;
+      setControlRoom(false);
     };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [controlRoom, showFullscreenModal, exitControlRoom]);
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    document.addEventListener('webkitfullscreenchange', syncFullscreen as EventListener);
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFullscreen);
+      document.removeEventListener('webkitfullscreenchange', syncFullscreen as EventListener);
+    };
+  }, [controlRoom, setControlRoom]);
 
   useEffect(() => {
     const row = savedScrollRowRef.current;
@@ -363,11 +389,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
           LIVE_LAYOUTS.find((l) => l.label === e.target.value) ?? LIVE_LAYOUTS[1],
         )
       }
-      className={
-        controlRoom
-          ? 'bg-black/70 text-white border border-white/20 rounded px-2 py-1 text-xs'
-          : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-3 py-1'
-      }
+      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-3 py-1"
       title="Grid layout"
     >
       {LIVE_LAYOUTS.map((layout) => (
@@ -402,8 +424,9 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
                 <button
                   type="button"
                   onClick={enterControlRoom}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 text-sm hover:bg-gray-50 dark:hover:bg-gray-700"
-                  title="Hide navigation and maximize the video wall"
+                  disabled={!selectedGroup || camerasLoading || sortedCameras.length === 0}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Enter Control Room fullscreen video wall"
                 >
                   <Maximize2 size={14} />
                   Control Room
@@ -469,40 +492,30 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
           )}
 
           {selectedGroup && !camerasLoading && sortedCameras.length > 0 && (
+            <div
+              ref={wallRef}
+              className="live-control-room-wall flex-1 min-h-0 overflow-hidden flex flex-col bg-black"
+              data-live-control-room-wall="true"
+            >
             <LiveCameraGrid
               ref={gridRef}
               cameras={sortedCameras}
               gridCols={gridCols}
               streamsReady={go2rtcReady}
-              selectedCameraId={selectedCamera?.id ?? null}
+              selectedCameraId={controlRoom ? null : selectedCamera?.id ?? null}
               fullscreenCameraId={fullscreenCamera?.id ?? null}
               showFullscreenModal={showFullscreenModal}
               recordingSchedule={recordingSchedule}
               onToggleRecording={onToggleRecording}
-              onFullscreen={openFullscreen}
+              onFullscreen={controlRoom ? undefined : openFullscreen}
               scrollResetKey={selectedGroup}
+              controlRoom={controlRoom}
             />
+            </div>
           )}
         </div>
-
-        {controlRoom && (
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex justify-between p-2">
-            <div className="pointer-events-auto opacity-40 hover:opacity-100 focus-within:opacity-100 transition-opacity">
-              {layoutSelect}
-            </div>
-            <button
-              type="button"
-              onClick={exitControlRoom}
-              className="pointer-events-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-black/60 text-white text-xs border border-white/20 hover:bg-black/80"
-              title="Exit Control Room (Esc)"
-            >
-              <Minimize2 size={12} />
-              Exit
-            </button>
-          </div>
-        )}
       </div>
-      {showFullscreenModal && fullscreenCamera && (
+      {!controlRoom && showFullscreenModal && fullscreenCamera && (
         <FullscreenCameraModal
           key={fullscreenCamera.id}
           camera={fullscreenCamera}

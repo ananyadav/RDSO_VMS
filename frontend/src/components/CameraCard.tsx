@@ -23,6 +23,7 @@ interface CameraCardProps {
   isRecording: boolean;
   onToggleRecording: (cameraId: string) => void;
   onFullscreen?: (camera: Camera) => void;
+  controlRoom?: boolean;
 }
 
 function CameraCard({
@@ -34,6 +35,7 @@ function CameraCard({
   isRecording,
   onToggleRecording,
   onFullscreen,
+  controlRoom = false,
 }: CameraCardProps) {
   const tileRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<HTMLDivElement>(null);
@@ -57,16 +59,21 @@ function CameraCard({
     (isQueued || isConnecting || !streamsReady || (eagerLive && !inView));
 
   const handleDoubleClick = () => {
+    if (controlRoom) return;
     if (onFullscreen) onFullscreen(camera);
   };
 
   return (
     <div
-      className="group w-full h-full bg-white dark:bg-gray-900 overflow-hidden flex flex-col transition-all duration-300 relative ring-1 ring-gray-300 dark:ring-gray-700"
+      className={`w-full h-full overflow-hidden flex flex-col relative ${
+        controlRoom
+          ? 'bg-black'
+          : 'group bg-white dark:bg-gray-900 transition-all duration-300 ring-1 ring-gray-300 dark:ring-gray-700'
+      }`}
     >
       <div
         ref={tileRef}
-        className="relative flex-1 min-h-0 bg-black cursor-pointer"
+        className={`relative flex-1 min-h-0 bg-black ${controlRoom ? '' : 'cursor-pointer'}`}
         onDoubleClick={handleDoubleClick}
       >
         <div className="absolute inset-0">
@@ -74,7 +81,7 @@ function CameraCard({
             <>
               <div ref={playerRef} className="live-monitor-player absolute inset-0" />
 
-              {showConnecting && (
+              {!controlRoom && showConnecting && (
                 <div className="absolute inset-0 animate-pulse bg-gray-800/60 z-10">
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="flex items-center gap-2 text-gray-200 text-sm">
@@ -87,12 +94,18 @@ function CameraCard({
             </>
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
-              <VideoOff size={48} />
-              <p>Camera Offline</p>
+              {!controlRoom && (
+                <>
+                  <VideoOff size={48} />
+                  <p>Camera Offline</p>
+                </>
+              )}
             </div>
           )}
         </div>
 
+        {!controlRoom && (
+          <>
         <div className="absolute top-0 left-0 right-0 p-2 flex justify-between items-start bg-gradient-to-b from-black/60 to-transparent z-10">
           <div className="flex items-center space-x-2 min-w-0 flex-wrap gap-1">
             {isRecording && (
@@ -151,6 +164,8 @@ function CameraCard({
             </button>
           </div>
         </div>
+          </>
+        )}
       </div>
     </div>
   );

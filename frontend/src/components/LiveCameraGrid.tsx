@@ -36,9 +36,10 @@ interface LiveCameraGridProps {
   showFullscreenModal: boolean;
   recordingSchedule: Record<string, boolean>;
   onToggleRecording: (cameraId: string) => void;
-  onFullscreen: (camera: LiveGridCamera) => void;
+  onFullscreen?: (camera: LiveGridCamera) => void;
   /** Reset scroll when location scope changes. */
   scrollResetKey: string | null;
+  controlRoom?: boolean;
 }
 
 export interface LiveCameraGridHandle {
@@ -62,6 +63,7 @@ const LiveCameraGrid = forwardRef<LiveCameraGridHandle, LiveCameraGridProps>(fun
     onToggleRecording,
     onFullscreen,
     scrollResetKey,
+    controlRoom = false,
   },
   ref,
 ) {
@@ -180,7 +182,9 @@ const LiveCameraGrid = forwardRef<LiveCameraGridHandle, LiveCameraGridProps>(fun
   return (
     <div
       ref={viewportRef}
-      className="flex-1 min-h-0 overflow-y-auto bg-black"
+      className={`flex-1 min-h-0 overflow-y-auto bg-black ${
+        controlRoom ? 'live-control-room-scroll' : ''
+      }`}
       onScroll={onScroll}
       data-live-grid-cols={gridCols}
       data-live-grid-total={cameras.length}
@@ -210,7 +214,7 @@ const LiveCameraGrid = forwardRef<LiveCameraGridHandle, LiveCameraGridProps>(fun
                   <div
                     key={camera.id}
                     className={`relative min-w-0 h-full ${
-                      selectedCameraId === camera.id
+                      !controlRoom && selectedCameraId === camera.id
                         ? 'ring-2 ring-blue-400 dark:ring-blue-500 z-10'
                         : ''
                     }`}
@@ -228,7 +232,8 @@ const LiveCameraGrid = forwardRef<LiveCameraGridHandle, LiveCameraGridProps>(fun
                         }
                         isRecording={recordingSchedule[camera.id] || false}
                         onToggleRecording={() => onToggleRecording(camera.id)}
-                        onFullscreen={onFullscreen}
+                        onFullscreen={controlRoom ? undefined : onFullscreen}
+                        controlRoom={controlRoom}
                       />
                     </div>
                   </div>
