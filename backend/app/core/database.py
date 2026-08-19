@@ -522,8 +522,10 @@ async def ensure_database_indexes() -> None:
 
         await ensure_workers_indexes()
         from app.services.session_service import ensure_session_indexes
+        from app.services.audit_service import ensure_audit_indexes
 
         await ensure_session_indexes()
+        await ensure_audit_indexes()
         try:
             await camera_collection.drop_index("idx_camera_online")
         except Exception:

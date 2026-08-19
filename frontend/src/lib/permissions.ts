@@ -17,12 +17,23 @@ export function isAdminUser(user: Pick<User, 'role'> | null | undefined): boolea
   return (user?.role ?? '').trim().toLowerCase() === 'admin';
 }
 
+/** Matches backend SUPER_ADMIN aliases. Do not treat this as Admin in the normal VMS UI. */
+export function isSuperAdminUser(user: Pick<User, 'role'> | null | undefined): boolean {
+  const key = (user?.role ?? '').trim().toLowerCase().replace(/[-\s]/g, '_');
+  return key === 'super_admin' || key === 'superadmin';
+}
+
+/** Day-to-day CCTV admin: ADMIN or SUPER_ADMIN. Matches backend is_ops_admin / is_admin. */
+export function isOpsAdminUser(user: Pick<User, 'role'> | null | undefined): boolean {
+  return isAdminUser(user) || isSuperAdminUser(user);
+}
+
 export function hasPermission(
   user: Pick<User, 'role' | 'permissions'> | null | undefined,
   permission: Permission,
 ): boolean {
   if (!user) return false;
-  if (isAdminUser(user)) return true;
+  if (isOpsAdminUser(user)) return true;
   return (user.permissions ?? []).includes(permission);
 }
 
@@ -67,10 +78,22 @@ export function permissionForPath(pathname: string): Permission | null {
   return match ? ROUTE_PERMISSIONS[match] : null;
 }
 
+function isControlCenterPath(pathname: string): boolean {
+  return (
+    pathname === '/control-center' ||
+    pathname.startsWith('/control-center/') ||
+    pathname === '/super-admin' ||
+    pathname.startsWith('/super-admin/')
+  );
+}
+
 export function canAccessPath(
   user: Pick<User, 'role' | 'permissions'> | null | undefined,
   pathname: string,
 ): boolean {
+  if (isControlCenterPath(pathname)) {
+    return isSuperAdminUser(user);
+  }
   const required = permissionForPath(pathname);
   if (!required) return true;
   return hasPermission(user, required);

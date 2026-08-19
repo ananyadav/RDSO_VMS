@@ -33,7 +33,7 @@ import { useLocationsContext } from '../context/LocationsContext';
 import { apiFetch, cameraQuery } from '../lib/api';
 import { readSessionCache, UI_CACHE_TTL_MS, writeSessionCache } from '../lib/sessionCache';
 import { authService } from '../services/authService';
-import { isAdminUser } from '../lib/permissions';
+import { isOpsAdminUser } from '../lib/permissions';
 
 interface Camera {
   id?: string;
@@ -283,7 +283,7 @@ export default function CameraManagement() {
   );
   const { sites: locationSites, buildings: locationBuildings, reload: reloadLocations } = useLocationsContext();
   const importInputRef = useRef<HTMLInputElement>(null);
-  const isAdmin = isAdminUser(authService.getCurrentUser());
+  const isAdmin = isOpsAdminUser(authService.getCurrentUser());
 
   const fetchGroupTree = useCallback(async (opts?: { silent?: boolean; hydrateUrl?: boolean }) => {
     const silent = opts?.silent === true;

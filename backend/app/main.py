@@ -24,6 +24,8 @@ from app.routes.playback import setup_playback_routes
 from app.routes.locations import setup_location_routes
 from app.routes.go2rtc import setup_go2rtc_routes
 from app.routes.ptz import setup_ptz_routes
+from app.routes.audit import setup_audit_routes
+from app.routes.sessions import setup_session_routes
 
 from app.core.auth_context import session_middleware
 from app.core.http_utils import json_error_middleware
@@ -53,6 +55,8 @@ async def create_app():
 
     setup_go2rtc_routes(app)
     setup_ptz_routes(app)
+    setup_audit_routes(app)
+    setup_session_routes(app)
 
     # --- Register routes ---
     app.router.add_get("/api/cameras", get_camera_list)

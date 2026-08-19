@@ -8,8 +8,8 @@ import { useTheme } from './hooks/useTheme';
 // --- Component & Layout Imports ---
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
-import { renderProtected, renderHome } from "./components/ProtectedRoute";
-import { isAdminUser, PERMISSIONS } from './lib/permissions';
+import { renderProtected, renderHome, renderControlCenter } from "./components/ProtectedRoute";
+import { isOpsAdminUser, isSuperAdminUser, PERMISSIONS, firstAllowedPath } from './lib/permissions';
 
 // --- Page Imports ---
 import LoginPage from "./pages/LoginPage";
@@ -25,6 +25,7 @@ import Notifications from "./pages/Notifications";
 import SystemStatus from "./pages/SystemStatus";
 import Go2RtcDiagnostics from "./pages/Go2RtcDiagnostics";
 import Maintenance from "./pages/Maintenance";
+import ControlCenter from "./pages/ControlCenter";
 import type { User } from './services/authService';
 import { authService } from './services/authService';
 import { apiFetch } from './lib/api';
@@ -117,7 +118,7 @@ export default function App(): React.ReactElement {
       void apiFetch('/api/go2rtc/health-scan', { cache: 'no-store' }).catch(() => {});
     },
     30000,
-    Boolean(currentUser && isAdminUser(currentUser)),
+    Boolean(currentUser && isOpsAdminUser(currentUser)),
   );
 
   // --- Handlers (useCallback keeps references stable across re-renders so
@@ -312,11 +313,19 @@ function AppShell({
                 <Route path="/playback" render={() => renderProtected(currentUser, PERMISSIONS.PLAYBACK, <Playback key={accessProfileKey} />)} />
                 <Route path="/events" render={() => renderProtected(currentUser, PERMISSIONS.EVENTS, <Events />)} />
                 <Route path="/network-settings" render={() => renderProtected(currentUser, PERMISSIONS.SYSTEM, <NetworkSettings />, 'Network Settings')} />
-                <Route path="/user-management" render={() => renderProtected(currentUser, PERMISSIONS.USERS, <UserManagement />, 'User Management')} />
+                <Route path="/user-management" render={() => (
+                  isSuperAdminUser(currentUser)
+                    ? <Redirect to="/control-center?tab=users" />
+                    : renderProtected(currentUser, PERMISSIONS.USERS, <UserManagement />, 'User Management')
+                )} />
                 <Route path="/notifications" render={() => renderProtected(currentUser, PERMISSIONS.SYSTEM, <Notifications />, 'Alerts')} />
                 <Route path="/system-status" render={() => renderProtected(currentUser, PERMISSIONS.SYSTEM, <SystemStatus />, 'System Status')} />
                 <Route path="/go2rtc-diagnostics" render={() => renderProtected(currentUser, PERMISSIONS.SYSTEM, <Go2RtcDiagnostics />, 'go2rtc Diagnostics')} />
                 <Route path="/maintenance" render={() => renderProtected(currentUser, PERMISSIONS.SYSTEM, <Maintenance />, 'Maintenance')} />
+                <Route path="/control-center" render={() => renderControlCenter(currentUser, <ControlCenter currentUser={currentUser} />)} />
+                <Route path="/super-admin" render={() => (
+                  <Redirect to={isSuperAdminUser(currentUser) ? '/control-center' : (firstAllowedPath(currentUser) || '/live')} />
+                )} />
                 <Route><div className="text-center text-xl p-8">Page Not Found</div></Route>
               </Switch>
               </ErrorBoundary>

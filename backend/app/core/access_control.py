@@ -7,6 +7,7 @@ from typing import Optional
 from aiohttp import web
 
 from app.core.auth_context import get_effective_user
+from app.core.roles import ROLE_SUPER_ADMIN, normalize_role
 from app.services.camera_access import is_admin
 from app.services.camera_identity import get_camera_by_ref
 from app.services.camera_access import user_can_access_camera
@@ -41,6 +42,36 @@ async def require_admin(request: web.Request) -> dict:
     if not is_admin(user):
         raise web.HTTPForbidden(text="Admin only")
     return user
+
+
+def user_has_role(user: Optional[dict], *roles: str) -> bool:
+    current = normalize_role(user)
+    if not current:
+        return False
+    wanted = {normalize_role(role) for role in roles if role}
+    return current in wanted
+
+
+async def require_role(request: web.Request, *roles: str) -> dict:
+    """Fail closed: unauthenticated → 401, wrong role → 403."""
+    user = await require_user(request)
+    if not user_has_role(user, *roles):
+        raise web.HTTPForbidden(text="Forbidden")
+    return user
+
+
+async def require_super_admin(request: web.Request) -> dict:
+    return await require_role(request, ROLE_SUPER_ADMIN)
+
+
+async def deny_unless_super_admin(request: web.Request) -> web.Response | None:
+    try:
+        await require_super_admin(request)
+    except web.HTTPUnauthorized:
+        return _json_error("Authentication required", 401)
+    except web.HTTPForbidden:
+        return _json_error("Forbidden", 403)
+    return None
 
 
 async def deny_unless_playback_permission(request: web.Request) -> web.Response | None:

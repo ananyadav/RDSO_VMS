@@ -10,10 +10,11 @@ import {
 import {
   NO_FLOOR_SELECTED,
   buildingKey,
-  isAdminUser,
   parseBuildingKey,
   soleFloorGroup,
 } from '../lib/cameraAccess';
+import { isOpsAdminUser } from '../lib/permissions';
+import { authService } from '../services/authService';
 
 export type { BuildingGroup };
 
@@ -48,7 +49,7 @@ export default function LiveViewLocationSelector({
   onSelectBuilding,
   onSelectGroup,
 }: LiveViewLocationSelectorProps) {
-  const isAdmin = isAdminUser();
+  const isAdmin = isOpsAdminUser(authService.getCurrentUser());
 
   const sites = useMemo(() => {
     const map = new Map<string, BuildingGroup[]>();

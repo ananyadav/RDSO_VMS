@@ -3,8 +3,9 @@
 # Flow:
 #   1. CI builds frontend → backend/static
 #   2. CI runs backend unit tests
-#   3. rsync (preserves server .env, Recordings/, go2rtc/, tools/)
-#   4. SSH: install deps, recreate PM2 cctv-backend, ensure go2rtc workers
+#   3. SSH: timestamped app-tree backup (no Recordings) under CCTV-backups/
+#   4. rsync (preserves server .env, Recordings/, go2rtc/, tools/)
+#   5. SSH: install deps, recreate PM2 cctv-backend, ensure go2rtc workers
 #
 # Required GitHub secrets: SSH_HOST, SSH_USER, SSH_PRIVATE_KEY
 # Optional: SSH_PORT (default 22)
@@ -74,6 +75,40 @@ jobs:
           PORT="${{ secrets.SSH_PORT }}"
           if [ -z "$PORT" ]; then PORT=22; fi
           ssh-keyscan -p "$PORT" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Backup production before rsync
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          command_timeout: 15m
+          script: |
+            set -euo pipefail
+            ROOT="${{ env.SERVER_DEPLOY_PATH }}"
+            TS="$(date -u +%Y%m%dT%H%M%SZ)"
+            BACKUP_DIR="${ROOT}/../CCTV-backups/task14c-${TS}"
+            mkdir -p "$BACKUP_DIR"
+            cd "$ROOT"
+            tar --exclude='./Recordings' --exclude='./recordings' --exclude='./node_modules' \
+              --exclude='./frontend/node_modules' --exclude='./.venv' --exclude='./venv' \
+              --exclude='./.git' --exclude='./deploy/nginx-win' --exclude='./__pycache__' \
+              -czf "${BACKUP_DIR}/app-tree.tgz" -C "$ROOT" .
+            cp -a .env "${BACKUP_DIR}/env.backup" 2>/dev/null || true
+            cp -a backend/static "${BACKUP_DIR}/static.backup" 2>/dev/null || true
+            if [ -d /etc/nginx ]; then
+              sudo cp -a /etc/nginx "${BACKUP_DIR}/nginx" 2>/dev/null || cp -a /etc/nginx "${BACKUP_DIR}/nginx" 2>/dev/null || true
+            fi
+            if [ -d go2rtc ]; then
+              mkdir -p "${BACKUP_DIR}/go2rtc"
+              cp -a go2rtc/workers "${BACKUP_DIR}/go2rtc/" 2>/dev/null || true
+            fi
+            pm2 save 2>/dev/null || true
+            cp -a "${HOME}/.pm2/dump.pm2" "${BACKUP_DIR}/pm2.dump.pm2" 2>/dev/null || true
+            echo "BACKUP_DIR=${BACKUP_DIR}"
+            ls -la "$BACKUP_DIR"
+            printf '%s\n' "$BACKUP_DIR" > "${BACKUP_DIR}/BACKUP_DIR.txt"
 
       - name: Rsync to server
         env:

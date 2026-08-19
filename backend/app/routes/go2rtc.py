@@ -7,9 +7,10 @@ import logging
 
 from aiohttp import ClientSession, ClientTimeout, web
 
-from app.core.access_control import require_admin, require_user
+from app.core.access_control import deny_unless_super_admin, require_admin, require_user
 from app.core.auth_context import get_effective_user
 from app.services.camera_identity import get_camera_by_ref
+from app.core.roles import is_super_admin
 from app.services.camera_access import (
     is_admin,
     parse_stream_camera_id,
@@ -60,15 +61,19 @@ async def _admin_only(request: web.Request) -> web.Response | None:
     return None
 
 
+async def _super_admin_only(request: web.Request) -> web.Response | None:
+    return await deny_unless_super_admin(request)
+
+
 async def go2rtc_status(request: web.Request) -> web.Response:
-    denied = await _admin_only(request)
+    denied = await _super_admin_only(request)
     if denied is not None:
         return denied
     return web.json_response(await get_go2rtc_status())
 
 
 async def go2rtc_diagnostics(request: web.Request) -> web.Response:
-    denied = await _admin_only(request)
+    denied = await _super_admin_only(request)
     if denied is not None:
         return denied
     return web.json_response(await get_go2rtc_diagnostics())
@@ -93,7 +98,7 @@ async def go2rtc_health_clear_failures(request: web.Request) -> web.Response:
 
 
 async def go2rtc_reload(request: web.Request) -> web.Response:
-    denied = await _admin_only(request)
+    denied = await _super_admin_only(request)
     if denied is not None:
         return denied
     return web.json_response(await start_go2rtc(reload=True))
@@ -224,8 +229,8 @@ async def go2rtc_media_auth(request: web.Request) -> web.Response:
 
     src = (request.query.get("src") or "").strip()
     if not src:
-        # Allow generic worker asset probes only for admins; live players always pass src.
-        if is_admin(user):
+        # Allow generic worker asset probes only for SUPER_ADMIN; live players always pass src.
+        if is_super_admin(user):
             return web.Response(status=200, text="ok")
         return web.Response(status=403, text="src query parameter required")
 
@@ -241,14 +246,14 @@ async def go2rtc_media_auth(request: web.Request) -> web.Response:
 
 
 async def go2rtc_start(request: web.Request) -> web.Response:
-    denied = await _admin_only(request)
+    denied = await _super_admin_only(request)
     if denied is not None:
         return denied
     return web.json_response(await start_go2rtc())
 
 
 async def go2rtc_stop(request: web.Request) -> web.Response:
-    denied = await _admin_only(request)
+    denied = await _super_admin_only(request)
     if denied is not None:
         return denied
     await stop_go2rtc()
@@ -276,18 +281,18 @@ async def _authorize_go2rtc_proxy(request: web.Request, path: str) -> None:
             raise web.HTTPForbidden(text="Camera access denied")
         return
 
-    if is_admin(user):
+    if is_super_admin(user):
         return
 
     path_lower = path.lower()
     if path_lower.startswith("api/streams") or path_lower.startswith("api/config"):
-        raise web.HTTPForbidden(text="Admin only")
+        raise web.HTTPForbidden(text="Forbidden")
 
-    raise web.HTTPForbidden(text="Camera access denied")
+    raise web.HTTPForbidden(text="Forbidden")
 
 
 async def go2rtc_workers_list(request: web.Request) -> web.Response:
-    denied = await _admin_only(request)
+    denied = await _super_admin_only(request)
     if denied is not None:
         return denied
     workers = await list_active_workers()
@@ -295,7 +300,7 @@ async def go2rtc_workers_list(request: web.Request) -> web.Response:
 
 
 async def go2rtc_worker_sync(request: web.Request) -> web.Response:
-    denied = await _admin_only(request)
+    denied = await _super_admin_only(request)
     if denied is not None:
         return denied
     try:
@@ -309,7 +314,7 @@ async def go2rtc_worker_sync(request: web.Request) -> web.Response:
 
 async def go2rtc_workers_heal(request: web.Request) -> web.Response:
     """POST /api/go2rtc/workers/heal — restart/resync any unhealthy worker."""
-    denied = await _admin_only(request)
+    denied = await _super_admin_only(request)
     if denied is not None:
         return denied
     return web.json_response(await heal_all_workers())
@@ -317,7 +322,7 @@ async def go2rtc_workers_heal(request: web.Request) -> web.Response:
 
 async def go2rtc_workers_rebalance(request: web.Request) -> web.Response:
     """POST /api/go2rtc/workers/rebalance — redistribute cameras across workers."""
-    denied = await _admin_only(request)
+    denied = await _super_admin_only(request)
     if denied is not None:
         return denied
     rebalance = await rebalance_worker_assignments(reason="api")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from app.core.roles import is_ops_admin
 from bson.objectid import ObjectId
 
 
@@ -22,7 +23,7 @@ def normalize_camera_access(user: Optional[dict]) -> Dict[str, Any]:
         return _all_access()
 
     role = (user.get("role") or "").strip().lower()
-    if role == "admin":
+    if is_ops_admin(user):
         return _all_access()
 
     raw = user.get("cameraAccess") or {}
@@ -35,7 +36,7 @@ def normalize_camera_access(user: Optional[dict]) -> Dict[str, Any]:
     uids = [str(u).strip() for u in (raw.get("allowedCameraUids") or []) if str(u).strip()]
 
     if legacy_type == "all" and not groups and not uids and not legacy_ids:
-        if role == "admin":
+        if is_ops_admin(user):
             return _all_access()
         return {
             "all": False,
@@ -53,7 +54,8 @@ def normalize_camera_access(user: Optional[dict]) -> Dict[str, Any]:
 
 
 def is_admin(user: Optional[dict]) -> bool:
-    return (user or {}).get("role", "").strip().lower() == "admin"
+    """True for ADMIN and SUPER_ADMIN (operational CCTV privileges)."""
+    return is_ops_admin(user)
 
 
 def has_unrestricted_camera_access(user: Optional[dict]) -> bool:

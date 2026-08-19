@@ -2,7 +2,7 @@ import React from 'react';
 import { Redirect } from 'react-router-dom';
 import type { User } from '../services/authService';
 import type { Permission } from '../lib/permissions';
-import { firstAllowedPath, hasPermission } from '../lib/permissions';
+import { firstAllowedPath, hasPermission, isSuperAdminUser } from '../lib/permissions';
 import PermissionDenied from './PermissionDenied';
 
 export function renderProtected(
@@ -16,6 +16,16 @@ export function renderProtected(
   ) : (
     <PermissionDenied user={user} required={permission} area={area} />
   );
+}
+
+/** Hidden route: never advertise why access was denied. */
+export function renderControlCenter(
+  user: User,
+  children: React.ReactNode,
+): React.ReactNode {
+  if (isSuperAdminUser(user)) return children;
+  const fallback = firstAllowedPath(user) || '/live';
+  return <Redirect to={fallback} />;
 }
 
 export function renderHome(

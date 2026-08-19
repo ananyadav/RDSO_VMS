@@ -13,6 +13,17 @@ from app.services.camera_service import (
 from app.services.camera_management import reload_go2rtc_for_group, test_camera_stream
 from app.core.database import delete_camera
 from app.core.access_control import require_admin
+from app.core.auth_context import get_effective_user
+from app.services.audit_service import (
+    ACTION_CAMERA_CREATED,
+    ACTION_CAMERA_DELETED,
+    ACTION_CAMERA_LOCATION_CHANGED,
+    ACTION_CAMERA_UPDATED,
+    AUDIT_INCOMPLETE_ERROR,
+    commit_critical_audit,
+    field_diff,
+    location_fields_changed,
+)
 from app.services.camera_sync import schedule_camera_side_effects
 
 logger = logging.getLogger(__name__)
@@ -61,6 +72,26 @@ async def add_camera_endpoint(request):
     log_data = {k: ('***' if k == 'password' and v else v) for k, v in camera_data.items()}
     logging.info(f"Received camera data: {log_data}")
     result, status = await handle_add_camera(camera_data)
+    if status == 201:
+        actor = await get_effective_user(request)
+        created_id = result.get("id") or result.get("_id")
+
+        async def _compensate():
+            if created_id:
+                await delete_camera(str(created_id))
+
+        ok = await commit_critical_audit(
+            compensate=_compensate,
+            action=ACTION_CAMERA_CREATED,
+            actor=actor,
+            resource_type="camera",
+            resource_id=created_id,
+            resource_label=result.get("name") or result.get("ip_address"),
+            request=request,
+            success=True,
+        )
+        if not ok:
+            return web.json_response({"error": AUDIT_INCOMPLETE_ERROR}, status=500)
     return web.json_response(result, status=status)
 
 
@@ -85,7 +116,56 @@ async def update_camera_endpoint(request):
         return web.json_response({"error": "Admin only"}, status=403)
     camera_id = request.match_info['id']
     camera_data = await request.json()
+    from bson import ObjectId
+    from bson.errors import InvalidId
+    from app.core.database import camera_collection
+
+    try:
+        existing = await camera_collection.find_one({"_id": ObjectId(camera_id)})
+    except (InvalidId, TypeError):
+        existing = None
     result, status = await handle_update_camera(camera_id, camera_data)
+    if status == 200 and existing:
+        actor = await get_effective_user(request)
+        loc_changes = location_fields_changed(existing, result)
+        other_fields = [
+            "name",
+            "ip_address",
+            "port",
+            "protocol",
+            "username",
+            "main_rtsp_url",
+            "sub_rtsp_url",
+            "is_active",
+        ]
+        changes = field_diff(existing, result, other_fields)
+        changes.update(loc_changes)
+        if camera_data.get("password") not in (None, "", "***"):
+            changes["camera_password"] = {"before": "[REDACTED]", "after": "[REDACTED]"}
+        action = ACTION_CAMERA_LOCATION_CHANGED if loc_changes else ACTION_CAMERA_UPDATED
+
+        async def _compensate():
+            from bson import ObjectId as _OID
+            from app.core.database import camera_collection as cams
+
+            restore = dict(existing)
+            oid = restore.get("_id")
+            if oid is not None:
+                await cams.replace_one({"_id": _OID(str(oid))}, restore)
+
+        ok = await commit_critical_audit(
+            compensate=_compensate,
+            action=action,
+            actor=actor,
+            resource_type="camera",
+            resource_id=camera_id,
+            resource_label=result.get("name") or result.get("ip_address"),
+            request=request,
+            success=True,
+            changes=changes,
+        )
+        if not ok:
+            return web.json_response({"error": AUDIT_INCOMPLETE_ERROR}, status=500)
     return web.json_response(result, status=status)
 
 
@@ -123,6 +203,25 @@ async def delete_camera_endpoint(request):
     deleted = await delete_camera(camera_id)
     if not deleted:
         return web.json_response({"error": "Camera not found"}, status=404)
+
+    actor = await get_effective_user(request)
+
+    async def _compensate():
+        await camera_collection.replace_one({"_id": existing["_id"]}, existing, upsert=True)
+
+    ok = await commit_critical_audit(
+        compensate=_compensate,
+        action=ACTION_CAMERA_DELETED,
+        actor=actor,
+        resource_type="camera",
+        resource_id=camera_id,
+        resource_label=(existing.get("ip_address") or existing.get("name") or camera_id),
+        request=request,
+        success=True,
+        metadata={"method": "hard_delete"},
+    )
+    if not ok:
+        return web.json_response({"error": AUDIT_INCOMPLETE_ERROR}, status=500)
 
     # Sync the camera's worker so go2rtc drops its streams (DB row is already gone).
     try:

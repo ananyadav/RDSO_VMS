@@ -1,4 +1,5 @@
 import { authService } from '../services/authService';
+import { isOpsAdminUser } from './permissions';
 import {
   ALL_CAMERAS_GROUP,
   buildingScopeKey,
@@ -74,7 +75,7 @@ export function initialLiveViewSelection(
   if (!buildings.length) {
     return { site: null, buildingKey: null, group: null };
   }
-  if (isAdminUser()) {
+  if (isOpsAdminUser(authService.getCurrentUser())) {
     return { site: null, buildingKey: null, group: null };
   }
   const b = preferredBuilding(buildings);

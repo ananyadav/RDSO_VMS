@@ -49,11 +49,15 @@ class TestAccessControl(unittest.TestCase):
 
     def test_playback_permission(self):
         admin = {"role": "Admin", "permissions": []}
+        super_admin = {"role": "SUPER_ADMIN", "permissions": []}
         viewer_ok = {"role": "Viewer", "permissions": [PERMISSION_PLAYBACK]}
         viewer_no = {"role": "Viewer", "permissions": ["Live View"]}
+        operator = {"role": "Operator", "permissions": ["Live View"]}
         self.assertTrue(has_permission(admin, PERMISSION_PLAYBACK))
+        self.assertTrue(has_permission(super_admin, PERMISSION_PLAYBACK))
         self.assertTrue(has_permission(viewer_ok, PERMISSION_PLAYBACK))
         self.assertFalse(has_permission(viewer_no, PERMISSION_PLAYBACK))
+        self.assertFalse(has_permission(operator, PERMISSION_PLAYBACK))
 
 
 if __name__ == "__main__":

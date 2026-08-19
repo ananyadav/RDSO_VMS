@@ -2,10 +2,10 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   Camera, Play, Calendar, Zap, SlidersHorizontal, HardDrive,
-  Network, Users, Bell, Activity, Wrench, Radio, type LucideIcon,
+  Network, Users, Bell, Activity, Wrench, Radio, Shield, type LucideIcon,
 } from 'lucide-react';
 import type { User } from '../services/authService';
-import { PERMISSIONS, type Permission, hasPermission, isAdminUser } from '../lib/permissions';
+import { PERMISSIONS, type Permission, hasPermission, isAdminUser, isSuperAdminUser } from '../lib/permissions';
 
 type NavItem = { label: string; href: string; icon: LucideIcon; permission: Permission; adminOnly?: boolean };
 
@@ -33,6 +33,7 @@ const systemNav: NavItem[] = [
 function filterNav(items: NavItem[], user: User): NavItem[] {
   return items.filter((item) => {
     if (item.adminOnly && !isAdminUser(user)) return false;
+    if (item.href === '/user-management' && isSuperAdminUser(user)) return false;
     return hasPermission(user, item.permission);
   });
 }
@@ -92,6 +93,20 @@ export default function Sidebar({ user }: SidebarProps): React.ReactElement {
             {system.map((item) => (
               <NavItemLink key={item.href} item={item} />
             ))}
+          </>
+        )}
+
+        {isSuperAdminUser(user) && (
+          <>
+            <div className="my-1 mx-3 border-t border-gray-800" role="separator" />
+            <NavItemLink
+              item={{
+                label: 'Control Center',
+                href: '/control-center',
+                icon: Shield,
+                permission: PERMISSIONS.SYSTEM,
+              }}
+            />
           </>
         )}
       </nav>

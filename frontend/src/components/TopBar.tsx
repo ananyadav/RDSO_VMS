@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ThemeToggle from './ThemeToggle';
 import { User as UserIcon, LogOut, ChevronDown } from 'lucide-react';
+import { displayRole } from '../lib/superAdmin';
 
 interface TopBarProps {
   userName: string;
@@ -53,7 +54,7 @@ export default function TopBar({ userName, userRole, onLogout, theme, toggleThem
             aria-haspopup="menu"
           >
             <UserIcon size={20} />
-            <span className="text-sm font-medium hidden sm:block">{userRole}</span>
+            <span className="text-sm font-medium hidden sm:block">{displayRole(userRole)}</span>
             <ChevronDown size={16} className={isUserMenuOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
           </button>
 
@@ -64,7 +65,7 @@ export default function TopBar({ userName, userRole, onLogout, theme, toggleThem
             >
               <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
                 <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{userName}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{userRole}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{displayRole(userRole)}</p>
               </div>
               <button
                 type="button"

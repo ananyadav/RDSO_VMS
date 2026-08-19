@@ -8,6 +8,7 @@ from aiohttp import web
 
 from app.core.access_control import deny_unless_camera_access, has_permission, PERMISSION_LIVE_VIEW
 from app.core.auth_context import get_effective_user
+from app.services.audit_service import ACTION_PTZ_PAN, ACTION_PTZ_STOP, ACTION_PTZ_TILT, ACTION_PTZ_ZOOM, write_audit
 from app.services.camera_access import is_admin
 from app.services.camera_identity import get_camera_by_ref
 from app.services.hikvision_ptz import (
@@ -98,6 +99,42 @@ async def ptz_move(request: web.Request) -> web.Response:
 
     if not result.get("ok"):
         return web.json_response(result, status=502)
+
+    actor = await get_effective_user(request)
+    pan = int(body.get("pan") or 0)
+    tilt = int(body.get("tilt") or 0)
+    zoom = int(body.get("zoom") or 0)
+    direction_l = str(direction or "").lower()
+    if direction_l in ("left", "right") or pan:
+        await write_audit(
+            action=ACTION_PTZ_PAN,
+            actor=actor,
+            resource_type="camera",
+            resource_id=camera_id,
+            request=request,
+            success=True,
+            metadata={"direction": direction_l or None, "pan": pan},
+        )
+    if direction_l in ("up", "down") or tilt:
+        await write_audit(
+            action=ACTION_PTZ_TILT,
+            actor=actor,
+            resource_type="camera",
+            resource_id=camera_id,
+            request=request,
+            success=True,
+            metadata={"direction": direction_l or None, "tilt": tilt},
+        )
+    if direction_l in ("in", "out", "zoom_in", "zoom_out") or zoom:
+        await write_audit(
+            action=ACTION_PTZ_ZOOM,
+            actor=actor,
+            resource_type="camera",
+            resource_id=camera_id,
+            request=request,
+            success=True,
+            metadata={"direction": direction_l or None, "zoom": zoom},
+        )
     return web.json_response({"ok": True})
 
 
@@ -109,6 +146,15 @@ async def ptz_stop_handler(request: web.Request) -> web.Response:
     result = await ptz_stop(camera)
     if not result.get("ok"):
         return web.json_response(result, status=502)
+    actor = await get_effective_user(request)
+    await write_audit(
+        action=ACTION_PTZ_STOP,
+        actor=actor,
+        resource_type="camera",
+        resource_id=camera_id,
+        request=request,
+        success=True,
+    )
     return web.json_response({"ok": True})
 
 
