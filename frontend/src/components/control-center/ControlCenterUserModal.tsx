@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import CameraAccessPicker, { normalizeStoredCameraAccess } from '../CameraAccessPicker';
-import { ALL_PERMISSIONS } from '../../lib/permissions';
+import { ALL_PERMISSIONS, permissionLabel } from '../../lib/permissions';
 import { isSuperAdminRole } from '../../lib/superAdmin';
 import type { ManagedUser } from '../../lib/controlCenterApi';
 
@@ -210,7 +210,7 @@ export default function ControlCenterUserModal({
                       }
                       className="checkbox-style"
                     />
-                    <span className="text-gray-300">{permission}</span>
+                    <span className="text-gray-300">{permissionLabel(permission)}</span>
                   </label>
                 ))}
               </div>

@@ -2,6 +2,19 @@
 
 import os
 
+
+def is_recording_engine_enabled() -> bool:
+    """Master create-new-recordings flag. Default off (storage not available).
+
+    RECORDING_ENABLED=false must not block playback of existing recordings.
+    """
+    return os.getenv("RECORDING_ENABLED", "false").strip().lower() in ("1", "true", "yes")
+
+
+class RecordingEngineDisabled(RuntimeError):
+    """Attempted to start a recorder while RECORDING_ENABLED is false."""
+
+
 RECORDING_STREAM = os.getenv("RECORDING_STREAM", "main").strip().lower()
 # 5-minute segments — fewer files, same total disk use
 RECORDING_SEGMENT_SECONDS = os.getenv("RECORDING_HLS_SEGMENT_SECONDS", "300")

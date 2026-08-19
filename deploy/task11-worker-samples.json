@@ -1,0 +1,64 @@
+{
+  "cookie": "nvr_session=<REDACTED>",
+  "workers": [
+    {
+      "workerId": 1,
+      "pm2Name": null,
+      "baseUrl": "http://127.0.0.1:1984",
+      "apiPort": 1984,
+      "rtspPort": 8554,
+      "webrtcPort": 8555,
+      "assignedCameraCount": 294,
+      "maxCameras": 300,
+      "running": true,
+      "liveStreamCount": 588,
+      "configPath": "/home/vms/cctv_ananya/CCTV/go2rtc/workers/1/go2rtc.yaml"
+    },
+    {
+      "workerId": 2,
+      "pm2Name": null,
+      "baseUrl": "http://127.0.0.1:1985",
+      "apiPort": 1985,
+      "rtspPort": 8556,
+      "webrtcPort": 8557,
+      "assignedCameraCount": 297,
+      "maxCameras": 300,
+      "running": true,
+      "liveStreamCount": 594,
+      "configPath": "/home/vms/cctv_ananya/CCTV/go2rtc/workers/2/go2rtc.yaml"
+    },
+    {
+      "workerId": 3,
+      "pm2Name": "go2rtc-worker-3",
+      "baseUrl": "http://127.0.0.1:1986",
+      "apiPort": 1986,
+      "rtspPort": 8558,
+      "webrtcPort": 8559,
+      "assignedCameraCount": 202,
+      "maxCameras": 300,
+      "running": true,
+      "liveStreamCount": 404,
+      "configPath": "/home/vms/cctv_ananya/CCTV/go2rtc/workers/3/go2rtc.yaml"
+    }
+  ],
+  "samples": [
+    {
+      "_id": "6a38c7808ca33214031596f9",
+      "worker_id": 1,
+      "name": "192.168.41.31",
+      "ip_address": "192.168.41.31"
+    },
+    {
+      "_id": "6a4b7565b6a42e83880b64d7",
+      "worker_id": 2,
+      "name": "192.168.46.49",
+      "ip_address": "192.168.46.49"
+    },
+    {
+      "_id": "6a4e2f169243e2b5ff10a861",
+      "name": "192.168.9.36",
+      "ip_address": "192.168.9.36",
+      "worker_id": 3
+    }
+  ]
+}

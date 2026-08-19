@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import PlaybackTimeline, { blockStyle, recordingSeekOffset } from '../components/playback/PlaybackTimeline';
 import {
   Play, Pause, ChevronsLeft, ChevronsRight, Calendar, Video,
-  Search, Clock, Loader2, Maximize, Minimize, Camera,
+  Search, Clock, Loader2, Maximize, Minimize, Camera, Download, Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiFetch, cameraQuery } from '../lib/api';
@@ -28,6 +28,8 @@ import {
   initialStringParam,
 } from '../hooks/useUrlSearchState';
 import { resolvePlaybackFromUrl } from '../lib/urlViewState';
+import { authService } from '../services/authService';
+import { isSuperAdminUser } from '../lib/permissions';
 
 interface Camera {
   id: string;
@@ -159,6 +161,7 @@ export default function Playback(): React.ReactElement {
   const videoContainerRef = useRef<HTMLDivElement>(null);
 
   const GAP_MESSAGE = 'No recording available for this time.';
+  const canManageRecordings = isSuperAdminUser(authService.getCurrentUser());
 
   const calYear = selectedDate.getFullYear();
   const calMonth = selectedDate.getMonth() + 1;
@@ -509,6 +512,41 @@ export default function Playback(): React.ReactElement {
     }, 'image/png');
   };
 
+  const downloadSession = async (rec: PlaybackRecording) => {
+    try {
+      const response = await apiFetch(`/api/recordings/sessions/${rec.sessionId}/download`);
+      if (!response.ok) {
+        toast.error(response.status === 403 ? 'Download is not permitted' : 'Download failed');
+        return;
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `recording-${rec.sessionId}.zip`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Download failed');
+    }
+  };
+
+  const deleteSession = async (rec: PlaybackRecording) => {
+    if (!window.confirm('Delete this recording? This cannot be undone.')) return;
+    try {
+      const response = await apiFetch(`/api/recordings/sessions/${rec.sessionId}`, { method: 'DELETE' });
+      if (!response.ok) {
+        toast.error(response.status === 403 ? 'Delete is not permitted' : 'Could not delete recording');
+        return;
+      }
+      setRecordings((prev) => prev.filter((item) => item.sessionId !== rec.sessionId));
+      if (activeSessionId === rec.sessionId) setActiveSessionId(null);
+      toast.success('Recording deleted');
+    } catch {
+      toast.error('Could not delete recording');
+    }
+  };
+
   const renderSessionsList = () => (
     <div className="flex flex-col flex-1 min-h-0 border-t border-gray-700">
       <div className="flex-shrink-0 px-2.5 py-2 text-white text-xs font-semibold flex items-center">
@@ -529,8 +567,8 @@ export default function Playback(): React.ReactElement {
           playableRecordings.map((rec) => {
             const active = rec.sessionId === activeSessionId;
             return (
+              <div key={rec.sessionId} className="space-y-0.5">
               <button
-                key={rec.sessionId}
                 type="button"
                 onClick={() => playAt(rec, 0)}
                 className={`w-full text-left p-1.5 rounded border text-[10px] transition-all ${
@@ -548,6 +586,27 @@ export default function Playback(): React.ReactElement {
                   <span className="text-gray-300">{formatClock(rec.duration)}</span>
                 </div>
               </button>
+              {canManageRecordings && (
+                <div className="flex items-center justify-end gap-1 mt-1">
+                  <button
+                    type="button"
+                    onClick={() => void downloadSession(rec)}
+                    className="p-1 text-gray-400 hover:text-white"
+                    title="Download recording"
+                  >
+                    <Download size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void deleteSession(rec)}
+                    className="p-1 text-gray-400 hover:text-red-400"
+                    title="Delete recording"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              )}
+              </div>
             );
           })
         )}
@@ -858,6 +917,7 @@ export default function Playback(): React.ReactElement {
               ))}
               </div>
 
+            {canManageRecordings && (
             <button
               type="button"
               onClick={captureSnapshot}
@@ -868,6 +928,7 @@ export default function Playback(): React.ReactElement {
               <Camera size={16} />
               Capture
             </button>
+            )}
 
             <button
               type="button"

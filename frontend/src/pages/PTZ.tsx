@@ -17,6 +17,8 @@ import {
 } from '../lib/ptzApi';
 import { ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { authService } from '../services/authService';
+import { hasPermission, PERMISSIONS } from '../lib/permissions';
 import {
   useUrlHydration,
   useUrlSync,
@@ -208,9 +210,11 @@ const PTZ = () => {
     return (
       <div className="flex flex-col items-center gap-4 text-center p-8">
         <p className="text-red-400">{error}</p>
+        {hasPermission(authService.getCurrentUser(), PERMISSIONS.CAMERAS) && (
         <Link to="/camera-management" className="text-blue-400 hover:underline">
           Open Camera Management
         </Link>
+        )}
       </div>
     );
   }

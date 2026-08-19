@@ -2,8 +2,9 @@ import unittest
 
 from app.core.access_control import (
     PERMISSION_PLAYBACK,
-    deny_unless_playback_permission,
+    PERMISSION_RECORDING_VIEW,
     has_permission,
+    has_recording_view,
 )
 from app.services.camera_access import (
     normalize_camera_access,
@@ -50,13 +51,20 @@ class TestAccessControl(unittest.TestCase):
     def test_playback_permission(self):
         admin = {"role": "Admin", "permissions": []}
         super_admin = {"role": "SUPER_ADMIN", "permissions": []}
-        viewer_ok = {"role": "Viewer", "permissions": [PERMISSION_PLAYBACK]}
+        viewer_ok = {"role": "Viewer", "permissions": [PERMISSION_RECORDING_VIEW]}
         viewer_no = {"role": "Viewer", "permissions": ["Live View"]}
         operator = {"role": "Operator", "permissions": ["Live View"]}
-        self.assertTrue(has_permission(admin, PERMISSION_PLAYBACK))
-        self.assertTrue(has_permission(super_admin, PERMISSION_PLAYBACK))
-        self.assertTrue(has_permission(viewer_ok, PERMISSION_PLAYBACK))
-        self.assertFalse(has_permission(viewer_no, PERMISSION_PLAYBACK))
+        operator_view = {"role": "Operator", "permissions": [PERMISSION_RECORDING_VIEW]}
+        legacy_playback = {"role": "Operator", "permissions": [PERMISSION_PLAYBACK]}
+        self.assertTrue(has_permission(admin, PERMISSION_RECORDING_VIEW))
+        self.assertTrue(has_permission(super_admin, PERMISSION_RECORDING_VIEW))
+        self.assertTrue(has_recording_view(admin))
+        self.assertTrue(has_recording_view(super_admin))
+        self.assertTrue(has_recording_view(viewer_ok))
+        self.assertFalse(has_recording_view(viewer_no))
+        self.assertFalse(has_recording_view(operator))
+        self.assertTrue(has_recording_view(operator_view))
+        self.assertFalse(has_recording_view(legacy_playback))
         self.assertFalse(has_permission(operator, PERMISSION_PLAYBACK))
 
 

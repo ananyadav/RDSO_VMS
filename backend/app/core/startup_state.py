@@ -30,8 +30,25 @@ def get_startup(app: web.Application) -> Dict[str, Any]:
     return state
 
 
+def _recording_health_snapshot() -> dict:
+    """Truthful disabled/active recording state for System Health. Does not start recorders."""
+    from app.services.recording_config import is_recording_engine_enabled
+
+    enabled = is_recording_engine_enabled()
+    recording_active = False
+    if enabled:
+        try:
+            from app.services.video_recording import ACTIVE_RECORDINGS
+
+            recording_active = bool(ACTIVE_RECORDINGS)
+        except Exception:
+            recording_active = False
+    return {"enabled": enabled, "recordingActive": recording_active}
+
+
 async def health_handler(request: web.Request) -> web.Response:
     state = get_startup(request.app)
+    rec = _recording_health_snapshot()
     return web.json_response(
         {
             "ready": bool(state.get("ready")),
@@ -39,6 +56,9 @@ async def health_handler(request: web.Request) -> web.Response:
             "cameraCount": int(state.get("camera_count") or 0),
             "phase": state.get("phase") or "starting",
             "error": state.get("error"),
+            "recording": rec,
+            "enabled": rec["enabled"],
+            "recordingActive": rec["recordingActive"],
         }
     )
 

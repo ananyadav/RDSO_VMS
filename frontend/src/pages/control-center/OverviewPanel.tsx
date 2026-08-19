@@ -141,6 +141,7 @@ export default function OverviewPanel(): React.ReactElement {
               <li>Backend: {health.ready ? 'Ready' : 'Not ready'}</li>
               <li>MongoDB: {health.mongodb ? 'Connected' : 'Unavailable'}</li>
               <li>Cameras: {health.cameraCount ?? '—'}</li>
+              <li>Recording: {health.enabled || health.recording?.enabled ? 'Enabled' : 'Disabled'}</li>
             </ul>
           ) : (
             <p className="text-sm text-gray-500">Unavailable</p>

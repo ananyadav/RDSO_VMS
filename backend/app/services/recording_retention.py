@@ -74,17 +74,9 @@ async def _mark_session_deleted(session_id: str, camera_id: str) -> None:
     )
 
 
-async def _delete_session_folder(camera_id: str, session_id: str) -> int:
-    folder = session_storage_dir(camera_id, session_id)
-    if not folder.exists():
-        return 0
-    try:
-        size = sum(f.stat().st_size for f in folder.rglob("*") if f.is_file())
-        shutil.rmtree(folder, ignore_errors=True)
-        return size
-    except OSError as e:
-        logger.warning(f"[RETENTION] Could not delete {folder}: {e}")
-        return 0
+async def delete_recording_session_files(camera_id: str, session_id: str) -> int:
+    """Remove a session folder from disk. Does not start recorders or run retention."""
+    return await _delete_session_folder(camera_id, session_id)
 
 
 async def _process_session_folder(

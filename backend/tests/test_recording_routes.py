@@ -12,10 +12,12 @@ from app.routes.recording import (
 
 
 class TestRecordingRoutes(unittest.IsolatedAsyncioTestCase):
+    @patch("app.routes.recording._audit_recording_config", new_callable=AsyncMock)
+    @patch("app.routes.recording.is_recording_engine_enabled", return_value=True)
     @patch("app.routes.recording.recording_sched.save_recording_settings", new_callable=AsyncMock)
-    @patch("app.routes.recording.deny_unless_admin_or_system", new_callable=AsyncMock, return_value=None)
+    @patch("app.routes.recording.deny_unless_super_admin", new_callable=AsyncMock, return_value=None)
     @patch("app.routes.recording.start_camera_recording", new_callable=AsyncMock)
-    async def test_start_recording(self, mock_start, _mock_auth, _mock_save):
+    async def test_start_recording(self, mock_start, _mock_auth, _mock_save, _mock_enabled, _mock_audit):
         mock_start.return_value = {
             "id": "sess1",
             "camera_id": "cam1",
@@ -30,10 +32,11 @@ class TestRecordingRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["status"], "recording")
         mock_start.assert_awaited_once_with("cam1")
 
+    @patch("app.routes.recording._audit_recording_config", new_callable=AsyncMock)
     @patch("app.routes.recording.recording_sched.save_recording_settings", new_callable=AsyncMock)
-    @patch("app.routes.recording.deny_unless_admin_or_system", new_callable=AsyncMock, return_value=None)
+    @patch("app.routes.recording.deny_unless_super_admin", new_callable=AsyncMock, return_value=None)
     @patch("app.routes.recording.stop_camera_recording", new_callable=AsyncMock)
-    async def test_stop_recording(self, mock_stop, _mock_auth, _mock_save):
+    async def test_stop_recording(self, mock_stop, _mock_auth, _mock_save, _mock_audit):
         mock_stop.return_value = {"id": "sess1", "status": "stopped"}
         request = make_mocked_request(
             "POST", "/api/recordings/cam1/stop", match_info={"cameraId": "cam1"}

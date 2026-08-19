@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { apiFetch } from '../lib/api';
-import { authService } from '../services/authService';
-import { isAdminUser } from '../lib/permissions';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import AddUserModal from '../components/AddUserModal';
@@ -35,8 +33,6 @@ interface User {
 export type { User, CameraAccess };
 
 export default function UserManagement() {
-  const currentUser = authService.getCurrentUser();
-  const isAdmin = isAdminUser(currentUser);
   const { setParams, initialParams, hydratedRef, markHydrated } = useUrlHydration();
   const [users, setUsers] = useState<User[]>([]);
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(() =>
@@ -77,13 +73,10 @@ export default function UserManagement() {
     }
   };
 
-  if (!isAdmin) {
-    return (
-      <div className="p-6 text-center text-gray-400">
-        User management is available to administrators only.
-      </div>
-    );
-  }
+  const managedUsers = users.filter((user) => {
+    const role = (user.role || '').trim().toLowerCase().replace(/[-\s]/g, '_');
+    return role !== 'admin' && role !== 'administrator' && role !== 'super_admin' && role !== 'superadmin';
+  });
 
   const handleAddUser = async (userData: User) => {
     try {
@@ -157,7 +150,7 @@ export default function UserManagement() {
             </tr>
           </thead>
           <tbody>
-            {users.map((user) => (
+            {managedUsers.map((user) => (
               <tr key={user.id} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/20">
                 <td className="px-6 py-4 font-bold text-gray-900 dark:text-white">{user.name}</td>
                 <td className="px-6 py-4">{user.role}</td>

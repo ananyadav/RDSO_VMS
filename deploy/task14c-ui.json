@@ -1,0 +1,317 @@
+{
+  "pages": {
+    "saNav": {
+      "nav": [
+        "Live View",
+        "Playback",
+        "Events",
+        "PTZ",
+        "Cameras",
+        "Storage",
+        "Network",
+        "Alerts",
+        "Status",
+        "Maintain",
+        "Control Center"
+      ],
+      "hasControlCenter": true,
+      "hasUsers": false,
+      "hasGo2rtc": false
+    },
+    "cameras": {
+      "href": "http://192.168.17.150/camera-management",
+      "add": true,
+      "manageLocations": true,
+      "denied": false
+    },
+    "locationsModal": {
+      "heading": true,
+      "open": true
+    },
+    "cameraCredentials": {
+      "passwordField": false,
+      "note": "no edit button found"
+    },
+    "ptz": {
+      "href": "http://192.168.17.150/ptz/6a6ad1c1ab17995b58f6cb91",
+      "denied": false,
+      "hasGrid": true
+    },
+    "controlCenter": {
+      "overview": {
+        "href": "http://192.168.17.150/control-center",
+        "heading": "VMS System",
+        "badApi": [],
+        "bodyHas404": false,
+        "bodyHas403": false,
+        "bodyHas500": false
+      },
+      "users": {
+        "href": "http://192.168.17.150/control-center?tab=users",
+        "heading": "VMS System",
+        "badApi": [],
+        "bodyHas404": false,
+        "bodyHas403": false,
+        "bodyHas500": false
+      },
+      "login": {
+        "href": "http://192.168.17.150/control-center?tab=login",
+        "heading": "VMS System",
+        "badApi": [],
+        "bodyHas404": false,
+        "bodyHas403": false,
+        "bodyHas500": false
+      },
+      "audit": {
+        "href": "http://192.168.17.150/control-center?tab=audit",
+        "heading": "VMS System",
+        "badApi": [],
+        "bodyHas404": false,
+        "bodyHas403": false,
+        "bodyHas500": false
+      },
+      "sessions": {
+        "href": "http://192.168.17.150/control-center?tab=sessions",
+        "heading": "VMS System",
+        "badApi": [],
+        "bodyHas404": false,
+        "bodyHas403": false,
+        "bodyHas500": false
+      },
+      "health": {
+        "href": "http://192.168.17.150/control-center?tab=health",
+        "heading": "VMS System",
+        "badApi": [],
+        "bodyHas404": false,
+        "bodyHas403": false,
+        "bodyHas500": false
+      }
+    },
+    "saLogout": {
+      "href": "http://192.168.17.150/control-center?tab=health",
+      "hasUsername": 1
+    }
+  },
+  "live": {},
+  "api": {
+    "sa": {
+      "audit": {
+        "status": 200,
+        "path": "/api/audit-logs?limit=5"
+      },
+      "sessions": {
+        "status": 200,
+        "path": "/api/sessions?active=true&limit=5"
+      },
+      "go2rtc": {
+        "status": 200,
+        "path": "/api/go2rtc/status"
+      }
+    },
+    "admin": {
+      "audit": {
+        "status": 403,
+        "path": "/api/audit-logs",
+        "error": "Forbidden"
+      },
+      "sessions": {
+        "status": 403,
+        "path": "/api/sessions",
+        "error": "Forbidden"
+      },
+      "go2rtc": {
+        "status": 403,
+        "path": "/api/go2rtc/status",
+        "error": "Forbidden"
+      }
+    },
+    "operator": {
+      "audit": {
+        "status": 403,
+        "path": "/api/audit-logs",
+        "error": "Forbidden"
+      },
+      "sessions": {
+        "status": 403,
+        "path": "/api/sessions",
+        "error": "Forbidden"
+      },
+      "go2rtc": {
+        "status": 403,
+        "path": "/api/go2rtc/status",
+        "error": "Forbidden"
+      },
+      "users": {
+        "status": 403,
+        "path": "/api/users",
+        "error": "Forbidden"
+      }
+    }
+  },
+  "http": [
+    {
+      "url": "/api/auth/session",
+      "status": 401
+    },
+    {
+      "url": "/api/ptz/6a6ad1c1ab17995b58f6cb91/status",
+      "status": 400
+    },
+    {
+      "url": "/api/ptz/6a6ad1c1ab17995b58f6cb91/presets",
+      "status": 400
+    }
+  ],
+  "saLogin": {
+    "href": "http://192.168.17.150/live",
+    "user": {
+      "id": "6a856fd4b9c450894085498d",
+      "name": "TASK14C_VAL",
+      "role": "SUPER_ADMIN",
+      "lastLogin": "2026-08-19T08:58:52.561132+00:00",
+      "status": "Active",
+      "email": null,
+      "permissions": [
+        "Live View",
+        "Playback",
+        "Events",
+        "Cameras",
+        "System",
+        "Users"
+      ],
+      "cameraAccess": {
+        "all": true,
+        "allowedCameraGroups": [],
+        "allowedCameraUids": []
+      }
+    }
+  },
+  "admin": {
+    "nav": [
+      "Live View",
+      "Playback",
+      "Events",
+      "PTZ",
+      "Cameras",
+      "Storage",
+      "Network",
+      "Users",
+      "Alerts",
+      "Status",
+      "go2rtc",
+      "Maintain"
+    ],
+    "hasControlCenter": false,
+    "live": {
+      "href": "http://192.168.17.150/live?group=rml_6_isp_labour_housing_2&layout=5x5",
+      "title": "Live View\nPlayback\nEvents\nPTZ\nCameras\nStorage\nNetwork\nUsers\nAlerts\nStatus\ngo2rtc",
+      "controlRoom": "false",
+      "cols": "5",
+      "total": "77",
+      "mounted": "35",
+      "eligible": "25",
+      "playing": 0,
+      "streams": 16,
+      "sidebarVisible": true,
+      "nav": [
+        "Live View",
+        "Playback",
+        "Events",
+        "PTZ",
+        "Cameras",
+        "Storage",
+        "Network",
+        "Users",
+        "Alerts",
+        "Status",
+        "go2rtc",
+        "Maintain"
+      ],
+      "hasControlCenter": false,
+      "hasUsers": true,
+      "hasGo2rtc": true,
+      "fullscreen": false
+    },
+    "cameras": {
+      "add": true,
+      "manageLocations": true
+    },
+    "usersPage": {
+      "href": "http://192.168.17.150/user-management",
+      "hasSuper": true
+    },
+    "controlCenterRedirect": {
+      "href": "http://192.168.17.150/live"
+    },
+    "ptz": {
+      "href": "http://192.168.17.150/ptz/6a6ad1c1ab17995b58f6cb91",
+      "denied": false
+    }
+  },
+  "operator": {
+    "nav": [
+      "Live View",
+      "Playback",
+      "Events",
+      "PTZ",
+      "Cameras",
+      "Storage",
+      "Network",
+      "Alerts",
+      "Status",
+      "Maintain"
+    ],
+    "hasControlCenter": false,
+    "hasUsers": false,
+    "live": {
+      "href": "http://192.168.17.150/live?site=RML+-+6&building=RML+-+6%3A%3ACorporate+Office&layout=2x2",
+      "title": "Live View\nPlayback\nEvents\nPTZ\nCameras\nStorage\nNetwork\nAlerts\nStatus\nMaintain\nVMS",
+      "controlRoom": "false",
+      "playing": 0,
+      "streams": 0,
+      "sidebarVisible": true,
+      "nav": [
+        "Live View",
+        "Playback",
+        "Events",
+        "PTZ",
+        "Cameras",
+        "Storage",
+        "Network",
+        "Alerts",
+        "Status",
+        "Maintain"
+      ],
+      "hasControlCenter": false,
+      "hasUsers": false,
+      "hasGo2rtc": false,
+      "fullscreen": false
+    },
+    "ws": 0,
+    "legacy": 0,
+    "controlCenterRedirect": {
+      "href": "http://192.168.17.150/live?site=RML+-+6&building=RML+-+6%3A%3ACorporate+Office&layout=2x2"
+    },
+    "users": {
+      "href": "http://192.168.17.150/user-management",
+      "denied": false
+    },
+    "go2rtcPage": {
+      "href": "http://192.168.17.150/go2rtc-diagnostics"
+    }
+  },
+  "saHttp4xx": [
+    {
+      "url": "/api/auth/session",
+      "status": 401
+    },
+    {
+      "url": "/api/ptz/6a6ad1c1ab17995b58f6cb91/status",
+      "status": 400
+    },
+    {
+      "url": "/api/ptz/6a6ad1c1ab17995b58f6cb91/presets",
+      "status": 400
+    }
+  ]
+}

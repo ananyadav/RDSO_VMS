@@ -1,0 +1,328 @@
+{
+  "topGroups": [
+    {
+      "group": "rml_6_isp_labour_housing_2",
+      "total": 77,
+      "online": 77,
+      "w1": 77,
+      "w2": 0,
+      "w3": 0,
+      "workersPresent": [
+        1
+      ],
+      "ptz": 0
+    },
+    {
+      "group": "rml_6_isp_seamless",
+      "total": 59,
+      "online": 59,
+      "w1": 0,
+      "w2": 58,
+      "w3": 1,
+      "workersPresent": [
+        2,
+        3
+      ],
+      "ptz": 0
+    },
+    {
+      "group": "rml_6_rml_dip_fittings",
+      "total": 52,
+      "online": 52,
+      "w1": 50,
+      "w2": 0,
+      "w3": 2,
+      "workersPresent": [
+        1,
+        3
+      ],
+      "ptz": 0
+    },
+    {
+      "group": "rml_6_rml_dip_sdp_10",
+      "total": 51,
+      "online": 51,
+      "w1": 0,
+      "w2": 51,
+      "w3": 0,
+      "workersPresent": [
+        2
+      ],
+      "ptz": 0
+    },
+    {
+      "group": "rml_3_kipl_kipl_all",
+      "total": 49,
+      "online": 49,
+      "w1": 0,
+      "w2": 0,
+      "w3": 49,
+      "workersPresent": [
+        3
+      ],
+      "ptz": 0
+    },
+    {
+      "group": "rml_6_rml_dip_sdp_8",
+      "total": 45,
+      "online": 45,
+      "w1": 0,
+      "w2": 45,
+      "w3": 0,
+      "workersPresent": [
+        2
+      ],
+      "ptz": 0
+    },
+    {
+      "group": "rml_6_rml_dip_sdp_9",
+      "total": 45,
+      "online": 45,
+      "w1": 0,
+      "w2": 45,
+      "w3": 0,
+      "workersPresent": [
+        2
+      ],
+      "ptz": 0
+    },
+    {
+      "group": "rml_6_rashmi_6_paradigm_limited_biomass",
+      "total": 43,
+      "online": 43,
+      "w1": 24,
+      "w2": 0,
+      "w3": 19,
+      "workersPresent": [
+        1,
+        3
+      ],
+      "ptz": 0
+    },
+    {
+      "group": "rml_6_rml_dip_sdp_6",
+      "total": 42,
+      "online": 42,
+      "w1": 0,
+      "w2": 25,
+      "w3": 17,
+      "workersPresent": [
+        2,
+        3
+      ],
+      "ptz": 0
+    },
+    {
+      "group": "rml_6_rml_dip_sdp_7",
+      "total": 36,
+      "online": 36,
+      "w1": 0,
+      "w2": 22,
+      "w3": 14,
+      "workersPresent": [
+        2,
+        3
+      ],
+      "ptz": 0
+    },
+    {
+      "group": "rml_6_corporate_office_ground_floor",
+      "total": 22,
+      "online": 22,
+      "w1": 18,
+      "w2": 0,
+      "w3": 4,
+      "workersPresent": [
+        1,
+        3
+      ],
+      "ptz": 0
+    },
+    {
+      "group": "rml_6_isp_mbf",
+      "total": 22,
+      "online": 22,
+      "w1": 1,
+      "w2": 0,
+      "w3": 21,
+      "workersPresent": [
+        1,
+        3
+      ],
+      "ptz": 1
+    },
+    {
+      "group": "rml_6_rml_dip_bl3_4",
+      "total": 18,
+      "online": 18,
+      "w1": 6,
+      "w2": 0,
+      "w3": 12,
+      "workersPresent": [
+        1,
+        3
+      ],
+      "ptz": 0
+    },
+    {
+      "group": "rml_1_rml_dip_rml_dip_all",
+      "total": 18,
+      "online": 18,
+      "w1": 0,
+      "w2": 18,
+      "w3": 0,
+      "workersPresent": [
+        2
+      ],
+      "ptz": 0
+    },
+    {
+      "group": "rml_6_corporate_office_2nd_floor",
+      "total": 17,
+      "online": 17,
+      "w1": 17,
+      "w2": 0,
+      "w3": 0,
+      "workersPresent": [
+        1
+      ],
+      "ptz": 0
+    },
+    {
+      "group": "rml_6_isp_rml6_boundary",
+      "total": 17,
+      "online": 17,
+      "w1": 0,
+      "w2": 17,
+      "w3": 0,
+      "workersPresent": [
+        2
+      ],
+      "ptz": 4
+    },
+    {
+      "group": "rml_6_corporate_office_3rd_floor",
+      "total": 16,
+      "online": 16,
+      "w1": 16,
+      "w2": 0,
+      "w3": 0,
+      "workersPresent": [
+        1
+      ],
+      "ptz": 0
+    },
+    {
+      "group": "rml_6_isp_sinter",
+      "total": 16,
+      "online": 16,
+      "w1": 7,
+      "w2": 9,
+      "w3": 0,
+      "workersPresent": [
+        1,
+        2
+      ],
+      "ptz": 0
+    },
+    {
+      "group": "rml_6_corporate_office_4th_floor",
+      "total": 14,
+      "online": 14,
+      "w1": 14,
+      "w2": 0,
+      "w3": 0,
+      "workersPresent": [
+        1
+      ],
+      "ptz": 0
+    },
+    {
+      "group": "rml_6_corporate_office_6th_floor",
+      "total": 14,
+      "online": 14,
+      "w1": 14,
+      "w2": 0,
+      "w3": 0,
+      "workersPresent": [
+        1
+      ],
+      "ptz": 0
+    }
+  ],
+  "coverGroups": {
+    "w1": "rml_6_isp_labour_housing_2",
+    "w2": "rml_6_isp_seamless",
+    "w3": "rml_3_kipl_kipl_all"
+  },
+  "mixedGroup": "rml_6_isp_seamless",
+  "largeScrollGroup": "rml_6_isp_labour_housing_2",
+  "ptzSample": [
+    {
+      "id": "6a38e9f9c8082fc30758240d",
+      "ip": "192.168.44.131",
+      "group": "rml_6_parking_area_parking_area",
+      "workerId": 1
+    },
+    {
+      "id": "6a4b8ef4b6a42e83880b663d",
+      "ip": "192.168.12.95",
+      "group": "rml_6_isp_rml6_boundary",
+      "workerId": 2
+    },
+    {
+      "id": "6a4b8ef4b6a42e83880b663e",
+      "ip": "192.168.11.47",
+      "group": "rml_6_isp_rml6_boundary",
+      "workerId": 2
+    },
+    {
+      "id": "6a4b8ef4b6a42e83880b6640",
+      "ip": "192.168.12.94",
+      "group": "rml_6_isp_rml6_boundary",
+      "workerId": 2
+    },
+    {
+      "id": "6a4b8ef4b6a42e83880b6643",
+      "ip": "192.168.45.82",
+      "group": "rml_6_isp_rml6_boundary",
+      "workerId": 2
+    },
+    {
+      "id": "6a577948608cd73e5f441caa",
+      "ip": "192.168.11.83",
+      "group": "rml_6_parking_area_parking_area",
+      "workerId": 3
+    },
+    {
+      "id": "6a58930c69a78715e4e34429",
+      "ip": "192.168.13.7",
+      "group": "rml_6_isp_power_plant",
+      "workerId": 3
+    },
+    {
+      "id": "6a69775c99e4c7f180c1e8df",
+      "ip": "192.168.46.43",
+      "group": "rml_6_isp_mbf",
+      "workerId": 3
+    },
+    {
+      "id": "6a6ad1c1ab17995b58f6cb91",
+      "ip": "192.168.11.29",
+      "group": "rml_6_rashmi_6_paradigm_limited_precast_office",
+      "workerId": 3
+    },
+    {
+      "id": "6a6ad1d5ab17995b58f6cb92",
+      "ip": "192.168.11.30",
+      "group": "rml_6_rashmi_6_paradigm_limited_precast_office",
+      "workerId": 3
+    },
+    {
+      "id": "6a6ad1e5ab17995b58f6cb93",
+      "ip": "192.168.11.31",
+      "group": "rml_6_rashmi_6_paradigm_limited_precast_office",
+      "workerId": 3
+    }
+  ]
+}

@@ -1,0 +1,7320 @@
+{
+  "startedAt": "2026-08-17T08:07:18.101Z",
+  "base": "http://192.168.17.150",
+  "phases": {
+    "walls": {
+      "w1": {
+        "group": "rml_6_isp_labour_housing_2",
+        "settle": {
+          "href": "http://192.168.17.150/live?group=rml_6_isp_labour_housing_2&layout=5x5",
+          "cols": "5",
+          "total": 77,
+          "mounted": 35,
+          "eligible": 25,
+          "cardCount": 35,
+          "playing": 25,
+          "connecting": 0,
+          "onlineNoVideo": [
+            "192.168.45.35",
+            "192.168.45.36",
+            "192.168.45.37",
+            "192.168.45.38",
+            "192.168.45.39",
+            "192.168.45.4",
+            "192.168.45.40",
+            "192.168.45.41",
+            "192.168.45.42",
+            "192.168.45.43"
+          ],
+          "tiles": [
+            {
+              "ip": "192.168.45.10",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.11",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.12",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.13",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.14",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.15",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.16",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.17",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.18",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.19",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.20",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.21",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.22",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.23",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.24",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.25",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.26",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.27",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.28",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.29",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.30",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.31",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.32",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.33",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.34",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.35",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.45.36",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.45.37",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.45.38",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.45.39",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.45.4",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.45.40",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.45.41",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.45.42",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.45.43",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            }
+          ]
+        },
+        "after20s": {
+          "href": "http://192.168.17.150/live?group=rml_6_isp_labour_housing_2&layout=5x5",
+          "cols": "5",
+          "total": 77,
+          "mounted": 35,
+          "eligible": 25,
+          "cardCount": 35,
+          "playing": 25,
+          "connecting": 0,
+          "onlineNoVideo": [
+            "192.168.45.35",
+            "192.168.45.36",
+            "192.168.45.37",
+            "192.168.45.38",
+            "192.168.45.39",
+            "192.168.45.4",
+            "192.168.45.40",
+            "192.168.45.41",
+            "192.168.45.42",
+            "192.168.45.43"
+          ],
+          "tiles": [
+            {
+              "ip": "192.168.45.10",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.11",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.12",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.13",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.14",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.15",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.16",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.17",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.18",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.19",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.20",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.21",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.22",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.23",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.24",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.25",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.26",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.27",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.28",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.29",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.30",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.31",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.32",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.33",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.34",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.45.35",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.45.36",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.45.37",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.45.38",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.45.39",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.45.4",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.45.40",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.45.41",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.45.42",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.45.43",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            }
+          ]
+        },
+        "permanentBlackCandidates": [
+          "192.168.45.35",
+          "192.168.45.36",
+          "192.168.45.37",
+          "192.168.45.38",
+          "192.168.45.39",
+          "192.168.45.4",
+          "192.168.45.40",
+          "192.168.45.41",
+          "192.168.45.42",
+          "192.168.45.43"
+        ]
+      },
+      "w2": {
+        "group": "rml_6_isp_seamless",
+        "settle": {
+          "href": "http://192.168.17.150/live?group=rml_6_isp_seamless&layout=5x5",
+          "cols": "5",
+          "total": 59,
+          "mounted": 35,
+          "eligible": 25,
+          "cardCount": 35,
+          "playing": 25,
+          "connecting": 0,
+          "onlineNoVideo": [
+            "192.168.12.52",
+            "192.168.12.6",
+            "192.168.12.60",
+            "192.168.12.63",
+            "192.168.12.64",
+            "192.168.12.69",
+            "192.168.12.70",
+            "192.168.12.71",
+            "192.168.12.74",
+            "192.168.12.75"
+          ],
+          "tiles": [
+            {
+              "ip": "192.168.12.123",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.125",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.230",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.26",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.27",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.28",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.29",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.30",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.32",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.33",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.34",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.35",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.36",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.37",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.38",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "RTC"
+            },
+            {
+              "ip": "192.168.12.40",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.41",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.42",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.43",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.44",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.45",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.47",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.48",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.5",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.51",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.52",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.12.6",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.12.60",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.12.63",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.12.64",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.12.69",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.12.70",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.12.71",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.12.74",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.12.75",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            }
+          ]
+        },
+        "after20s": {
+          "href": "http://192.168.17.150/live?group=rml_6_isp_seamless&layout=5x5",
+          "cols": "5",
+          "total": 59,
+          "mounted": 35,
+          "eligible": 25,
+          "cardCount": 35,
+          "playing": 25,
+          "connecting": 0,
+          "onlineNoVideo": [
+            "192.168.12.52",
+            "192.168.12.6",
+            "192.168.12.60",
+            "192.168.12.63",
+            "192.168.12.64",
+            "192.168.12.69",
+            "192.168.12.70",
+            "192.168.12.71",
+            "192.168.12.74",
+            "192.168.12.75"
+          ],
+          "tiles": [
+            {
+              "ip": "192.168.12.123",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.125",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.230",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.26",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.27",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.28",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.29",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.30",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.32",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.33",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.34",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.35",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.36",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.37",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.38",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "RTC"
+            },
+            {
+              "ip": "192.168.12.40",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.41",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.42",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.43",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.44",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.45",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.47",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.48",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.5",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.51",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.12.52",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.12.6",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.12.60",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.12.63",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.12.64",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.12.69",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.12.70",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.12.71",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.12.74",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.12.75",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            }
+          ]
+        },
+        "permanentBlackCandidates": [
+          "192.168.12.52",
+          "192.168.12.6",
+          "192.168.12.60",
+          "192.168.12.63",
+          "192.168.12.64",
+          "192.168.12.69",
+          "192.168.12.70",
+          "192.168.12.71",
+          "192.168.12.74",
+          "192.168.12.75"
+        ]
+      },
+      "w3": {
+        "group": "rml_3_kipl_kipl_all",
+        "settle": {
+          "href": "http://192.168.17.150/live?group=rml_3_kipl_kipl_all&layout=5x5",
+          "cols": "5",
+          "total": 49,
+          "mounted": 35,
+          "eligible": 25,
+          "cardCount": 35,
+          "playing": 25,
+          "connecting": 0,
+          "onlineNoVideo": [
+            "192.168.8.246",
+            "192.168.8.247",
+            "192.168.8.248",
+            "192.168.8.249",
+            "192.168.8.250",
+            "192.168.8.251",
+            "192.168.8.66",
+            "192.168.8.67",
+            "192.168.8.71",
+            "192.168.8.72"
+          ],
+          "tiles": [
+            {
+              "ip": "192.168.8.221",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.222",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.223",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.224",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.225",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.226",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.227",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.228",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.229",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.230",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.231",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.232",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.233",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.234",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.235",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.236",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.237",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.238",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.239",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.240",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.241",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.242",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.243",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.244",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.245",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.246",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.8.247",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.8.248",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.8.249",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.8.250",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.8.251",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.8.66",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.8.67",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.8.71",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.8.72",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            }
+          ]
+        },
+        "after20s": {
+          "href": "http://192.168.17.150/live?group=rml_3_kipl_kipl_all&layout=5x5",
+          "cols": "5",
+          "total": 49,
+          "mounted": 35,
+          "eligible": 25,
+          "cardCount": 35,
+          "playing": 25,
+          "connecting": 0,
+          "onlineNoVideo": [
+            "192.168.8.246",
+            "192.168.8.247",
+            "192.168.8.248",
+            "192.168.8.249",
+            "192.168.8.250",
+            "192.168.8.251",
+            "192.168.8.66",
+            "192.168.8.67",
+            "192.168.8.71",
+            "192.168.8.72"
+          ],
+          "tiles": [
+            {
+              "ip": "192.168.8.221",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.222",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.223",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.224",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.225",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.226",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.227",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.228",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.229",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.230",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.231",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.232",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.233",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.234",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.235",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.236",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.237",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.238",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.239",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.240",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.241",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.242",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.243",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.244",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.245",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.8.246",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.8.247",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.8.248",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.8.249",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.8.250",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.8.251",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.8.66",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.8.67",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.8.71",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.8.72",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            }
+          ]
+        },
+        "permanentBlackCandidates": [
+          "192.168.8.246",
+          "192.168.8.247",
+          "192.168.8.248",
+          "192.168.8.249",
+          "192.168.8.250",
+          "192.168.8.251",
+          "192.168.8.66",
+          "192.168.8.67",
+          "192.168.8.71",
+          "192.168.8.72"
+        ]
+      },
+      "mixed": {
+        "group": "rml_6_rashmi_6_paradigm_limited_biomass",
+        "settle": {
+          "href": "http://192.168.17.150/live?group=rml_6_rashmi_6_paradigm_limited_biomass&layout=5x5",
+          "cols": "5",
+          "total": 43,
+          "mounted": 35,
+          "eligible": 25,
+          "cardCount": 35,
+          "playing": 23,
+          "connecting": 0,
+          "onlineNoVideo": [
+            "192.168.14.57",
+            "192.168.14.58",
+            "192.168.14.59",
+            "192.168.14.60",
+            "192.168.14.61",
+            "192.168.14.62",
+            "192.168.14.63",
+            "192.168.14.65",
+            "192.168.14.66",
+            "192.168.14.68"
+          ],
+          "tiles": [
+            {
+              "ip": "192.168.14.26",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.27",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.28",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.29",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.30",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.31",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.32",
+              "online": false,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.33",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.34",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "RTC"
+            },
+            {
+              "ip": "192.168.14.36",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.37",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.38",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.40",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.41",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.42",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.43",
+              "online": false,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.44",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.45",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.46",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.48",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.49",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.50",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.53",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.54",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.56",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.57",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.58",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.59",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.60",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.61",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.62",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.63",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.65",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.66",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.68",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            }
+          ]
+        },
+        "after20s": {
+          "href": "http://192.168.17.150/live?group=rml_6_rashmi_6_paradigm_limited_biomass&layout=5x5",
+          "cols": "5",
+          "total": 43,
+          "mounted": 35,
+          "eligible": 25,
+          "cardCount": 35,
+          "playing": 23,
+          "connecting": 0,
+          "onlineNoVideo": [
+            "192.168.14.57",
+            "192.168.14.58",
+            "192.168.14.59",
+            "192.168.14.60",
+            "192.168.14.61",
+            "192.168.14.62",
+            "192.168.14.63",
+            "192.168.14.65",
+            "192.168.14.66",
+            "192.168.14.68"
+          ],
+          "tiles": [
+            {
+              "ip": "192.168.14.26",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.27",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.28",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.29",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.30",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.31",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.32",
+              "online": false,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.33",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.34",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "RTC"
+            },
+            {
+              "ip": "192.168.14.36",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.37",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.38",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.40",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.41",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.42",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.43",
+              "online": false,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.44",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.45",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.46",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.48",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.49",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.50",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.53",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.54",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.56",
+              "online": true,
+              "videoWidth": 640,
+              "paused": false,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": true,
+              "mode": "MSE"
+            },
+            {
+              "ip": "192.168.14.57",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.58",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.59",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.60",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.61",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.62",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.63",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.65",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.66",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            },
+            {
+              "ip": "192.168.14.68",
+              "online": true,
+              "videoWidth": 0,
+              "paused": null,
+              "overlay": false,
+              "overlayText": null,
+              "hasVs": false,
+              "mode": null
+            }
+          ]
+        },
+        "permanentBlackCandidates": [
+          "192.168.14.57",
+          "192.168.14.58",
+          "192.168.14.59",
+          "192.168.14.60",
+          "192.168.14.61",
+          "192.168.14.62",
+          "192.168.14.63",
+          "192.168.14.65",
+          "192.168.14.66",
+          "192.168.14.68"
+        ]
+      },
+      "workersHit": [
+        "w1",
+        "w2",
+        "w3"
+      ]
+    },
+    "scroll": {
+      "cycles": 1200,
+      "stepEvents": 1200,
+      "uniqueIpsSeen": 182,
+      "afterSettle": {
+        "href": "http://192.168.17.150/live?group=rml_6_isp_labour_housing_2&layout=5x5",
+        "cols": "5",
+        "total": 77,
+        "mounted": 35,
+        "eligible": 25,
+        "cardCount": 35,
+        "playing": 24,
+        "connecting": 1,
+        "onlineNoVideo": [
+          "192.168.45.35",
+          "192.168.45.36",
+          "192.168.45.37",
+          "192.168.45.38",
+          "192.168.45.39",
+          "192.168.45.4",
+          "192.168.45.40",
+          "192.168.45.41",
+          "192.168.45.42",
+          "192.168.45.43"
+        ],
+        "tiles": [
+          {
+            "ip": "192.168.45.10",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.11",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.12",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.13",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.14",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.15",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.16",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.17",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.18",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.19",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.20",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.21",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.22",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.23",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.24",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.25",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.26",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.27",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.28",
+            "online": false,
+            "videoWidth": 0,
+            "paused": null,
+            "overlay": true,
+            "overlayText": "Connecting…",
+            "hasVs": false,
+            "mode": null
+          },
+          {
+            "ip": "192.168.45.29",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.30",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.31",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.32",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.33",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.34",
+            "online": true,
+            "videoWidth": 640,
+            "paused": false,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": true,
+            "mode": "MSE"
+          },
+          {
+            "ip": "192.168.45.35",
+            "online": true,
+            "videoWidth": 0,
+            "paused": null,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": false,
+            "mode": null
+          },
+          {
+            "ip": "192.168.45.36",
+            "online": true,
+            "videoWidth": 0,
+            "paused": null,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": false,
+            "mode": null
+          },
+          {
+            "ip": "192.168.45.37",
+            "online": true,
+            "videoWidth": 0,
+            "paused": null,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": false,
+            "mode": null
+          },
+          {
+            "ip": "192.168.45.38",
+            "online": true,
+            "videoWidth": 0,
+            "paused": null,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": false,
+            "mode": null
+          },
+          {
+            "ip": "192.168.45.39",
+            "online": true,
+            "videoWidth": 0,
+            "paused": null,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": false,
+            "mode": null
+          },
+          {
+            "ip": "192.168.45.4",
+            "online": true,
+            "videoWidth": 0,
+            "paused": null,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": false,
+            "mode": null
+          },
+          {
+            "ip": "192.168.45.40",
+            "online": true,
+            "videoWidth": 0,
+            "paused": null,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": false,
+            "mode": null
+          },
+          {
+            "ip": "192.168.45.41",
+            "online": true,
+            "videoWidth": 0,
+            "paused": null,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": false,
+            "mode": null
+          },
+          {
+            "ip": "192.168.45.42",
+            "online": true,
+            "videoWidth": 0,
+            "paused": null,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": false,
+            "mode": null
+          },
+          {
+            "ip": "192.168.45.43",
+            "online": true,
+            "videoWidth": 0,
+            "paused": null,
+            "overlay": false,
+            "overlayText": null,
+            "hasVs": false,
+            "mode": null
+          }
+        ]
+      },
+      "openWsAfterSettle": 24,
+      "uniqueIpsAfterExtraGroups": 228
+    },
+    "viewChange": {
+      "cycles": 24,
+      "detail": [
+        {
+          "n": 1,
+          "group": "rml_6_isp_labour_housing_2",
+          "gridPlaying": 20,
+          "fullscreen": {
+            "status": "Connecting · 101 · main · go2rtc",
+            "videoWidth": 0,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 27,
+          "backMounted": 45
+        },
+        {
+          "n": 2,
+          "group": "rml_6_isp_seamless",
+          "gridPlaying": 11,
+          "fullscreen": {
+            "status": "Connecting · 101 · main · go2rtc",
+            "videoWidth": 0,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 20,
+          "backMounted": 45
+        },
+        {
+          "n": 3,
+          "group": "rml_3_kipl_kipl_all",
+          "gridPlaying": 15,
+          "fullscreen": {
+            "status": "Connecting · 101 · main · go2rtc",
+            "videoWidth": 0,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 21,
+          "backMounted": 45
+        },
+        {
+          "n": 4,
+          "group": "rml_6_rashmi_6_paradigm_limited_biomass",
+          "gridPlaying": 21,
+          "fullscreen": {
+            "status": "Connecting · 101 · main · go2rtc",
+            "videoWidth": 640,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 28,
+          "backMounted": 40
+        },
+        {
+          "n": 5,
+          "group": "rml_6_isp_labour_housing_2",
+          "gridPlaying": 24,
+          "fullscreen": {
+            "status": "Playing · 101 · main · go2rtc",
+            "videoWidth": 2560,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 29,
+          "backMounted": 45
+        },
+        {
+          "n": 6,
+          "group": "rml_6_isp_seamless",
+          "gridPlaying": 20,
+          "fullscreen": {
+            "status": "Playing · 101 · main · go2rtc",
+            "videoWidth": 1920,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 20,
+          "backMounted": 45
+        },
+        {
+          "n": 7,
+          "group": "rml_3_kipl_kipl_all",
+          "gridPlaying": 25,
+          "fullscreen": {
+            "status": "Connecting · 101 · main · go2rtc",
+            "videoWidth": 0,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 28,
+          "backMounted": 45
+        },
+        {
+          "n": 8,
+          "group": "rml_6_rashmi_6_paradigm_limited_biomass",
+          "gridPlaying": 20,
+          "fullscreen": {
+            "status": "Connecting · 101 · main · go2rtc",
+            "videoWidth": 640,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 28,
+          "backMounted": 40
+        },
+        {
+          "n": 9,
+          "group": "rml_6_isp_labour_housing_2",
+          "gridPlaying": 24,
+          "fullscreen": {
+            "status": "Playing · 101 · main · go2rtc",
+            "videoWidth": 2560,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 29,
+          "backMounted": 45
+        },
+        {
+          "n": 10,
+          "group": "rml_6_isp_seamless",
+          "gridPlaying": 19,
+          "fullscreen": {
+            "status": "Playing · 101 · main · go2rtc",
+            "videoWidth": 1920,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 23,
+          "backMounted": 45
+        },
+        {
+          "n": 11,
+          "group": "rml_3_kipl_kipl_all",
+          "gridPlaying": 16,
+          "fullscreen": {
+            "status": "Connecting · 101 · main · go2rtc",
+            "videoWidth": 0,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 21,
+          "backMounted": 45
+        },
+        {
+          "n": 12,
+          "group": "rml_6_rashmi_6_paradigm_limited_biomass",
+          "gridPlaying": 19,
+          "fullscreen": {
+            "status": "Connecting · 101 · main · go2rtc",
+            "videoWidth": 640,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 25,
+          "backMounted": 40
+        },
+        {
+          "n": 13,
+          "group": "rml_6_isp_labour_housing_2",
+          "gridPlaying": 24,
+          "fullscreen": {
+            "status": "Playing · 101 · main · go2rtc",
+            "videoWidth": 2560,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 29,
+          "backMounted": 45
+        },
+        {
+          "n": 14,
+          "group": "rml_6_isp_seamless",
+          "gridPlaying": 18,
+          "fullscreen": {
+            "status": "Playing · 101 · main · go2rtc",
+            "videoWidth": 1920,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 23,
+          "backMounted": 45
+        },
+        {
+          "n": 15,
+          "group": "rml_3_kipl_kipl_all",
+          "gridPlaying": 25,
+          "fullscreen": {
+            "status": "Connecting · 101 · main · go2rtc",
+            "videoWidth": 0,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 27,
+          "backMounted": 45
+        },
+        {
+          "n": 16,
+          "group": "rml_6_rashmi_6_paradigm_limited_biomass",
+          "gridPlaying": 18,
+          "fullscreen": {
+            "status": "Connecting · 101 · main · go2rtc",
+            "videoWidth": 640,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 25,
+          "backMounted": 40
+        },
+        {
+          "n": 17,
+          "group": "rml_6_isp_labour_housing_2",
+          "gridPlaying": 24,
+          "fullscreen": {
+            "status": "Playing · 101 · main · go2rtc",
+            "videoWidth": 2560,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 25,
+          "backMounted": 45
+        },
+        {
+          "n": 18,
+          "group": "rml_6_isp_seamless",
+          "gridPlaying": 18,
+          "fullscreen": {
+            "status": "Playing · 101 · main · go2rtc",
+            "videoWidth": 1920,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 23,
+          "backMounted": 45
+        },
+        {
+          "n": 19,
+          "group": "rml_3_kipl_kipl_all",
+          "gridPlaying": 25,
+          "fullscreen": {
+            "status": "Playing · 101 · main · go2rtc",
+            "videoWidth": 1920,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 28,
+          "backMounted": 45
+        },
+        {
+          "n": 20,
+          "group": "rml_6_rashmi_6_paradigm_limited_biomass",
+          "gridPlaying": 20,
+          "fullscreen": {
+            "status": "Connecting · 101 · main · go2rtc",
+            "videoWidth": 640,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 25,
+          "backMounted": 40
+        },
+        {
+          "n": 21,
+          "group": "rml_6_isp_labour_housing_2",
+          "gridPlaying": 24,
+          "fullscreen": {
+            "status": "Playing · 101 · main · go2rtc",
+            "videoWidth": 2560,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 24,
+          "backMounted": 45
+        },
+        {
+          "n": 22,
+          "group": "rml_6_isp_seamless",
+          "gridPlaying": 19,
+          "fullscreen": {
+            "status": "Playing · 101 · main · go2rtc",
+            "videoWidth": 1920,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 23,
+          "backMounted": 45
+        },
+        {
+          "n": 23,
+          "group": "rml_3_kipl_kipl_all",
+          "gridPlaying": 25,
+          "fullscreen": {
+            "status": "Playing · 101 · main · go2rtc",
+            "videoWidth": 1920,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 29,
+          "backMounted": 45
+        },
+        {
+          "n": 24,
+          "group": "rml_6_rashmi_6_paradigm_limited_biomass",
+          "gridPlaying": 19,
+          "fullscreen": {
+            "status": "Connecting · 101 · main · go2rtc",
+            "videoWidth": 640,
+            "src": null,
+            "profile": null
+          },
+          "backPlaying": 25,
+          "backMounted": 40
+        }
+      ]
+    },
+    "ptz": {
+      "found": true,
+      "camera": {
+        "id": "6a6ad1c1ab17995b58f6cb91",
+        "name": "192.168.11.29",
+        "ip": "192.168.11.29"
+      },
+      "moveMs": 190,
+      "moveStatus": 400,
+      "moveBody": {
+        "error": "PTZ via ISAPI is only supported for Hikvision cameras (got CUSTOM)"
+      },
+      "stopStatus": 400,
+      "tiltStatus": 400,
+      "zoomStatus": 400,
+      "healthDuringMs": 138,
+      "healthDuring": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "totalMs": 2271,
+      "gridDuring": {
+        "playing": 20,
+        "eligible": 25,
+        "mounted": 35
+      }
+    },
+    "settled": [
+      {
+        "t": "2026-08-17T08:30:26.291Z",
+        "playing": 24,
+        "mounted": 35,
+        "eligible": 25,
+        "connecting": 0,
+        "onlineNoVideo": [
+          "192.168.45.35",
+          "192.168.45.36",
+          "192.168.45.37",
+          "192.168.45.38",
+          "192.168.45.39",
+          "192.168.45.4",
+          "192.168.45.40",
+          "192.168.45.41",
+          "192.168.45.43"
+        ],
+        "openWs": 24
+      },
+      {
+        "t": "2026-08-17T08:30:56.908Z",
+        "playing": 24,
+        "mounted": 35,
+        "eligible": 25,
+        "connecting": 0,
+        "onlineNoVideo": [
+          "192.168.45.35",
+          "192.168.45.36",
+          "192.168.45.37",
+          "192.168.45.38",
+          "192.168.45.39",
+          "192.168.45.4",
+          "192.168.45.40",
+          "192.168.45.41",
+          "192.168.45.43"
+        ],
+        "openWs": 24
+      },
+      {
+        "t": "2026-08-17T08:31:27.758Z",
+        "playing": 24,
+        "mounted": 35,
+        "eligible": 25,
+        "connecting": 0,
+        "onlineNoVideo": [
+          "192.168.45.35",
+          "192.168.45.36",
+          "192.168.45.37",
+          "192.168.45.38",
+          "192.168.45.39",
+          "192.168.45.4",
+          "192.168.45.40",
+          "192.168.45.41",
+          "192.168.45.43"
+        ],
+        "openWs": 24
+      },
+      {
+        "t": "2026-08-17T08:31:58.395Z",
+        "playing": 24,
+        "mounted": 35,
+        "eligible": 25,
+        "connecting": 0,
+        "onlineNoVideo": [
+          "192.168.45.35",
+          "192.168.45.36",
+          "192.168.45.37",
+          "192.168.45.38",
+          "192.168.45.39",
+          "192.168.45.4",
+          "192.168.45.40",
+          "192.168.45.41",
+          "192.168.45.43"
+        ],
+        "openWs": 24
+      },
+      {
+        "t": "2026-08-17T08:32:29.217Z",
+        "playing": 24,
+        "mounted": 35,
+        "eligible": 25,
+        "connecting": 0,
+        "onlineNoVideo": [
+          "192.168.45.35",
+          "192.168.45.36",
+          "192.168.45.37",
+          "192.168.45.38",
+          "192.168.45.39",
+          "192.168.45.4",
+          "192.168.45.40",
+          "192.168.45.41",
+          "192.168.45.43"
+        ],
+        "openWs": 24
+      },
+      {
+        "t": "2026-08-17T08:33:00.088Z",
+        "playing": 24,
+        "mounted": 35,
+        "eligible": 25,
+        "connecting": 0,
+        "onlineNoVideo": [
+          "192.168.45.35",
+          "192.168.45.36",
+          "192.168.45.37",
+          "192.168.45.38",
+          "192.168.45.39",
+          "192.168.45.4",
+          "192.168.45.40",
+          "192.168.45.41",
+          "192.168.45.43"
+        ],
+        "openWs": 24
+      },
+      {
+        "t": "2026-08-17T08:33:31.115Z",
+        "playing": 24,
+        "mounted": 35,
+        "eligible": 25,
+        "connecting": 0,
+        "onlineNoVideo": [
+          "192.168.45.35",
+          "192.168.45.36",
+          "192.168.45.37",
+          "192.168.45.38",
+          "192.168.45.39",
+          "192.168.45.4",
+          "192.168.45.40",
+          "192.168.45.41",
+          "192.168.45.43"
+        ],
+        "openWs": 24
+      },
+      {
+        "t": "2026-08-17T08:34:02.443Z",
+        "playing": 24,
+        "mounted": 35,
+        "eligible": 25,
+        "connecting": 0,
+        "onlineNoVideo": [
+          "192.168.45.35",
+          "192.168.45.36",
+          "192.168.45.37",
+          "192.168.45.38",
+          "192.168.45.39",
+          "192.168.45.4",
+          "192.168.45.40",
+          "192.168.45.41",
+          "192.168.45.43"
+        ],
+        "openWs": 24
+      },
+      {
+        "t": "2026-08-17T08:34:33.667Z",
+        "playing": 24,
+        "mounted": 35,
+        "eligible": 25,
+        "connecting": 0,
+        "onlineNoVideo": [
+          "192.168.45.35",
+          "192.168.45.36",
+          "192.168.45.37",
+          "192.168.45.38",
+          "192.168.45.39",
+          "192.168.45.4",
+          "192.168.45.40",
+          "192.168.45.41",
+          "192.168.45.43"
+        ],
+        "openWs": 24
+      },
+      {
+        "t": "2026-08-17T08:35:04.771Z",
+        "playing": 24,
+        "mounted": 35,
+        "eligible": 25,
+        "connecting": 0,
+        "onlineNoVideo": [
+          "192.168.45.35",
+          "192.168.45.36",
+          "192.168.45.37",
+          "192.168.45.38",
+          "192.168.45.39",
+          "192.168.45.4",
+          "192.168.45.40",
+          "192.168.45.41",
+          "192.168.45.43"
+        ],
+        "openWs": 24
+      }
+    ]
+  },
+  "samples": [
+    {
+      "t": "2026-08-17T08:07:23.711Z",
+      "elapsedSec": 13,
+      "label": "start",
+      "heap": {
+        "usedMB": 10,
+        "totalMB": 10
+      },
+      "metrics": {
+        "jsHeapUsedMB": 1,
+        "jsHeapTotalMB": 1,
+        "nodes": 8,
+        "jsEventListeners": 0
+      }
+    },
+    {
+      "t": "2026-08-17T08:07:45.972Z",
+      "elapsedSec": 35,
+      "label": "wall-w1",
+      "heap": {
+        "usedMB": 58,
+        "totalMB": 60
+      },
+      "metrics": {
+        "jsHeapUsedMB": 4,
+        "jsHeapTotalMB": 7,
+        "nodes": 5771,
+        "jsEventListeners": 572
+      }
+    },
+    {
+      "t": "2026-08-17T08:08:07.292Z",
+      "elapsedSec": 56,
+      "label": "wall-w2",
+      "heap": {
+        "usedMB": 59,
+        "totalMB": 62
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 7,
+        "nodes": 5663,
+        "jsEventListeners": 569
+      }
+    },
+    {
+      "t": "2026-08-17T08:08:28.329Z",
+      "elapsedSec": 77,
+      "label": "wall-w3",
+      "heap": {
+        "usedMB": 61,
+        "totalMB": 63
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 7,
+        "nodes": 5603,
+        "jsEventListeners": 572
+      }
+    },
+    {
+      "t": "2026-08-17T08:08:49.434Z",
+      "elapsedSec": 98,
+      "label": "wall-mixed",
+      "heap": {
+        "usedMB": 53,
+        "totalMB": 56
+      },
+      "metrics": {
+        "jsHeapUsedMB": 4,
+        "jsHeapTotalMB": 7,
+        "nodes": 5257,
+        "jsEventListeners": 543
+      }
+    },
+    {
+      "t": "2026-08-17T08:09:06.566Z",
+      "elapsedSec": 115,
+      "label": "wall-hold",
+      "heap": {
+        "usedMB": 53,
+        "totalMB": 55
+      },
+      "metrics": {
+        "jsHeapUsedMB": 4,
+        "jsHeapTotalMB": 7,
+        "nodes": 5257,
+        "jsEventListeners": 543
+      }
+    },
+    {
+      "t": "2026-08-17T08:09:22.749Z",
+      "elapsedSec": 132,
+      "label": "wall-hold",
+      "heap": {
+        "usedMB": 53,
+        "totalMB": 56
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 7,
+        "nodes": 5257,
+        "jsEventListeners": 543
+      }
+    },
+    {
+      "t": "2026-08-17T08:09:38.791Z",
+      "elapsedSec": 148,
+      "label": "wall-hold",
+      "heap": {
+        "usedMB": 51,
+        "totalMB": 54
+      },
+      "metrics": {
+        "jsHeapUsedMB": 4,
+        "jsHeapTotalMB": 7,
+        "nodes": 5257,
+        "jsEventListeners": 543
+      }
+    },
+    {
+      "t": "2026-08-17T08:09:54.770Z",
+      "elapsedSec": 164,
+      "label": "wall-hold",
+      "heap": {
+        "usedMB": 54,
+        "totalMB": 56
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 7,
+        "nodes": 5257,
+        "jsEventListeners": 543
+      }
+    },
+    {
+      "t": "2026-08-17T08:10:10.692Z",
+      "elapsedSec": 180,
+      "label": "wall-hold",
+      "heap": {
+        "usedMB": 52,
+        "totalMB": 54
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 7,
+        "nodes": 5257,
+        "jsEventListeners": 543
+      }
+    },
+    {
+      "t": "2026-08-17T08:10:26.228Z",
+      "elapsedSec": 195,
+      "label": "wall-hold",
+      "heap": {
+        "usedMB": 53,
+        "totalMB": 55
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 7,
+        "nodes": 5257,
+        "jsEventListeners": 543
+      }
+    },
+    {
+      "t": "2026-08-17T08:10:42.134Z",
+      "elapsedSec": 211,
+      "label": "wall-hold",
+      "heap": {
+        "usedMB": 52,
+        "totalMB": 54
+      },
+      "metrics": {
+        "jsHeapUsedMB": 4,
+        "jsHeapTotalMB": 7,
+        "nodes": 5257,
+        "jsEventListeners": 543
+      }
+    },
+    {
+      "t": "2026-08-17T08:10:57.793Z",
+      "elapsedSec": 227,
+      "label": "wall-hold",
+      "heap": {
+        "usedMB": 54,
+        "totalMB": 56
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 7,
+        "nodes": 5257,
+        "jsEventListeners": 543
+      }
+    },
+    {
+      "t": "2026-08-17T08:11:13.435Z",
+      "elapsedSec": 242,
+      "label": "wall-hold",
+      "heap": {
+        "usedMB": 52,
+        "totalMB": 55
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 7,
+        "nodes": 5257,
+        "jsEventListeners": 543
+      }
+    },
+    {
+      "t": "2026-08-17T08:11:29.320Z",
+      "elapsedSec": 258,
+      "label": "wall-hold",
+      "heap": {
+        "usedMB": 54,
+        "totalMB": 56
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 7,
+        "nodes": 5257,
+        "jsEventListeners": 543
+      }
+    },
+    {
+      "t": "2026-08-17T08:11:44.956Z",
+      "elapsedSec": 274,
+      "label": "wall-hold",
+      "heap": {
+        "usedMB": 52,
+        "totalMB": 54
+      },
+      "metrics": {
+        "jsHeapUsedMB": 4,
+        "jsHeapTotalMB": 7,
+        "nodes": 5257,
+        "jsEventListeners": 543
+      }
+    },
+    {
+      "t": "2026-08-17T08:12:00.612Z",
+      "elapsedSec": 289,
+      "label": "wall-hold",
+      "heap": {
+        "usedMB": 54,
+        "totalMB": 56
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 7,
+        "nodes": 5257,
+        "jsEventListeners": 543
+      }
+    },
+    {
+      "t": "2026-08-17T08:12:16.489Z",
+      "elapsedSec": 305,
+      "label": "wall-hold",
+      "heap": {
+        "usedMB": 52,
+        "totalMB": 54
+      },
+      "metrics": {
+        "jsHeapUsedMB": 4,
+        "jsHeapTotalMB": 7,
+        "nodes": 5257,
+        "jsEventListeners": 543
+      }
+    },
+    {
+      "t": "2026-08-17T08:12:25.550Z",
+      "elapsedSec": 314,
+      "label": "wall-hold",
+      "heap": {
+        "usedMB": 53,
+        "totalMB": 55
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 7,
+        "nodes": 5257,
+        "jsEventListeners": 543
+      }
+    },
+    {
+      "t": "2026-08-17T08:12:58.299Z",
+      "elapsedSec": 347,
+      "label": "scroll-40",
+      "heap": {
+        "usedMB": 13,
+        "totalMB": 22
+      },
+      "metrics": {
+        "jsHeapUsedMB": 10,
+        "jsHeapTotalMB": 19,
+        "nodes": 18687,
+        "jsEventListeners": 1718
+      }
+    },
+    {
+      "t": "2026-08-17T08:13:19.291Z",
+      "elapsedSec": 368,
+      "label": "scroll-80",
+      "heap": {
+        "usedMB": 17,
+        "totalMB": 38
+      },
+      "metrics": {
+        "jsHeapUsedMB": 10,
+        "jsHeapTotalMB": 31,
+        "nodes": 18513,
+        "jsEventListeners": 1695
+      }
+    },
+    {
+      "t": "2026-08-17T08:13:39.675Z",
+      "elapsedSec": 388,
+      "label": "scroll-120",
+      "heap": {
+        "usedMB": 8,
+        "totalMB": 32
+      },
+      "metrics": {
+        "jsHeapUsedMB": 7,
+        "jsHeapTotalMB": 31,
+        "nodes": 11773,
+        "jsEventListeners": 1089
+      }
+    },
+    {
+      "t": "2026-08-17T08:13:59.569Z",
+      "elapsedSec": 408,
+      "label": "scroll-160",
+      "heap": {
+        "usedMB": 6,
+        "totalMB": 32
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 31,
+        "nodes": 5136,
+        "jsEventListeners": 468
+      }
+    },
+    {
+      "t": "2026-08-17T08:14:19.670Z",
+      "elapsedSec": 428,
+      "label": "scroll-200",
+      "heap": {
+        "usedMB": 15,
+        "totalMB": 36
+      },
+      "metrics": {
+        "jsHeapUsedMB": 10,
+        "jsHeapTotalMB": 31,
+        "nodes": 18453,
+        "jsEventListeners": 1676
+      }
+    },
+    {
+      "t": "2026-08-17T08:14:39.843Z",
+      "elapsedSec": 449,
+      "label": "scroll-240",
+      "heap": {
+        "usedMB": 9,
+        "totalMB": 34
+      },
+      "metrics": {
+        "jsHeapUsedMB": 6,
+        "jsHeapTotalMB": 31,
+        "nodes": 9271,
+        "jsEventListeners": 862
+      }
+    },
+    {
+      "t": "2026-08-17T08:14:59.921Z",
+      "elapsedSec": 469,
+      "label": "scroll-280",
+      "heap": {
+        "usedMB": 14,
+        "totalMB": 32
+      },
+      "metrics": {
+        "jsHeapUsedMB": 13,
+        "jsHeapTotalMB": 31,
+        "nodes": 26121,
+        "jsEventListeners": 2383
+      }
+    },
+    {
+      "t": "2026-08-17T08:15:19.833Z",
+      "elapsedSec": 489,
+      "label": "scroll-320",
+      "heap": {
+        "usedMB": 11,
+        "totalMB": 32
+      },
+      "metrics": {
+        "jsHeapUsedMB": 10,
+        "jsHeapTotalMB": 31,
+        "nodes": 18247,
+        "jsEventListeners": 1656
+      }
+    },
+    {
+      "t": "2026-08-17T08:15:39.290Z",
+      "elapsedSec": 508,
+      "label": "scroll-360",
+      "heap": {
+        "usedMB": 15,
+        "totalMB": 32
+      },
+      "metrics": {
+        "jsHeapUsedMB": 14,
+        "jsHeapTotalMB": 31,
+        "nodes": 32714,
+        "jsEventListeners": 3000
+      }
+    },
+    {
+      "t": "2026-08-17T08:15:59.558Z",
+      "elapsedSec": 528,
+      "label": "scroll-400",
+      "heap": {
+        "usedMB": 14,
+        "totalMB": 32
+      },
+      "metrics": {
+        "jsHeapUsedMB": 13,
+        "jsHeapTotalMB": 31,
+        "nodes": 26077,
+        "jsEventListeners": 2379
+      }
+    },
+    {
+      "t": "2026-08-17T08:16:19.741Z",
+      "elapsedSec": 549,
+      "label": "scroll-440",
+      "heap": {
+        "usedMB": 13,
+        "totalMB": 34
+      },
+      "metrics": {
+        "jsHeapUsedMB": 10,
+        "jsHeapTotalMB": 31,
+        "nodes": 18443,
+        "jsEventListeners": 1671
+      }
+    },
+    {
+      "t": "2026-08-17T08:16:39.418Z",
+      "elapsedSec": 568,
+      "label": "scroll-480",
+      "heap": {
+        "usedMB": 8,
+        "totalMB": 32
+      },
+      "metrics": {
+        "jsHeapUsedMB": 7,
+        "jsHeapTotalMB": 31,
+        "nodes": 12060,
+        "jsEventListeners": 1096
+      }
+    },
+    {
+      "t": "2026-08-17T08:16:59.249Z",
+      "elapsedSec": 588,
+      "label": "scroll-520",
+      "heap": {
+        "usedMB": 14,
+        "totalMB": 32
+      },
+      "metrics": {
+        "jsHeapUsedMB": 13,
+        "jsHeapTotalMB": 31,
+        "nodes": 26273,
+        "jsEventListeners": 2383
+      }
+    },
+    {
+      "t": "2026-08-17T08:17:18.937Z",
+      "elapsedSec": 608,
+      "label": "scroll-560",
+      "heap": {
+        "usedMB": 9,
+        "totalMB": 34
+      },
+      "metrics": {
+        "jsHeapUsedMB": 6,
+        "jsHeapTotalMB": 31,
+        "nodes": 8214,
+        "jsEventListeners": 721
+      }
+    },
+    {
+      "t": "2026-08-17T08:17:38.455Z",
+      "elapsedSec": 627,
+      "label": "scroll-600",
+      "heap": {
+        "usedMB": 14,
+        "totalMB": 32
+      },
+      "metrics": {
+        "jsHeapUsedMB": 13,
+        "jsHeapTotalMB": 31,
+        "nodes": 30196,
+        "jsEventListeners": 2769
+      }
+    },
+    {
+      "t": "2026-08-17T08:17:58.099Z",
+      "elapsedSec": 647,
+      "label": "scroll-640",
+      "heap": {
+        "usedMB": 10,
+        "totalMB": 31
+      },
+      "metrics": {
+        "jsHeapUsedMB": 9,
+        "jsHeapTotalMB": 30,
+        "nodes": 15848,
+        "jsEventListeners": 1429
+      }
+    },
+    {
+      "t": "2026-08-17T08:18:17.866Z",
+      "elapsedSec": 667,
+      "label": "scroll-680",
+      "heap": {
+        "usedMB": 10,
+        "totalMB": 35
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 30,
+        "nodes": 5682,
+        "jsEventListeners": 495
+      }
+    },
+    {
+      "t": "2026-08-17T08:18:37.603Z",
+      "elapsedSec": 686,
+      "label": "scroll-720",
+      "heap": {
+        "usedMB": 12,
+        "totalMB": 31
+      },
+      "metrics": {
+        "jsHeapUsedMB": 11,
+        "jsHeapTotalMB": 30,
+        "nodes": 22450,
+        "jsEventListeners": 2050
+      }
+    },
+    {
+      "t": "2026-08-17T08:18:57.128Z",
+      "elapsedSec": 706,
+      "label": "scroll-760",
+      "heap": {
+        "usedMB": 6,
+        "totalMB": 31
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 30,
+        "nodes": 5458,
+        "jsEventListeners": 475
+      }
+    },
+    {
+      "t": "2026-08-17T08:19:17.382Z",
+      "elapsedSec": 726,
+      "label": "scroll-800",
+      "heap": {
+        "usedMB": 16,
+        "totalMB": 34
+      },
+      "metrics": {
+        "jsHeapUsedMB": 13,
+        "jsHeapTotalMB": 31,
+        "nodes": 28847,
+        "jsEventListeners": 2619
+      }
+    },
+    {
+      "t": "2026-08-17T08:19:37.048Z",
+      "elapsedSec": 746,
+      "label": "scroll-840",
+      "heap": {
+        "usedMB": 8,
+        "totalMB": 31
+      },
+      "metrics": {
+        "jsHeapUsedMB": 7,
+        "jsHeapTotalMB": 31,
+        "nodes": 12060,
+        "jsEventListeners": 1096
+      }
+    },
+    {
+      "t": "2026-08-17T08:19:57.022Z",
+      "elapsedSec": 766,
+      "label": "scroll-880",
+      "heap": {
+        "usedMB": 16,
+        "totalMB": 34
+      },
+      "metrics": {
+        "jsHeapUsedMB": 13,
+        "jsHeapTotalMB": 31,
+        "nodes": 26434,
+        "jsEventListeners": 2398
+      }
+    },
+    {
+      "t": "2026-08-17T08:20:16.577Z",
+      "elapsedSec": 785,
+      "label": "scroll-920",
+      "heap": {
+        "usedMB": 11,
+        "totalMB": 31
+      },
+      "metrics": {
+        "jsHeapUsedMB": 10,
+        "jsHeapTotalMB": 31,
+        "nodes": 18408,
+        "jsEventListeners": 1660
+      }
+    },
+    {
+      "t": "2026-08-17T08:20:37.844Z",
+      "elapsedSec": 807,
+      "label": "scroll-960",
+      "heap": {
+        "usedMB": 14,
+        "totalMB": 39
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 30,
+        "nodes": 5911,
+        "jsEventListeners": 499
+      }
+    },
+    {
+      "t": "2026-08-17T08:20:58.955Z",
+      "elapsedSec": 828,
+      "label": "scroll-1000",
+      "heap": {
+        "usedMB": 14,
+        "totalMB": 39
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 30,
+        "nodes": 6249,
+        "jsEventListeners": 539
+      }
+    },
+    {
+      "t": "2026-08-17T08:21:18.888Z",
+      "elapsedSec": 848,
+      "label": "scroll-1040",
+      "heap": {
+        "usedMB": 17,
+        "totalMB": 37
+      },
+      "metrics": {
+        "jsHeapUsedMB": 12,
+        "jsHeapTotalMB": 32,
+        "nodes": 26364,
+        "jsEventListeners": 2399
+      }
+    },
+    {
+      "t": "2026-08-17T08:21:39.072Z",
+      "elapsedSec": 868,
+      "label": "scroll-1080",
+      "heap": {
+        "usedMB": 11,
+        "totalMB": 33
+      },
+      "metrics": {
+        "jsHeapUsedMB": 10,
+        "jsHeapTotalMB": 32,
+        "nodes": 19806,
+        "jsEventListeners": 1815
+      }
+    },
+    {
+      "t": "2026-08-17T08:21:59.048Z",
+      "elapsedSec": 888,
+      "label": "scroll-1120",
+      "heap": {
+        "usedMB": 6,
+        "totalMB": 33
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 32,
+        "nodes": 5458,
+        "jsEventListeners": 475
+      }
+    },
+    {
+      "t": "2026-08-17T08:22:18.723Z",
+      "elapsedSec": 908,
+      "label": "scroll-1160",
+      "heap": {
+        "usedMB": 13,
+        "totalMB": 35
+      },
+      "metrics": {
+        "jsHeapUsedMB": 10,
+        "jsHeapTotalMB": 32,
+        "nodes": 18639,
+        "jsEventListeners": 1675
+      }
+    },
+    {
+      "t": "2026-08-17T08:22:38.672Z",
+      "elapsedSec": 927,
+      "label": "scroll-1200",
+      "heap": {
+        "usedMB": 8,
+        "totalMB": 35
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 32,
+        "nodes": 5321,
+        "jsEventListeners": 454
+      }
+    },
+    {
+      "t": "2026-08-17T08:22:46.715Z",
+      "elapsedSec": 936,
+      "label": "after-scroll",
+      "heap": {
+        "usedMB": 55,
+        "totalMB": 57
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 7,
+        "nodes": 6458,
+        "jsEventListeners": 592
+      }
+    },
+    {
+      "t": "2026-08-17T08:24:52.618Z",
+      "elapsedSec": 1061,
+      "label": "switch-5",
+      "heap": {
+        "usedMB": 67,
+        "totalMB": 76
+      },
+      "metrics": {
+        "jsHeapUsedMB": 7,
+        "jsHeapTotalMB": 16,
+        "nodes": 6927,
+        "jsEventListeners": 680
+      }
+    },
+    {
+      "t": "2026-08-17T08:26:11.107Z",
+      "elapsedSec": 1140,
+      "label": "switch-10",
+      "heap": {
+        "usedMB": 53,
+        "totalMB": 56
+      },
+      "metrics": {
+        "jsHeapUsedMB": 6,
+        "jsHeapTotalMB": 9,
+        "nodes": 5672,
+        "jsEventListeners": 588
+      }
+    },
+    {
+      "t": "2026-08-17T08:27:37.781Z",
+      "elapsedSec": 1227,
+      "label": "switch-15",
+      "heap": {
+        "usedMB": 70,
+        "totalMB": 74
+      },
+      "metrics": {
+        "jsHeapUsedMB": 6,
+        "jsHeapTotalMB": 10,
+        "nodes": 6945,
+        "jsEventListeners": 693
+      }
+    },
+    {
+      "t": "2026-08-17T08:28:55.207Z",
+      "elapsedSec": 1304,
+      "label": "switch-20",
+      "heap": {
+        "usedMB": 70,
+        "totalMB": 79
+      },
+      "metrics": {
+        "jsHeapUsedMB": 10,
+        "jsHeapTotalMB": 20,
+        "nodes": 8743,
+        "jsEventListeners": 664
+      }
+    },
+    {
+      "t": "2026-08-17T08:30:26.896Z",
+      "elapsedSec": 1396,
+      "label": "settled",
+      "heap": {
+        "usedMB": 55,
+        "totalMB": 57
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 8,
+        "nodes": 5622,
+        "jsEventListeners": 559
+      }
+    },
+    {
+      "t": "2026-08-17T08:30:57.734Z",
+      "elapsedSec": 1427,
+      "label": "settled",
+      "heap": {
+        "usedMB": 55,
+        "totalMB": 57
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 8,
+        "nodes": 5622,
+        "jsEventListeners": 559
+      }
+    },
+    {
+      "t": "2026-08-17T08:31:28.372Z",
+      "elapsedSec": 1457,
+      "label": "settled",
+      "heap": {
+        "usedMB": 55,
+        "totalMB": 58
+      },
+      "metrics": {
+        "jsHeapUsedMB": 6,
+        "jsHeapTotalMB": 9,
+        "nodes": 5622,
+        "jsEventListeners": 559
+      }
+    },
+    {
+      "t": "2026-08-17T08:31:59.198Z",
+      "elapsedSec": 1488,
+      "label": "settled",
+      "heap": {
+        "usedMB": 54,
+        "totalMB": 57
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 8,
+        "nodes": 5622,
+        "jsEventListeners": 559
+      }
+    },
+    {
+      "t": "2026-08-17T08:32:30.010Z",
+      "elapsedSec": 1519,
+      "label": "settled",
+      "heap": {
+        "usedMB": 54,
+        "totalMB": 58
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 9,
+        "nodes": 5622,
+        "jsEventListeners": 559
+      }
+    },
+    {
+      "t": "2026-08-17T08:33:01.005Z",
+      "elapsedSec": 1550,
+      "label": "settled",
+      "heap": {
+        "usedMB": 56,
+        "totalMB": 59
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 8,
+        "nodes": 5622,
+        "jsEventListeners": 559
+      }
+    },
+    {
+      "t": "2026-08-17T08:33:32.410Z",
+      "elapsedSec": 1581,
+      "label": "settled",
+      "heap": {
+        "usedMB": 58,
+        "totalMB": 61
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 8,
+        "nodes": 5622,
+        "jsEventListeners": 559
+      }
+    },
+    {
+      "t": "2026-08-17T08:34:03.607Z",
+      "elapsedSec": 1612,
+      "label": "settled",
+      "heap": {
+        "usedMB": 58,
+        "totalMB": 61
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 9,
+        "nodes": 5622,
+        "jsEventListeners": 559
+      }
+    },
+    {
+      "t": "2026-08-17T08:34:34.747Z",
+      "elapsedSec": 1644,
+      "label": "settled",
+      "heap": {
+        "usedMB": 58,
+        "totalMB": 60
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 8,
+        "nodes": 5622,
+        "jsEventListeners": 559
+      }
+    },
+    {
+      "t": "2026-08-17T08:35:05.853Z",
+      "elapsedSec": 1675,
+      "label": "settled",
+      "heap": {
+        "usedMB": 56,
+        "totalMB": 60
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 9,
+        "nodes": 5622,
+        "jsEventListeners": 559
+      }
+    },
+    {
+      "t": "2026-08-17T08:35:36.997Z",
+      "elapsedSec": 1706,
+      "label": "end",
+      "heap": {
+        "usedMB": 58,
+        "totalMB": 60
+      },
+      "metrics": {
+        "jsHeapUsedMB": 5,
+        "jsHeapTotalMB": 8,
+        "nodes": 5622,
+        "jsEventListeners": 559
+      }
+    }
+  ],
+  "security": {
+    "external10000": {
+      "reachable": false,
+      "error": "ECONNREFUSED"
+    },
+    "mediaLogout": {
+      "status": 401
+    },
+    "go2rtcWsLogout": {
+      "status": 401
+    },
+    "go2rtcWsAuthed": {
+      "status": 410,
+      "ms": 109,
+      "body": {
+        "error": "Direct media route required",
+        "message": "Python live-video WebSocket proxy was removed. Use /media/w{workerId}/api/ws via Nginx (see deploy/nginx-cctv-direct-media.conf)."
+      }
+    },
+    "badStream": {
+      "status": 403,
+      "ms": 119,
+      "body": "Invalid stream"
+    },
+    "nginxHealth": {
+      "status": 200,
+      "ms": 105,
+      "body": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      }
+    }
+  },
+  "apiHealth": [
+    {
+      "t": "2026-08-17T08:07:24.597Z",
+      "label": "start",
+      "healthMs": 107,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:07:45.939Z",
+      "label": "wall-w1",
+      "healthMs": 153,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:08:07.284Z",
+      "label": "wall-w2",
+      "healthMs": 158,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:08:28.325Z",
+      "label": "wall-w3",
+      "healthMs": 115,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:08:49.427Z",
+      "label": "wall-mixed",
+      "healthMs": 130,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:09:06.557Z",
+      "label": "wall-hold",
+      "healthMs": 383,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:09:22.737Z",
+      "label": "wall-hold",
+      "healthMs": 128,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:09:38.777Z",
+      "label": "wall-hold",
+      "healthMs": 131,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:09:54.763Z",
+      "label": "wall-hold",
+      "healthMs": 126,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:10:10.677Z",
+      "label": "wall-hold",
+      "healthMs": 132,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:10:26.225Z",
+      "label": "wall-hold",
+      "healthMs": 124,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:10:42.129Z",
+      "label": "wall-hold",
+      "healthMs": 129,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:10:57.789Z",
+      "label": "wall-hold",
+      "healthMs": 120,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:11:13.420Z",
+      "label": "wall-hold",
+      "healthMs": 116,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:11:29.306Z",
+      "label": "wall-hold",
+      "healthMs": 136,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:11:44.953Z",
+      "label": "wall-hold",
+      "healthMs": 122,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:12:00.598Z",
+      "label": "wall-hold",
+      "healthMs": 130,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:12:16.472Z",
+      "label": "wall-hold",
+      "healthMs": 129,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:12:25.523Z",
+      "label": "wall-hold",
+      "healthMs": 237,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:12:58.277Z",
+      "label": "scroll-40",
+      "healthMs": 127,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:13:19.287Z",
+      "label": "scroll-80",
+      "healthMs": 112,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:13:39.671Z",
+      "label": "scroll-120",
+      "healthMs": 124,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:13:59.561Z",
+      "label": "scroll-160",
+      "healthMs": 116,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:14:19.655Z",
+      "label": "scroll-200",
+      "healthMs": 118,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:14:39.819Z",
+      "label": "scroll-240",
+      "healthMs": 131,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:14:59.856Z",
+      "label": "scroll-280",
+      "healthMs": 112,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:15:19.823Z",
+      "label": "scroll-320",
+      "healthMs": 117,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:15:39.287Z",
+      "label": "scroll-360",
+      "healthMs": 112,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:15:59.554Z",
+      "label": "scroll-400",
+      "healthMs": 144,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:16:19.735Z",
+      "label": "scroll-440",
+      "healthMs": 623,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:16:39.413Z",
+      "label": "scroll-480",
+      "healthMs": 124,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:16:59.241Z",
+      "label": "scroll-520",
+      "healthMs": 133,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:17:18.918Z",
+      "label": "scroll-560",
+      "healthMs": 127,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:17:38.449Z",
+      "label": "scroll-600",
+      "healthMs": 117,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:17:58.095Z",
+      "label": "scroll-640",
+      "healthMs": 137,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:18:17.861Z",
+      "label": "scroll-680",
+      "healthMs": 142,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:18:37.598Z",
+      "label": "scroll-720",
+      "healthMs": 124,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:18:57.060Z",
+      "label": "scroll-760",
+      "healthMs": 122,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:19:17.375Z",
+      "label": "scroll-800",
+      "healthMs": 145,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:19:37.044Z",
+      "label": "scroll-840",
+      "healthMs": 120,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:19:57.003Z",
+      "label": "scroll-880",
+      "healthMs": 236,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:20:16.571Z",
+      "label": "scroll-920",
+      "healthMs": 133,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:20:37.837Z",
+      "label": "scroll-960",
+      "healthMs": 133,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:20:58.908Z",
+      "label": "scroll-1000",
+      "healthMs": 235,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:21:18.882Z",
+      "label": "scroll-1040",
+      "healthMs": 136,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:21:39.066Z",
+      "label": "scroll-1080",
+      "healthMs": 186,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:21:59.040Z",
+      "label": "scroll-1120",
+      "healthMs": 143,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:22:18.718Z",
+      "label": "scroll-1160",
+      "healthMs": 117,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:22:38.663Z",
+      "label": "scroll-1200",
+      "healthMs": 133,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:22:48.374Z",
+      "label": "after-scroll",
+      "healthMs": 123,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:24:52.609Z",
+      "label": "switch-5",
+      "healthMs": 129,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:26:11.090Z",
+      "label": "switch-10",
+      "healthMs": 132,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:27:37.481Z",
+      "label": "switch-15",
+      "healthMs": 120,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:28:55.188Z",
+      "label": "switch-20",
+      "healthMs": 128,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:30:26.889Z",
+      "label": "settled",
+      "healthMs": 115,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:30:57.715Z",
+      "label": "settled",
+      "healthMs": 126,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:31:28.368Z",
+      "label": "settled",
+      "healthMs": 123,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:31:59.169Z",
+      "label": "settled",
+      "healthMs": 124,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:32:29.999Z",
+      "label": "settled",
+      "healthMs": 119,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:33:00.923Z",
+      "label": "settled",
+      "healthMs": 135,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:33:32.386Z",
+      "label": "settled",
+      "healthMs": 138,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:34:03.569Z",
+      "label": "settled",
+      "healthMs": 145,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:34:34.714Z",
+      "label": "settled",
+      "healthMs": 134,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:35:05.792Z",
+      "label": "settled",
+      "healthMs": 147,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    },
+    {
+      "t": "2026-08-17T08:35:37.716Z",
+      "label": "end",
+      "healthMs": 135,
+      "health": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      },
+      "workers": [
+        {
+          "workerId": 1,
+          "running": true,
+          "streams": 588
+        },
+        {
+          "workerId": 2,
+          "running": true,
+          "streams": 594
+        },
+        {
+          "workerId": 3,
+          "running": true,
+          "streams": 404
+        }
+      ]
+    }
+  ],
+  "workersBefore": [
+    {
+      "workerId": 1,
+      "running": true,
+      "apiPort": 1984,
+      "assigned": 294,
+      "streams": 588
+    },
+    {
+      "workerId": 2,
+      "running": true,
+      "apiPort": 1985,
+      "assigned": 297,
+      "streams": 594
+    },
+    {
+      "workerId": 3,
+      "running": true,
+      "apiPort": 1986,
+      "assigned": 202,
+      "streams": 404
+    }
+  ],
+  "workersAfter": [
+    {
+      "workerId": 1,
+      "running": true,
+      "apiPort": 1984,
+      "assigned": 294,
+      "streams": 588
+    },
+    {
+      "workerId": 2,
+      "running": true,
+      "apiPort": 1985,
+      "assigned": 297,
+      "streams": 594
+    },
+    {
+      "workerId": 3,
+      "running": true,
+      "apiPort": 1986,
+      "assigned": 202,
+      "streams": 404
+    }
+  ],
+  "ws": {
+    "opened": 1628,
+    "closed": 1604,
+    "legacy": 0,
+    "maxConcurrent": 30,
+    "duplicateOpenEvents": 0,
+    "openAtEnd": 24,
+    "openSrcSample": [
+      {
+        "src": "ip_192_168_45_10_sub",
+        "n": 1
+      },
+      {
+        "src": "ip_192_168_45_11_sub",
+        "n": 1
+      },
+      {
+        "src": "ip_192_168_45_12_sub",
+        "n": 1
+      },
+      {
+        "src": "ip_192_168_45_13_sub",
+        "n": 1
+      },
+      {
+        "src": "ip_192_168_45_14_sub",
+        "n": 1
+      },
+      {
+        "src": "ip_192_168_45_15_sub",
+        "n": 1
+      },
+      {
+        "src": "ip_192_168_45_16_sub",
+        "n": 1
+      },
+      {
+        "src": "ip_192_168_45_17_sub",
+        "n": 1
+      },
+      {
+        "src": "ip_192_168_45_18_sub",
+        "n": 1
+      },
+      {
+        "src": "ip_192_168_45_20_sub",
+        "n": 1
+      },
+      {
+        "src": "ip_192_168_45_19_sub",
+        "n": 1
+      },
+      {
+        "src": "ip_192_168_45_21_sub",
+        "n": 1
+      },
+      {
+        "src": "ip_192_168_45_22_sub",
+        "n": 1
+      },
+      {
+        "src": "ip_192_168_45_24_sub",
+        "n": 1
+      },
+      {
+        "src": "ip_192_168_45_23_sub",
+        "n": 1
+      },
+      {
+        "src": "ip_192_168_45_25_sub",
+        "n": 1
+      },
+      {
+        "src": "ip_192_168_45_30_sub",
+        "n": 1
+      },
+      {
+        "src": "ip_192_168_45_27_sub",
+        "n": 1
+      },
+      {
+        "src": "ip_192_168_45_34_sub",
+        "n": 1
+      },
+      {
+        "src": "ip_192_168_45_31_sub",
+        "n": 1
+      }
+    ]
+  },
+  "black": {
+    "permanent": [
+      {
+        "phase": "wall-w1",
+        "ips": [
+          "192.168.45.35",
+          "192.168.45.36",
+          "192.168.45.37",
+          "192.168.45.38",
+          "192.168.45.39",
+          "192.168.45.4",
+          "192.168.45.40",
+          "192.168.45.41",
+          "192.168.45.42",
+          "192.168.45.43"
+        ]
+      },
+      {
+        "phase": "wall-w2",
+        "ips": [
+          "192.168.12.52",
+          "192.168.12.6",
+          "192.168.12.60",
+          "192.168.12.63",
+          "192.168.12.64",
+          "192.168.12.69",
+          "192.168.12.70",
+          "192.168.12.71",
+          "192.168.12.74",
+          "192.168.12.75"
+        ]
+      },
+      {
+        "phase": "wall-w3",
+        "ips": [
+          "192.168.8.246",
+          "192.168.8.247",
+          "192.168.8.248",
+          "192.168.8.249",
+          "192.168.8.250",
+          "192.168.8.251",
+          "192.168.8.66",
+          "192.168.8.67",
+          "192.168.8.71",
+          "192.168.8.72"
+        ]
+      },
+      {
+        "phase": "wall-mixed",
+        "ips": [
+          "192.168.14.57",
+          "192.168.14.58",
+          "192.168.14.59",
+          "192.168.14.60",
+          "192.168.14.61",
+          "192.168.14.62",
+          "192.168.14.63",
+          "192.168.14.65",
+          "192.168.14.66",
+          "192.168.14.68"
+        ]
+      }
+    ],
+    "recovered": 0,
+    "connectingOver10s": []
+  },
+  "camerasTraversed": [
+    "192.168.45.10",
+    "192.168.45.11",
+    "192.168.45.12",
+    "192.168.45.13",
+    "192.168.45.14",
+    "192.168.45.15",
+    "192.168.45.16",
+    "192.168.45.17",
+    "192.168.45.18",
+    "192.168.45.19",
+    "192.168.45.20",
+    "192.168.45.21",
+    "192.168.45.22",
+    "192.168.45.23",
+    "192.168.45.24",
+    "192.168.45.25",
+    "192.168.45.26",
+    "192.168.45.27",
+    "192.168.45.28",
+    "192.168.45.29",
+    "192.168.45.30",
+    "192.168.45.31",
+    "192.168.45.32",
+    "192.168.45.33",
+    "192.168.45.34",
+    "192.168.45.35",
+    "192.168.45.36",
+    "192.168.45.37",
+    "192.168.45.38",
+    "192.168.45.39",
+    "192.168.45.4",
+    "192.168.45.40",
+    "192.168.45.41",
+    "192.168.45.42",
+    "192.168.45.43",
+    "192.168.12.123",
+    "192.168.12.125",
+    "192.168.12.230",
+    "192.168.12.26",
+    "192.168.12.27",
+    "192.168.12.28",
+    "192.168.12.29",
+    "192.168.12.30",
+    "192.168.12.32",
+    "192.168.12.33",
+    "192.168.12.34",
+    "192.168.12.35",
+    "192.168.12.36",
+    "192.168.12.37",
+    "192.168.12.38",
+    "192.168.12.40",
+    "192.168.12.41",
+    "192.168.12.42",
+    "192.168.12.43",
+    "192.168.12.44",
+    "192.168.12.45",
+    "192.168.12.47",
+    "192.168.12.48",
+    "192.168.12.5",
+    "192.168.12.51",
+    "192.168.12.52",
+    "192.168.12.6",
+    "192.168.12.60",
+    "192.168.12.63",
+    "192.168.12.64",
+    "192.168.12.69",
+    "192.168.12.70",
+    "192.168.12.71",
+    "192.168.12.74",
+    "192.168.12.75",
+    "192.168.8.221",
+    "192.168.8.222",
+    "192.168.8.223",
+    "192.168.8.224",
+    "192.168.8.225",
+    "192.168.8.226",
+    "192.168.8.227",
+    "192.168.8.228",
+    "192.168.8.229",
+    "192.168.8.230",
+    "192.168.8.231",
+    "192.168.8.232",
+    "192.168.8.233",
+    "192.168.8.234",
+    "192.168.8.235",
+    "192.168.8.236",
+    "192.168.8.237",
+    "192.168.8.238",
+    "192.168.8.239",
+    "192.168.8.240",
+    "192.168.8.241",
+    "192.168.8.242",
+    "192.168.8.243",
+    "192.168.8.244",
+    "192.168.8.245",
+    "192.168.8.246",
+    "192.168.8.247",
+    "192.168.8.248",
+    "192.168.8.249",
+    "192.168.8.250",
+    "192.168.8.251",
+    "192.168.8.66",
+    "192.168.8.67",
+    "192.168.8.71",
+    "192.168.8.72",
+    "192.168.14.26",
+    "192.168.14.27",
+    "192.168.14.28",
+    "192.168.14.29",
+    "192.168.14.30",
+    "192.168.14.31",
+    "192.168.14.32",
+    "192.168.14.33",
+    "192.168.14.34",
+    "192.168.14.36",
+    "192.168.14.37",
+    "192.168.14.38",
+    "192.168.14.40",
+    "192.168.14.41",
+    "192.168.14.42",
+    "192.168.14.43",
+    "192.168.14.44",
+    "192.168.14.45",
+    "192.168.14.46",
+    "192.168.14.48",
+    "192.168.14.49",
+    "192.168.14.50",
+    "192.168.14.53",
+    "192.168.14.54",
+    "192.168.14.56",
+    "192.168.14.57",
+    "192.168.14.58",
+    "192.168.14.59",
+    "192.168.14.60",
+    "192.168.14.61",
+    "192.168.14.62",
+    "192.168.14.63",
+    "192.168.14.65",
+    "192.168.14.66",
+    "192.168.14.68",
+    "192.168.45.44",
+    "192.168.45.45",
+    "192.168.45.46",
+    "192.168.45.47",
+    "192.168.45.48",
+    "192.168.45.49",
+    "192.168.45.5",
+    "192.168.45.50",
+    "192.168.45.51",
+    "192.168.45.52",
+    "192.168.45.53",
+    "192.168.45.54",
+    "192.168.45.55",
+    "192.168.45.56",
+    "192.168.45.57",
+    "192.168.45.58",
+    "192.168.45.59",
+    "192.168.45.6",
+    "192.168.45.60",
+    "192.168.45.61",
+    "192.168.45.62",
+    "192.168.45.63",
+    "192.168.45.64",
+    "192.168.45.65",
+    "192.168.45.66",
+    "192.168.45.67",
+    "192.168.45.68",
+    "192.168.45.69",
+    "192.168.45.7",
+    "192.168.45.70",
+    "192.168.45.71",
+    "192.168.45.72",
+    "192.168.45.73",
+    "192.168.45.74",
+    "192.168.45.75",
+    "192.168.45.76",
+    "192.168.45.77",
+    "192.168.45.78",
+    "192.168.45.79",
+    "192.168.45.8",
+    "192.168.45.80",
+    "192.168.45.9",
+    "192.168.12.76",
+    "192.168.12.77",
+    "192.168.12.78",
+    "192.168.12.79",
+    "192.168.12.80",
+    "192.168.12.83",
+    "192.168.12.84",
+    "192.168.12.87",
+    "192.168.12.88",
+    "192.168.15.101",
+    "192.168.15.26",
+    "192.168.15.27",
+    "192.168.15.28",
+    "192.168.15.29",
+    "192.168.15.30",
+    "192.168.15.31",
+    "192.168.15.32",
+    "192.168.15.33",
+    "192.168.15.34",
+    "192.168.15.35",
+    "192.168.15.36",
+    "192.168.15.37",
+    "192.168.7.87",
+    "Hot mill 2 Straightner(G19)",
+    "192.168.8.73",
+    "192.168.8.74",
+    "192.168.8.75",
+    "192.168.8.77",
+    "192.168.8.78",
+    "192.168.8.79",
+    "192.168.8.80",
+    "192.168.8.81",
+    "192.168.8.82",
+    "192.168.8.83",
+    "192.168.8.84",
+    "192.168.8.85",
+    "192.168.8.86",
+    "192.168.8.87",
+    "192.168.14.69",
+    "192.168.14.70",
+    "192.168.14.71",
+    "192.168.14.72",
+    "192.168.14.73",
+    "192.168.14.74",
+    "192.168.14.75",
+    "192.168.14.76"
+  ],
+  "notes": [],
+  "endedAt": "2026-08-17T08:35:37.716Z",
+  "durationSec": 1707
+}

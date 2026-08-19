@@ -1,0 +1,156 @@
+{
+  "five": {
+    "href": "http://192.168.17.150/live?group=rml_6_isp_labour_housing_2&layout=5x5",
+    "controlRoom": "false",
+    "cols": "5",
+    "total": "77",
+    "mounted": "35",
+    "eligible": "25",
+    "playing": 25,
+    "streams": 25,
+    "sidebarVisible": true,
+    "hasExit": false,
+    "hasControlRoomBtn": true
+  },
+  "fiveOpenWs": 25,
+  "six": {
+    "href": "http://192.168.17.150/live?group=rml_6_isp_labour_housing_2&layout=6x6",
+    "controlRoom": "false",
+    "cols": "6",
+    "total": "77",
+    "mounted": "48",
+    "eligible": "36",
+    "playing": 36,
+    "streams": 36,
+    "sidebarVisible": true,
+    "hasExit": false,
+    "hasControlRoomBtn": true
+  },
+  "sixScrolled": {
+    "href": "http://192.168.17.150/live?group=rml_6_isp_labour_housing_2&layout=6x6",
+    "controlRoom": "false",
+    "cols": "6",
+    "total": "77",
+    "mounted": "41",
+    "eligible": "35",
+    "playing": 18,
+    "streams": 34,
+    "sidebarVisible": true,
+    "hasExit": false,
+    "hasControlRoomBtn": true
+  },
+  "sixBack": {
+    "href": "http://192.168.17.150/live?group=rml_6_isp_labour_housing_2&layout=6x6",
+    "controlRoom": "false",
+    "cols": "6",
+    "total": "77",
+    "mounted": "48",
+    "eligible": "36",
+    "playing": 21,
+    "streams": 36,
+    "sidebarVisible": true,
+    "hasExit": false,
+    "hasControlRoomBtn": true
+  },
+  "cr": {
+    "href": "http://192.168.17.150/live?group=rml_6_isp_labour_housing_2&layout=6x6",
+    "controlRoom": "true",
+    "cols": "6",
+    "total": "77",
+    "mounted": "48",
+    "eligible": "36",
+    "playing": 36,
+    "streams": 36,
+    "sidebarVisible": false,
+    "hasExit": true,
+    "hasControlRoomBtn": false
+  },
+  "fsOpen": {
+    "status": "Playing · 101 · main · go2rtc",
+    "controlRoom": "true"
+  },
+  "afterFsEsc": {
+    "href": "http://192.168.17.150/live?group=rml_6_isp_labour_housing_2&layout=6x6",
+    "controlRoom": "true",
+    "cols": "6",
+    "total": "77",
+    "mounted": "48",
+    "eligible": "36",
+    "playing": 36,
+    "streams": 36,
+    "sidebarVisible": false,
+    "hasExit": true,
+    "hasControlRoomBtn": false
+  },
+  "afterCrEsc": {
+    "href": "http://192.168.17.150/live?group=rml_6_isp_labour_housing_2&layout=6x6",
+    "controlRoom": "false",
+    "cols": "6",
+    "total": "77",
+    "mounted": "48",
+    "eligible": "36",
+    "playing": 36,
+    "streams": 36,
+    "sidebarVisible": true,
+    "hasExit": false,
+    "hasControlRoomBtn": true
+  },
+  "restored": {
+    "href": "http://192.168.17.150/live?group=rml_6_isp_labour_housing_2&layout=6x6",
+    "controlRoom": "false",
+    "cols": "6",
+    "total": "77",
+    "mounted": "48",
+    "eligible": "36",
+    "playing": 36,
+    "streams": 36,
+    "sidebarVisible": true,
+    "hasExit": false,
+    "hasControlRoomBtn": true
+  },
+  "ptz": {
+    "href": "http://192.168.17.150/ptz/6a6ad1c1ab17995b58f6cb91",
+    "crashed": false,
+    "heading": "PTZ"
+  },
+  "sixOpenWs": 36,
+  "sixDups": 1,
+  "holdSamples": [],
+  "mem0": 81,
+  "mem1": 81,
+  "ws": {
+    "opened": 107,
+    "legacy": 0,
+    "dups": 1,
+    "maxConcurrent": 37,
+    "workersHit": [
+      "w1",
+      "w3"
+    ],
+    "openAtEnd": 1
+  },
+  "health": {
+    "ready": true,
+    "mongodb": true,
+    "cameraCount": 801,
+    "phase": "ready",
+    "error": null
+  },
+  "workers": [
+    {
+      "id": 1,
+      "running": true,
+      "streams": 588
+    },
+    {
+      "id": 2,
+      "running": true,
+      "streams": 594
+    },
+    {
+      "id": 3,
+      "running": true,
+      "streams": 420
+    }
+  ]
+}

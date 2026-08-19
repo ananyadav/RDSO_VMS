@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, ChevronLeft, ChevronRight, Circle, Loader2 } from 'lucide-react';
 import { useGo2RtcLive } from '../hooks/useGo2RtcLive';
 import CameraSelector from './CameraSelector';
+import { useShowManualRecordingControls } from './CameraCard';
 import { cameraTileLabel } from '../lib/cameraLabel';
 
 interface Camera {
@@ -33,6 +34,7 @@ export default function FullscreenCameraModal({
   const playerRef = useRef<HTMLDivElement>(null);
   const [forceSub, setForceSub] = useState(false);
   const [sessionKey, setSessionKey] = useState(0);
+  const showManualRecordingControls = useShowManualRecordingControls();
 
   const profile = forceSub ? 'sub' : 'main';
   const { isConnecting, error, streamStatus, streamName } = useGo2RtcLive(camera, {
@@ -221,17 +223,19 @@ export default function FullscreenCameraModal({
                 Use sub stream (102)
               </button>
             )}
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => onToggleRecording(camera.id)}
-                className={`flex items-center space-x-2 py-2 px-4 rounded transition-colors bg-black/30 backdrop-blur-sm ${
-                  isRecording ? 'text-red-400' : 'text-gray-200 hover:bg-white/20'
-                }`}
-              >
-                <Circle size={16} className={isRecording ? 'fill-current' : ''} />
-                <span>{isRecording ? 'Stop' : 'Record'}</span>
-              </button>
-            </div>
+            {showManualRecordingControls && (
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={() => onToggleRecording(camera.id)}
+                  className={`flex items-center space-x-2 py-2 px-4 rounded transition-colors bg-black/30 backdrop-blur-sm ${
+                    isRecording ? 'text-red-400' : 'text-gray-200 hover:bg-white/20'
+                  }`}
+                >
+                  <Circle size={16} className={isRecording ? 'fill-current' : ''} />
+                  <span>{isRecording ? 'Stop' : 'Record'}</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {isConnecting && !showError && (

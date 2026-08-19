@@ -1,0 +1,257 @@
+{
+  "base": "http://192.168.17.150",
+  "group": "rml_6_rashmi_6_paradigm_limited_precast_office",
+  "at": "2026-08-10T09:05:28.249Z",
+  "wsEvents": [
+    {
+      "url": "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_24_sub",
+      "open": false,
+      "closeCode": {
+        "_type": "WebSocket",
+        "_guid": "ws@10d8c5933104a1be4cecd7151f656d74"
+      }
+    },
+    {
+      "url": "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_25_sub",
+      "open": false,
+      "closeCode": {
+        "_type": "WebSocket",
+        "_guid": "ws@a8615f2b4c68867000293c9e8ca647aa"
+      }
+    },
+    {
+      "url": "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_26_sub",
+      "open": false,
+      "closeCode": {
+        "_type": "WebSocket",
+        "_guid": "ws@3400c954b6ec668d892dccb056a46b06"
+      }
+    },
+    {
+      "url": "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_27_sub",
+      "open": false,
+      "closeCode": {
+        "_type": "WebSocket",
+        "_guid": "ws@e7a4d54a38a341908d12f013465d07b5"
+      }
+    },
+    {
+      "url": "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_28_sub",
+      "open": false,
+      "closeCode": {
+        "_type": "WebSocket",
+        "_guid": "ws@7b69cf6bf0871255fb9f77ec35ab591a"
+      }
+    },
+    {
+      "url": "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_29_sub",
+      "open": true,
+      "closeCode": null
+    },
+    {
+      "url": "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_30_sub",
+      "open": true,
+      "closeCode": null
+    },
+    {
+      "url": "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_31_sub",
+      "open": false,
+      "closeCode": {
+        "_type": "WebSocket",
+        "_guid": "ws@cfa94e6b5923a3b8907f6be705a9d228"
+      }
+    },
+    {
+      "url": "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_39_sub",
+      "open": false,
+      "closeCode": {
+        "_type": "WebSocket",
+        "_guid": "ws@f8c3e8471143699d3f55411bdbea46c7"
+      }
+    },
+    {
+      "url": "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_40_sub",
+      "open": false,
+      "closeCode": {
+        "_type": "WebSocket",
+        "_guid": "ws@1f4bbcf318157dc3bdfcda75199357e2"
+      }
+    },
+    {
+      "url": "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_27_main",
+      "open": false,
+      "closeCode": {
+        "_type": "WebSocket",
+        "_guid": "ws@e867abdb9d36fa2439142459bd39fb5c"
+      }
+    },
+    {
+      "url": "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_27_main",
+      "open": false,
+      "closeCode": {
+        "_type": "WebSocket",
+        "_guid": "ws@72014e8d9dab711a953482498f4024e4"
+      }
+    },
+    {
+      "url": "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_27_sub",
+      "open": false,
+      "closeCode": {
+        "_type": "WebSocket",
+        "_guid": "ws@ea4426a5adece5daa41d5ce9e00e3b6b"
+      }
+    }
+  ],
+  "tiles": {
+    "192.168.11.27": {
+      "ip": "192.168.11.27",
+      "found": true,
+      "hasPlayerDiv": true,
+      "hasVideoStream": true,
+      "hasVideo": true,
+      "videoWidth": 352,
+      "videoHeight": 288,
+      "videoPaused": false,
+      "videoReadyState": 4,
+      "modeLabel": "RTC",
+      "statusLabel": "",
+      "streamSrc": null,
+      "overlayVisible": false,
+      "overlayText": null,
+      "gridMounted": "10",
+      "gridEligible": "10",
+      "streamId": null,
+      "profile": null,
+      "worker": null,
+      "ws": [],
+      "classification": "OK-playing"
+    },
+    "192.168.11.30": {
+      "ip": "192.168.11.30",
+      "found": true,
+      "hasPlayerDiv": true,
+      "hasVideoStream": true,
+      "hasVideo": true,
+      "videoWidth": 2560,
+      "videoHeight": 1440,
+      "videoPaused": false,
+      "videoReadyState": 4,
+      "modeLabel": "MSE",
+      "statusLabel": "",
+      "streamSrc": null,
+      "overlayVisible": false,
+      "overlayText": null,
+      "gridMounted": "10",
+      "gridEligible": "10",
+      "streamId": null,
+      "profile": null,
+      "worker": null,
+      "ws": [],
+      "classification": "OK-playing"
+    },
+    "192.168.11.31": {
+      "ip": "192.168.11.31",
+      "found": true,
+      "hasPlayerDiv": true,
+      "hasVideoStream": true,
+      "hasVideo": true,
+      "videoWidth": 352,
+      "videoHeight": 288,
+      "videoPaused": false,
+      "videoReadyState": 4,
+      "modeLabel": "RTC",
+      "statusLabel": "",
+      "streamSrc": null,
+      "overlayVisible": false,
+      "overlayText": null,
+      "gridMounted": "10",
+      "gridEligible": "10",
+      "streamId": null,
+      "profile": null,
+      "worker": null,
+      "ws": [],
+      "classification": "OK-playing"
+    },
+    "192.168.11.40": {
+      "ip": "192.168.11.40",
+      "found": true,
+      "hasPlayerDiv": true,
+      "hasVideoStream": true,
+      "hasVideo": true,
+      "videoWidth": 352,
+      "videoHeight": 288,
+      "videoPaused": false,
+      "videoReadyState": 4,
+      "modeLabel": "RTC",
+      "statusLabel": "",
+      "streamSrc": null,
+      "overlayVisible": false,
+      "overlayText": null,
+      "gridMounted": "10",
+      "gridEligible": "10",
+      "streamId": null,
+      "profile": null,
+      "worker": null,
+      "ws": [],
+      "classification": "OK-playing"
+    },
+    "192.168.11.28": {
+      "ip": "192.168.11.28",
+      "found": true,
+      "hasPlayerDiv": true,
+      "hasVideoStream": true,
+      "hasVideo": true,
+      "videoWidth": 704,
+      "videoHeight": 576,
+      "videoPaused": false,
+      "videoReadyState": 4,
+      "modeLabel": "RTC",
+      "statusLabel": "",
+      "streamSrc": null,
+      "overlayVisible": false,
+      "overlayText": null,
+      "gridMounted": "10",
+      "gridEligible": "10",
+      "streamId": null,
+      "profile": null,
+      "worker": null,
+      "ws": []
+    }
+  },
+  "tests": {
+    "manualReconnect27": {
+      "before": {
+        "src": null,
+        "videoWidth": 352,
+        "mode": "RTC"
+      },
+      "error": "TypeError: Cannot read properties of null (reading 'toString')"
+    },
+    "fullscreen27": {
+      "streamSrc": null,
+      "streamId": null,
+      "profile": null,
+      "worker": null,
+      "videoWidth": 352,
+      "statusText": "Playing · 101 · main · go2rtc"
+    },
+    "afterFullscreenGrid27": {
+      "ip": "192.168.11.27",
+      "found": true,
+      "hasPlayerDiv": true,
+      "hasVideoStream": true,
+      "hasVideo": true,
+      "videoWidth": 352,
+      "videoHeight": 288,
+      "videoPaused": false,
+      "videoReadyState": 4,
+      "modeLabel": "RTC",
+      "statusLabel": "",
+      "streamSrc": null,
+      "overlayVisible": false,
+      "overlayText": null,
+      "gridMounted": "10",
+      "gridEligible": "10"
+    }
+  }
+}

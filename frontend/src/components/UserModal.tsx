@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, UserPlus } from 'lucide-react';
 import type { User } from '../pages/UserManagement';
 import ToggleSwitch from './ToggleSwitch'; // Make sure you have this component
+import { ALL_PERMISSIONS, permissionLabel } from '../lib/permissions';
 
 interface UserModalProps {
   isOpen: boolean;
@@ -10,7 +11,7 @@ interface UserModalProps {
   user: User | null;
 }
 
-const allPermissions = ['Live View', 'Playback', 'Events', 'Cameras', 'System', 'Users'];
+const allPermissions = ALL_PERMISSIONS;
 
 export default function UserModal({ isOpen, onClose, onSave, user }: UserModalProps): React.ReactElement | null {
   const [formData, setFormData] = useState<Partial<User>>({});
@@ -98,7 +99,7 @@ export default function UserModal({ isOpen, onClose, onSave, user }: UserModalPr
                 <div>
                   <label className="label-style">Role</label>
                   <select name="role" value={formData.role || 'Viewer'} onChange={handleChange} className="input-style">
-                    <option>Admin</option><option>Operator</option><option>Viewer</option>
+                    <option>Operator</option><option>Viewer</option>
                   </select>
                 </div>
               </div>
@@ -109,7 +110,7 @@ export default function UserModal({ isOpen, onClose, onSave, user }: UserModalPr
                 {allPermissions.map(permission => (
                   <ToggleSwitch
                     key={permission}
-                    label={permission}
+                    label={permissionLabel(permission)}
                     enabled={formData.permissions?.includes(permission) || false}
                     onChange={() => handlePermissionChange(permission)}
                   />

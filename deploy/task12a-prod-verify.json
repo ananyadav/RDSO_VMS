@@ -1,0 +1,77 @@
+{
+  "base": "http://192.168.17.150",
+  "at": "2026-08-13T12:27:19.497Z",
+  "tests": {
+    "external10000": {
+      "reachable": false,
+      "error": "ECONNREFUSED",
+      "pass": true
+    },
+    "nginxHealth": {
+      "status": 200,
+      "body": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      }
+    },
+    "mediaLogout": {
+      "status": 401
+    },
+    "go2rtcWsLogout": {
+      "status": 401
+    },
+    "go2rtcWsAuthed": {
+      "status": 410,
+      "text": "{\"error\": \"Direct media route required\", \"message\": \"Python live-video WebSocket proxy was removed. Use /media/w{workerI"
+    },
+    "badStreamAuth": {
+      "status": 403
+    },
+    "workers": [
+      {
+        "id": 1,
+        "port": 1984,
+        "running": true
+      },
+      {
+        "id": 2,
+        "port": 1985,
+        "running": true
+      },
+      {
+        "id": 3,
+        "port": 1986,
+        "running": true
+      }
+    ],
+    "grid5x5": {
+      "mounted": "10",
+      "eligible": "10",
+      "playing": 10,
+      "streams": 10
+    },
+    "afterScroll": {
+      "playing": 10
+    },
+    "fullscreen": {
+      "playing": 720
+    },
+    "media": {
+      "workersHit": [
+        "w3"
+      ],
+      "legacy": 0,
+      "sample": [
+        "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_24_sub",
+        "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_25_sub",
+        "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_26_sub",
+        "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_27_sub",
+        "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_28_sub",
+        "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_29_sub"
+      ]
+    }
+  }
+}

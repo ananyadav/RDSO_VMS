@@ -1,0 +1,263 @@
+{
+  "sa_login": {
+    "status": 200,
+    "role": "SUPER_ADMIN",
+    "name": "TASK14C_VAL"
+  },
+  "health": {
+    "status": 200,
+    "body": {
+      "ready": true,
+      "mongodb": true,
+      "cameraCount": 801,
+      "phase": "ready",
+      "error": null
+    }
+  },
+  "cameras": {
+    "status": 200,
+    "count": 801
+  },
+  "locations": {
+    "status": 200,
+    "ok": true
+  },
+  "sa_routes": {
+    "audit": 200,
+    "sessions": 200,
+    "go2rtc_status": 200,
+    "audit_total": 33,
+    "session_total": 42
+  },
+  "workers": [
+    {
+      "workerId": 1,
+      "running": true,
+      "assignedCameraCount": 294,
+      "pm2Name": null
+    },
+    {
+      "workerId": 2,
+      "running": true,
+      "assignedCameraCount": 297,
+      "pm2Name": null
+    },
+    {
+      "workerId": 3,
+      "running": true,
+      "assignedCameraCount": 210,
+      "pm2Name": "go2rtc-worker-3"
+    }
+  ],
+  "login_failed_http": 401,
+  "ptz": {
+    "move": 200,
+    "stop": 200,
+    "move_ok": true
+  },
+  "val2_login": 200,
+  "val2_session_before": {
+    "status": 200,
+    "name": "TASK14C_VAL2"
+  },
+  "revoke": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "revoked": 1
+    }
+  },
+  "val2_session_after": {
+    "status": 401,
+    "error": "Authentication required"
+  },
+  "audit_after": {
+    "status": 200,
+    "actions": [
+      "SESSION_REVOKED",
+      "LOGIN_SUCCESS",
+      "PTZ_STOP",
+      "PTZ_PAN",
+      "LOGIN_FAILED",
+      "LOGIN_SUCCESS",
+      "USER_ROLE_CHANGED",
+      "USER_CREATED",
+      "USER_CREATED",
+      "LOGIN_SUCCESS",
+      "USER_CREATED",
+      "USER_CREATED",
+      "LOGIN_SUCCESS",
+      "USER_ROLE_CHANGED",
+      "LOGIN_SUCCESS",
+      "CAMERA_DELETED",
+      "CAMERA_UPDATED",
+      "CAMERA_UPDATED",
+      "LOGIN_SUCCESS",
+      "USER_DELETED",
+      "LOGOUT",
+      "LOGIN_SUCCESS",
+      "LOGIN_SUCCESS",
+      "SESSION_REVOKED",
+      "USER_DELETED",
+      "USER_UPDATED",
+      "USER_UPDATED",
+      "USER_CREATED",
+      "LOCATION_DELETED",
+      "LOCATION_CREATED",
+      "CAMERA_CREATED",
+      "LOGIN_FAILED",
+      "USER_CREATED",
+      "USER_CREATED",
+      "LOGIN_SUCCESS",
+      "LOGIN_SUCCESS",
+      "LOGIN_SUCCESS",
+      "USER_ROLE_CHANGED"
+    ],
+    "sample": [
+      {
+        "action": "SESSION_REVOKED",
+        "actor": "TASK14C_VAL",
+        "role": "SUPER_ADMIN",
+        "ts": "2026-08-19T03:28:28.016000+00:00",
+        "ip": "192.168.17.1",
+        "result": "success",
+        "resource": "user",
+        "resource_label": "TASK14C_VAL2",
+        "success": true
+      },
+      {
+        "action": "LOGIN_SUCCESS",
+        "actor": "TASK14C_VAL2",
+        "role": "Operator",
+        "ts": "2026-08-19T03:28:27.623000+00:00",
+        "ip": "192.168.17.1",
+        "result": "success",
+        "resource": "auth",
+        "resource_label": "TASK14C_VAL2",
+        "success": true
+      },
+      {
+        "action": "PTZ_STOP",
+        "actor": "TASK14C_VAL",
+        "role": "SUPER_ADMIN",
+        "ts": "2026-08-19T03:28:27.225000+00:00",
+        "ip": "192.168.17.1",
+        "result": "success",
+        "resource": "camera",
+        "resource_label": null,
+        "success": true
+      },
+      {
+        "action": "PTZ_PAN",
+        "actor": "TASK14C_VAL",
+        "role": "SUPER_ADMIN",
+        "ts": "2026-08-19T03:28:27.016000+00:00",
+        "ip": "192.168.17.1",
+        "result": "success",
+        "resource": "camera",
+        "resource_label": null,
+        "success": true
+      },
+      {
+        "action": "LOGIN_FAILED",
+        "actor": null,
+        "role": null,
+        "ts": "2026-08-19T03:28:26.800000+00:00",
+        "ip": "192.168.17.1",
+        "result": "failure",
+        "resource": "auth",
+        "resource_label": "TASK14C_VAL",
+        "success": false
+      },
+      {
+        "action": "LOGIN_SUCCESS",
+        "actor": "TASK14C_VAL",
+        "role": "SUPER_ADMIN",
+        "ts": "2026-08-19T03:28:24.369000+00:00",
+        "ip": "192.168.17.1",
+        "result": "success",
+        "resource": "auth",
+        "resource_label": "TASK14C_VAL",
+        "success": true
+      },
+      {
+        "action": "USER_ROLE_CHANGED",
+        "actor": "promote_super_admin.py",
+        "role": "BOOTSTRAP",
+        "ts": "2026-08-19T03:27:03+00:00",
+        "ip": null,
+        "result": "success",
+        "resource": "user",
+        "resource_label": "TASK14C_VAL",
+        "success": true
+      },
+      {
+        "action": "USER_CREATED",
+        "actor": "admin123",
+        "role": "Admin",
+        "ts": "2026-08-19T03:26:53.496000+00:00",
+        "ip": "192.168.17.1",
+        "result": "success",
+        "resource": "user",
+        "resource_label": "TASK14C_VAL2",
+        "success": true
+      },
+      {
+        "action": "USER_CREATED",
+        "actor": "admin123",
+        "role": "Admin",
+        "ts": "2026-08-19T03:26:53.039000+00:00",
+        "ip": "192.168.17.1",
+        "result": "success",
+        "resource": "user",
+        "resource_label": "TASK14C_VAL",
+        "success": true
+      },
+      {
+        "action": "LOGIN_SUCCESS",
+        "actor": "admin123",
+        "role": "Admin",
+        "ts": "2026-08-19T03:26:52.583000+00:00",
+        "ip": "192.168.17.1",
+        "result": "success",
+        "resource": "auth",
+        "resource_label": "admin123",
+        "success": true
+      },
+      {
+        "action": "USER_CREATED",
+        "actor": "admin123",
+        "role": "Admin",
+        "ts": "2026-08-19T03:26:29.633000+00:00",
+        "ip": "192.168.17.1",
+        "result": "forbidden",
+        "resource": "user",
+        "resource_label": null,
+        "success": false
+      },
+      {
+        "action": "USER_CREATED",
+        "actor": "admin123",
+        "role": "Admin",
+        "ts": "2026-08-19T03:26:29.488000+00:00",
+        "ip": "192.168.17.1",
+        "result": "forbidden",
+        "resource": "user",
+        "resource_label": null,
+        "success": false
+      }
+    ],
+    "secret_leak": false
+  },
+  "admin_users_after_promote": {
+    "names": [
+      "admin123",
+      "controlroom",
+      "ispit",
+      "vms",
+      "TASK14C_VAL2"
+    ],
+    "has_TASK14C_VAL": false,
+    "has_super_role": false
+  }
+}

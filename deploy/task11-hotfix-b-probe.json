@@ -1,0 +1,485 @@
+{
+  "cameras": [
+    {
+      "ip": "192.168.11.27",
+      "id": "6a6ad1b4ab17995b58f6cb90",
+      "uid": "ip_192_168_11_27",
+      "workerId": 3,
+      "online": null,
+      "sub_stream": "ip_192_168_11_27_sub",
+      "main_stream": "ip_192_168_11_27_main",
+      "grid_profile": "sub / ch102",
+      "fullscreen_profile": "main / ch101 (default FullscreenCameraModal)",
+      "go2rtc_sub_http": 200,
+      "go2rtc_sub": {
+        "producers": [
+          {
+            "id": 53676,
+            "format_name": "rtsp",
+            "protocol": "rtsp+tcp",
+            "remote_addr": "192.168.11.27:554",
+            "url": "rtsp://<REDACTED>@192.168.11.27:554/media/video2",
+            "sdp": "v=0\r\no=- 1001 1 IN IP4 192.168.11.27\r\ns=VCP IPC Realtime stream\r\nm=video 0 RTP/AVP 108\r\nc=IN IP4 192.168.11.27\r\na=control:rtsp://192.168.11.27/media/video2/video\r\na=rtpmap:108 H265/90000\r\na=fmtp:108 sprop-sps=QgEBAWAAAAMAAAMAAAMAAAMAlqAFogCQWNrkkya5ZwCAAAADAIAAAAyE; sprop-pps=RAHgdrAmQA==\r\na=recvonly\r\nm=audio 0 RTP/AVP 0\r\nc=IN IP4 192.168.11.27\r\nb=AS:50\r\na=rtpmap:0 PCMU/8000\r\na=fmtp:0 RTCP=0\r\na=control:rtsp://192.168.11.27/media/video2/audio1\r\na=recvonly\r\nm=application 0 RTP/AVP 107\r\nc=IN IP4 192.168.11.27\r\na=control:rtsp://192.168.11.27/media/video2/metadata\r\na=rtpmap:107 vnd.onvif.metadata/90000\r\na=fmtp:107 DecoderTag=h3c-v3 RTCP=0\r\na=recvonly\r\n",
+            "user_agent": "go2rtc/1.9.14",
+            "medias": [
+              "video, recvonly, H265",
+              "audio, recvonly, PCMU/8000",
+              "application, recvonly, VND.ONVIF.METADATA"
+            ],
+            "receivers": [
+              {
+                "id": 53689,
+                "codec": {
+                  "codec_name": "hevc",
+                  "codec_type": "video"
+                },
+                "childs": [
+                  53690
+                ],
+                "bytes": 44764024,
+                "packets": 41561
+              },
+              {
+                "id": 53695,
+                "codec": {
+                  "codec_name": "pcm_mulaw",
+                  "codec_type": "audio",
+                  "sample_rate": 8000
+                },
+                "childs": [
+                  53696
+                ],
+                "bytes": 2923008,
+                "packets": 5709
+              }
+            ],
+            "bytes_recv": 48269664
+          },
+          {
+            "url": "rtsp://<REDACTED>@192.168.11.27:554/media/video3#rtsp_transport=tcp&timeout=20"
+          }
+        ],
+        "consumers": [
+          {
+            "id": 53677,
+            "format_name": "webrtc",
+            "protocol": "ws+udp",
+            "remote_addr": "192.168.17.1:57235 prflx",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+            "medias": [
+              "video, sendonly, VP8, VP9, H264, AV1, H265",
+              "audio, sendonly, OPUS/48000/2, G722/8000, PCMU/8000, PCMA/8000, L16, PCML"
+            ],
+            "senders": [
+              {
+                "id": 53690,
+                "codec": {
+                  "codec_name": "hevc",
+                  "codec_type": "video"
+                },
+                "parent": 53689,
+                "bytes": 44764024,
+                "packets": 41561
+              },
+              {
+                "id": 53696,
+                "codec": {
+                  "codec_name": "pcm_mulaw",
+                  "codec_type": "audio",
+                  "sample_rate": 8000
+                },
+                "parent": 53695,
+                "bytes": 2923008,
+                "packets": 5709
+              }
+            ],
+            "bytes_send": 48253714
+          }
+        ]
+      },
+      "go2rtc_main_http": 200,
+      "go2rtc_main": {
+        "producers": [
+          {
+            "url": "rtsp://<REDACTED>@192.168.11.27:554/media/video1#rtsp_transport=tcp&timeout=20"
+          },
+          {
+            "url": "rtsp://<REDACTED>@192.168.11.27:554/media/video3#rtsp_transport=tcp&timeout=20"
+          }
+        ],
+        "consumers": []
+      }
+    },
+    {
+      "ip": "192.168.11.30",
+      "id": "6a6ad1d5ab17995b58f6cb92",
+      "uid": "ip_192_168_11_30",
+      "workerId": 3,
+      "online": null,
+      "sub_stream": "ip_192_168_11_30_sub",
+      "main_stream": "ip_192_168_11_30_main",
+      "grid_profile": "sub / ch102",
+      "fullscreen_profile": "main / ch101 (default FullscreenCameraModal)",
+      "go2rtc_sub_http": 200,
+      "go2rtc_sub": {
+        "producers": [
+          {
+            "id": 53641,
+            "format_name": "rtsp",
+            "protocol": "rtsp+tcp",
+            "remote_addr": "192.168.11.30:554",
+            "url": "rtsp://<REDACTED>@192.168.11.30:554/media/video2",
+            "sdp": "v=0\r\no=- 1001 1 IN IP4 192.168.11.30\r\ns=VCP IPC Realtime stream\r\nm=video 0 RTP/AVP 108\r\nc=IN IP4 192.168.11.30\r\na=control:rtsp://192.168.11.30/media/video2/video\r\na=rtpmap:108 H265/90000\r\na=fmtp:108 sprop-sps=QgEBAWAAAAMAAAMAAAMAAAMAlqAFogCQWNrkkya5ZwCAAAADAIAAAAyE; sprop-pps=RAHgdrAmQA==\r\na=recvonly\r\nm=audio 0 RTP/AVP 0\r\nc=IN IP4 192.168.11.30\r\nb=AS:50\r\na=rtpmap:0 PCMU/8000\r\na=fmtp:0 RTCP=0\r\na=control:rtsp://192.168.11.30/media/video2/audio1\r\na=recvonly\r\nm=application 0 RTP/AVP 107\r\nc=IN IP4 192.168.11.30\r\na=control:rtsp://192.168.11.30/media/video2/metadata\r\na=rtpmap:107 vnd.onvif.metadata/90000\r\na=fmtp:107 DecoderTag=h3c-v3 RTCP=0\r\na=recvonly\r\n",
+            "user_agent": "go2rtc/1.9.14",
+            "medias": [
+              "video, recvonly, H265",
+              "audio, recvonly, PCMU/8000",
+              "application, recvonly, VND.ONVIF.METADATA"
+            ],
+            "receivers": [
+              {
+                "id": 53643,
+                "codec": {
+                  "codec_name": "hevc",
+                  "codec_type": "video"
+                },
+                "childs": [
+                  53645
+                ],
+                "bytes": 22861905,
+                "packets": 24149
+              },
+              {
+                "id": 53646,
+                "codec": {
+                  "codec_name": "pcm_mulaw",
+                  "codec_type": "audio",
+                  "sample_rate": 8000
+                },
+                "childs": [
+                  53648
+                ],
+                "bytes": 2937856,
+                "packets": 5738
+              }
+            ],
+            "bytes_recv": 26173797
+          },
+          {
+            "url": "rtsp://<REDACTED>@192.168.11.30:554/media/video3#rtsp_transport=tcp&timeout=20"
+          }
+        ],
+        "consumers": [
+          {
+            "id": 53640,
+            "format_name": "webrtc",
+            "protocol": "ws+udp",
+            "remote_addr": "192.168.17.1:65276 prflx",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+            "medias": [
+              "video, sendonly, VP8, VP9, H264, AV1, H265",
+              "audio, sendonly, OPUS/48000/2, G722/8000, PCMU/8000, PCMA/8000, L16, PCML"
+            ],
+            "senders": [
+              {
+                "id": 53645,
+                "codec": {
+                  "codec_name": "hevc",
+                  "codec_type": "video"
+                },
+                "parent": 53643,
+                "bytes": 22861905,
+                "packets": 24149
+              },
+              {
+                "id": 53648,
+                "codec": {
+                  "codec_name": "pcm_mulaw",
+                  "codec_type": "audio",
+                  "sample_rate": 8000
+                },
+                "parent": 53646,
+                "bytes": 2937856,
+                "packets": 5738
+              }
+            ],
+            "bytes_send": 26140686
+          }
+        ]
+      },
+      "go2rtc_main_http": 200,
+      "go2rtc_main": {
+        "producers": [
+          {
+            "url": "rtsp://<REDACTED>@192.168.11.30:554/media/video1#rtsp_transport=tcp&timeout=20"
+          },
+          {
+            "url": "rtsp://<REDACTED>@192.168.11.30:554/media/video3#rtsp_transport=tcp&timeout=20"
+          }
+        ],
+        "consumers": []
+      }
+    },
+    {
+      "ip": "192.168.11.31",
+      "id": "6a6ad1e5ab17995b58f6cb93",
+      "uid": "ip_192_168_11_31",
+      "workerId": 3,
+      "online": null,
+      "sub_stream": "ip_192_168_11_31_sub",
+      "main_stream": "ip_192_168_11_31_main",
+      "grid_profile": "sub / ch102",
+      "fullscreen_profile": "main / ch101 (default FullscreenCameraModal)",
+      "go2rtc_sub_http": 200,
+      "go2rtc_sub": {
+        "producers": [
+          {
+            "id": 53693,
+            "format_name": "rtsp",
+            "protocol": "rtsp+tcp",
+            "remote_addr": "192.168.11.31:554",
+            "url": "rtsp://<REDACTED>@192.168.11.31:554/media/video2",
+            "sdp": "v=0\r\no=- 1001 1 IN IP4 192.168.11.31\r\ns=VCP IPC Realtime stream\r\nm=video 0 RTP/AVP 108\r\nc=IN IP4 192.168.11.31\r\na=control:rtsp://192.168.11.31/media/video2/video\r\na=rtpmap:108 H265/90000\r\na=fmtp:108 sprop-sps=QgEBAWAAAAMAAAMAAAMAAAMAlqAFogCQWNrkkya5ZwCAAAADAIAAAAyE; sprop-pps=RAHgdrAmQA==\r\na=recvonly\r\nm=audio 0 RTP/AVP 0\r\nc=IN IP4 192.168.11.31\r\nb=AS:50\r\na=rtpmap:0 PCMU/8000\r\na=fmtp:0 RTCP=0\r\na=control:rtsp://192.168.11.31/media/video2/audio1\r\na=recvonly\r\nm=application 0 RTP/AVP 107\r\nc=IN IP4 192.168.11.31\r\na=control:rtsp://192.168.11.31/media/video2/metadata\r\na=rtpmap:107 vnd.onvif.metadata/90000\r\na=fmtp:107 DecoderTag=h3c-v3 RTCP=0\r\na=recvonly\r\n",
+            "user_agent": "go2rtc/1.9.14",
+            "medias": [
+              "video, recvonly, H265",
+              "audio, recvonly, PCMU/8000",
+              "application, recvonly, VND.ONVIF.METADATA"
+            ],
+            "receivers": [
+              {
+                "id": 53698,
+                "codec": {
+                  "codec_name": "hevc",
+                  "codec_type": "video"
+                },
+                "childs": [
+                  53699
+                ],
+                "bytes": 44790052,
+                "packets": 41824
+              },
+              {
+                "id": 53701,
+                "codec": {
+                  "codec_name": "pcm_mulaw",
+                  "codec_type": "audio",
+                  "sample_rate": 8000
+                },
+                "childs": [
+                  53702
+                ],
+                "bytes": 2926080,
+                "packets": 5715
+              }
+            ],
+            "bytes_recv": 48301992
+          },
+          {
+            "url": "rtsp://<REDACTED>@192.168.11.31:554/media/video3#rtsp_transport=tcp&timeout=20"
+          }
+        ],
+        "consumers": [
+          {
+            "id": 53694,
+            "format_name": "webrtc",
+            "protocol": "ws+udp",
+            "remote_addr": "192.168.17.1:57239 prflx",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+            "medias": [
+              "video, sendonly, VP8, VP9, H264, AV1, H265",
+              "audio, sendonly, OPUS/48000/2, G722/8000, PCMU/8000, PCMA/8000, L16, PCML"
+            ],
+            "senders": [
+              {
+                "id": 53699,
+                "codec": {
+                  "codec_name": "hevc",
+                  "codec_type": "video"
+                },
+                "parent": 53698,
+                "bytes": 44790052,
+                "packets": 41824
+              },
+              {
+                "id": 53702,
+                "codec": {
+                  "codec_name": "pcm_mulaw",
+                  "codec_type": "audio",
+                  "sample_rate": 8000
+                },
+                "parent": 53701,
+                "bytes": 2926080,
+                "packets": 5715
+              }
+            ],
+            "bytes_send": 48282516
+          }
+        ]
+      },
+      "go2rtc_main_http": 200,
+      "go2rtc_main": {
+        "producers": [
+          {
+            "url": "rtsp://<REDACTED>@192.168.11.31:554/media/video1#rtsp_transport=tcp&timeout=20"
+          },
+          {
+            "url": "rtsp://<REDACTED>@192.168.11.31:554/media/video3#rtsp_transport=tcp&timeout=20"
+          }
+        ],
+        "consumers": []
+      }
+    },
+    {
+      "ip": "192.168.11.40",
+      "id": "6a6ad200ab17995b58f6cb95",
+      "uid": "ip_192_168_11_40",
+      "workerId": 3,
+      "online": null,
+      "sub_stream": "ip_192_168_11_40_sub",
+      "main_stream": "ip_192_168_11_40_main",
+      "grid_profile": "sub / ch102",
+      "fullscreen_profile": "main / ch101 (default FullscreenCameraModal)",
+      "go2rtc_sub_http": 200,
+      "go2rtc_sub": {
+        "producers": [
+          {
+            "id": 53660,
+            "format_name": "rtsp",
+            "protocol": "rtsp+tcp",
+            "remote_addr": "192.168.11.40:554",
+            "url": "rtsp://<REDACTED>@192.168.11.40:554/media/video2",
+            "sdp": "v=0\r\no=- 1001 1 IN IP4 192.168.11.40\r\ns=VCP IPC Realtime stream\r\nm=video 0 RTP/AVP 108\r\nc=IN IP4 192.168.11.40\r\na=control:rtsp://192.168.11.40/media/video2/video\r\na=rtpmap:108 H265/90000\r\na=fmtp:108 sprop-sps=QgEBAWAAAAMAAAMAAAMAAAMAlqAFogCQWNrkkya5ZwCAAAADAIAAAAyE; sprop-pps=RAHgdrAmQA==\r\na=recvonly\r\nm=audio 0 RTP/AVP 0\r\nc=IN IP4 192.168.11.40\r\nb=AS:50\r\na=rtpmap:0 PCMU/8000\r\na=fmtp:0 RTCP=0\r\na=control:rtsp://192.168.11.40/media/video2/audio1\r\na=recvonly\r\nm=application 0 RTP/AVP 107\r\nc=IN IP4 192.168.11.40\r\na=control:rtsp://192.168.11.40/media/video2/metadata\r\na=rtpmap:107 vnd.onvif.metadata/90000\r\na=fmtp:107 DecoderTag=h3c-v3 RTCP=0\r\na=recvonly\r\n",
+            "user_agent": "go2rtc/1.9.14",
+            "medias": [
+              "video, recvonly, H265",
+              "audio, recvonly, PCMU/8000",
+              "application, recvonly, VND.ONVIF.METADATA"
+            ],
+            "receivers": [
+              {
+                "id": 53663,
+                "codec": {
+                  "codec_name": "hevc",
+                  "codec_type": "video"
+                },
+                "childs": [
+                  53665
+                ],
+                "bytes": 44891397,
+                "packets": 41447
+              },
+              {
+                "id": 53667,
+                "codec": {
+                  "codec_name": "pcm_mulaw",
+                  "codec_type": "audio",
+                  "sample_rate": 8000
+                },
+                "childs": [
+                  53668
+                ],
+                "bytes": 2935296,
+                "packets": 5733
+              }
+            ],
+            "bytes_recv": 48408245
+          },
+          {
+            "url": "rtsp://<REDACTED>@192.168.11.40:554/media/video3#rtsp_transport=tcp&timeout=20"
+          }
+        ],
+        "consumers": [
+          {
+            "id": 53659,
+            "format_name": "webrtc",
+            "protocol": "ws+udp",
+            "remote_addr": "192.168.17.1:54648 prflx",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+            "medias": [
+              "video, sendonly, VP8, VP9, H264, AV1, H265",
+              "audio, sendonly, OPUS/48000/2, G722/8000, PCMU/8000, PCMA/8000, L16, PCML"
+            ],
+            "senders": [
+              {
+                "id": 53665,
+                "codec": {
+                  "codec_name": "hevc",
+                  "codec_type": "video"
+                },
+                "parent": 53663,
+                "bytes": 44891397,
+                "packets": 41447
+              },
+              {
+                "id": 53668,
+                "codec": {
+                  "codec_name": "pcm_mulaw",
+                  "codec_type": "audio",
+                  "sample_rate": 8000
+                },
+                "parent": 53667,
+                "bytes": 2935296,
+                "packets": 5733
+              }
+            ],
+            "bytes_send": 48393275
+          }
+        ]
+      },
+      "go2rtc_main_http": 200,
+      "go2rtc_main": {
+        "producers": [
+          {
+            "url": "rtsp://<REDACTED>@192.168.11.40:554/media/video1#rtsp_transport=tcp&timeout=20"
+          },
+          {
+            "url": "rtsp://<REDACTED>@192.168.11.40:554/media/video3#rtsp_transport=tcp&timeout=20"
+          }
+        ],
+        "consumers": null
+      }
+    }
+  ],
+  "workers": {
+    "1": {
+      "workerId": 1,
+      "pm2Name": null,
+      "baseUrl": "http://127.0.0.1:1984",
+      "apiPort": 1984,
+      "rtspPort": 8554,
+      "webrtcPort": 8555,
+      "assignedCameraCount": 294,
+      "maxCameras": 300,
+      "running": true,
+      "liveStreamCount": 588,
+      "configPath": "/home/vms/cctv_ananya/CCTV/go2rtc/workers/1/go2rtc.yaml"
+    },
+    "2": {
+      "workerId": 2,
+      "pm2Name": null,
+      "baseUrl": "http://127.0.0.1:1985",
+      "apiPort": 1985,
+      "rtspPort": 8556,
+      "webrtcPort": 8557,
+      "assignedCameraCount": 297,
+      "maxCameras": 300,
+      "running": true,
+      "liveStreamCount": 594,
+      "configPath": "/home/vms/cctv_ananya/CCTV/go2rtc/workers/2/go2rtc.yaml"
+    },
+    "3": {
+      "workerId": 3,
+      "pm2Name": "go2rtc-worker-3",
+      "baseUrl": "http://127.0.0.1:1986",
+      "apiPort": 1986,
+      "rtspPort": 8558,
+      "webrtcPort": 8559,
+      "assignedCameraCount": 202,
+      "maxCameras": 300,
+      "running": true,
+      "liveStreamCount": 404,
+      "configPath": "/home/vms/cctv_ananya/CCTV/go2rtc/workers/3/go2rtc.yaml"
+    }
+  }
+}

@@ -162,6 +162,7 @@ async def _maybe_restart_recording(camera_id: str, existing: Optional[dict]) -> 
         return None
     cid = str(camera_id)
     try:
+        from app.services.recording_config import is_recording_engine_enabled
         from app.services.recording_schedule_store import recording_schedule
         from app.services.video_recording import (
             is_camera_recording,
@@ -169,6 +170,9 @@ async def _maybe_restart_recording(camera_id: str, existing: Optional[dict]) -> 
             stop_camera_recording,
         )
     except ImportError:
+        return None
+
+    if not is_recording_engine_enabled():
         return None
 
     if not recording_schedule.get(cid, False):

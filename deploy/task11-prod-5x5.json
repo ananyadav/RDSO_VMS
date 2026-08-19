@@ -1,0 +1,47 @@
+{
+  "group": "rml_6_isp_labour_housing_2",
+  "settle": {
+    "cols": "5",
+    "total": "77",
+    "mounted": "35",
+    "streamEligible": "25",
+    "videoStreams": 25,
+    "videosPlaying": 25,
+    "metricsGlobal": "undefined"
+  },
+  "mid": {
+    "mounted": "27",
+    "streamEligible": "22",
+    "videoStreams": 22,
+    "videosPlaying": 22
+  },
+  "back": {
+    "mounted": "35",
+    "streamEligible": "25",
+    "videoStreams": 24,
+    "videosPlaying": 24
+  },
+  "beforeScrollWs": 25,
+  "mediaWsCount": 73,
+  "workersHit": [
+    "w1",
+    "w3"
+  ],
+  "legacy": 0,
+  "overscanGap": 10,
+  "auth": {
+    "badSrc": {
+      "status": 403,
+      "text": "Invalid stream"
+    },
+    "empty": {
+      "status": 200,
+      "text": "ok"
+    }
+  },
+  "ptz": {
+    "href": "http://192.168.17.150/ptz/6a6ad1c1ab17995b58f6cb91",
+    "snippet": "Live View\nPlayback\nEvents\nPTZ\nCameras\nStorage\nNetwork\nUsers\nAlerts\nStatus\ngo2rtc\nMaintain\nVMS System\nAdmin\nBack to Live View\nPTZ: 192.168.11.29\n192.168.11.29\n192.168.11.30\n192.168.11.31\n192.168.11.47\n192.168.11.83\n192.168.12.94\n192.168.12.95\n192.168.13.7\n192.168.44.131\n192.168.45.82\n192.168.46.43\n1\n",
+    "hasControls": true
+  }
+}

@@ -3,7 +3,7 @@ import { X, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { User, CameraAccess } from '../pages/UserManagement';
 import CameraAccessPicker, { normalizeStoredCameraAccess } from './CameraAccessPicker';
-import { ALL_PERMISSIONS } from '../lib/permissions';
+import { ALL_PERMISSIONS, permissionLabel } from '../lib/permissions';
 
 interface UserModalProps {
   isOpen: boolean;
@@ -164,7 +164,6 @@ export default function AddUserModal({ isOpen, onClose, onSave, user }: UserModa
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1">Role</label>
                   <select name="role" value={formData.role || 'Viewer'} onChange={handleChange} className="select-style">
-                    <option>Admin</option>
                     <option>Operator</option>
                     <option>Viewer</option>
                   </select>
@@ -177,7 +176,7 @@ export default function AddUserModal({ isOpen, onClose, onSave, user }: UserModa
                 {allPermissions.map((permission) => (
                   <label key={permission} className="flex items-center space-x-3 cursor-pointer">
                     <input type="checkbox" checked={formData.permissions?.includes(permission)} onChange={() => handlePermissionChange(permission)} className="checkbox-style" />
-                    <span className="text-gray-300">{permission}</span>
+                    <span className="text-gray-300">{permissionLabel(permission)}</span>
                   </label>
                 ))}
               </div>

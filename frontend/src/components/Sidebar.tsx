@@ -5,33 +5,43 @@ import {
   Network, Users, Bell, Activity, Wrench, Radio, Shield, type LucideIcon,
 } from 'lucide-react';
 import type { User } from '../services/authService';
-import { PERMISSIONS, type Permission, hasPermission, isAdminUser, isSuperAdminUser } from '../lib/permissions';
+import { PERMISSIONS, type Permission, hasPermission, isAdminUser, isOpsAdminUser, isSuperAdminUser } from '../lib/permissions';
 
-type NavItem = { label: string; href: string; icon: LucideIcon; permission: Permission; adminOnly?: boolean };
+type NavItem = {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+  permission: Permission;
+  adminOnly?: boolean;
+  opsAdminOnly?: boolean;
+  superAdminOnly?: boolean;
+};
 
 const mainNav: NavItem[] = [
   { label: 'Live View', href: '/live', icon: Camera, permission: PERMISSIONS.LIVE_VIEW },
-  { label: 'Playback', href: '/playback', icon: Play, permission: PERMISSIONS.PLAYBACK },
+  { label: 'Playback', href: '/playback', icon: Play, permission: PERMISSIONS.RECORDING_VIEW },
   { label: 'Events', href: '/events', icon: Calendar, permission: PERMISSIONS.EVENTS },
   { label: 'PTZ', href: '/ptz', icon: Zap, permission: PERMISSIONS.LIVE_VIEW },
 ];
 
 const configNav: NavItem[] = [
-  { label: 'Cameras', href: '/camera-management', icon: SlidersHorizontal, permission: PERMISSIONS.CAMERAS },
-  { label: 'Storage', href: '/storage', icon: HardDrive, permission: PERMISSIONS.SYSTEM },
-  { label: 'Network', href: '/network-settings', icon: Network, permission: PERMISSIONS.SYSTEM },
-  { label: 'Users', href: '/user-management', icon: Users, permission: PERMISSIONS.USERS },
+  { label: 'Cameras', href: '/camera-management', icon: SlidersHorizontal, permission: PERMISSIONS.CAMERAS, opsAdminOnly: true },
+  { label: 'Storage', href: '/storage', icon: HardDrive, permission: PERMISSIONS.SYSTEM, superAdminOnly: true },
+  { label: 'Network', href: '/network-settings', icon: Network, permission: PERMISSIONS.SYSTEM, superAdminOnly: true },
+  { label: 'Users', href: '/user-management', icon: Users, permission: PERMISSIONS.USERS, adminOnly: true },
   { label: 'Alerts', href: '/notifications', icon: Bell, permission: PERMISSIONS.SYSTEM },
 ];
 
 const systemNav: NavItem[] = [
-  { label: 'Status', href: '/system-status', icon: Activity, permission: PERMISSIONS.SYSTEM },
-  { label: 'go2rtc', href: '/go2rtc-diagnostics', icon: Radio, permission: PERMISSIONS.SYSTEM, adminOnly: true },
-  { label: 'Maintain', href: '/maintenance', icon: Wrench, permission: PERMISSIONS.SYSTEM },
+  { label: 'Status', href: '/system-status', icon: Activity, permission: PERMISSIONS.SYSTEM, superAdminOnly: true },
+  { label: 'go2rtc', href: '/go2rtc-diagnostics', icon: Radio, permission: PERMISSIONS.SYSTEM, superAdminOnly: true },
+  { label: 'Maintain', href: '/maintenance', icon: Wrench, permission: PERMISSIONS.SYSTEM, superAdminOnly: true },
 ];
 
 function filterNav(items: NavItem[], user: User): NavItem[] {
   return items.filter((item) => {
+    if (item.superAdminOnly && !isSuperAdminUser(user)) return false;
+    if (item.opsAdminOnly && !isOpsAdminUser(user)) return false;
     if (item.adminOnly && !isAdminUser(user)) return false;
     if (item.href === '/user-management' && isSuperAdminUser(user)) return false;
     return hasPermission(user, item.permission);

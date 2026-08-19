@@ -397,6 +397,11 @@ class VideoRecorder:
 
 async def start_camera_recording(camera_id: str) -> dict:
     """Start an RTSP recording session; returns session metadata."""
+    from app.services.recording_config import RecordingEngineDisabled, is_recording_engine_enabled
+
+    if not is_recording_engine_enabled():
+        raise RecordingEngineDisabled("Recording engine is disabled")
+
     if camera_id not in _start_locks:
         _start_locks[camera_id] = asyncio.Lock()
 

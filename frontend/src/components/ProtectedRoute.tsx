@@ -2,7 +2,7 @@ import React from 'react';
 import { Redirect } from 'react-router-dom';
 import type { User } from '../services/authService';
 import type { Permission } from '../lib/permissions';
-import { firstAllowedPath, hasPermission, isSuperAdminUser } from '../lib/permissions';
+import { firstAllowedPath, hasPermission, isSuperAdminUser, permissionLabel } from '../lib/permissions';
 import PermissionDenied from './PermissionDenied';
 
 export function renderProtected(
@@ -14,8 +14,18 @@ export function renderProtected(
   return hasPermission(user, permission) ? (
     children
   ) : (
-    <PermissionDenied user={user} required={permission} area={area} />
+    <PermissionDenied user={user} required={permission} area={area || permissionLabel(permission)} />
   );
+}
+
+/** Hidden platform route: silent redirect. Do not name SUPER_ADMIN in the UI. */
+export function renderSuperAdminOnly(
+  user: User,
+  children: React.ReactNode,
+  _area?: string,
+): React.ReactNode {
+  if (isSuperAdminUser(user)) return children;
+  return <Redirect to={firstAllowedPath(user) || '/live'} />;
 }
 
 /** Hidden route: never advertise why access was denied. */
@@ -23,9 +33,7 @@ export function renderControlCenter(
   user: User,
   children: React.ReactNode,
 ): React.ReactNode {
-  if (isSuperAdminUser(user)) return children;
-  const fallback = firstAllowedPath(user) || '/live';
-  return <Redirect to={fallback} />;
+  return renderSuperAdminOnly(user, children);
 }
 
 export function renderHome(

@@ -1,7 +1,52 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { VideoOff, Circle, Maximize, Loader2 } from 'lucide-react';
 import { useGo2RtcLive } from '../hooks/useGo2RtcLive';
+import { apiFetch } from '../lib/api';
 import { cameraTileLabel } from '../lib/cameraLabel';
+import { isSuperAdminUser } from '../lib/permissions';
+import { authService } from '../services/authService';
+
+/** Shared so virtualized tiles do not stampede /api/health. */
+let recordingEngineEnabledCache: boolean | null = null;
+let recordingEngineEnabledInflight: Promise<boolean> | null = null;
+
+function readRecordingEngineEnabled(): Promise<boolean> {
+  if (recordingEngineEnabledCache !== null) {
+    return Promise.resolve(recordingEngineEnabledCache);
+  }
+  if (!recordingEngineEnabledInflight) {
+    recordingEngineEnabledInflight = apiFetch('/api/health')
+      .then((res) => res.json())
+      .then((data: { enabled?: boolean; recording?: { enabled?: boolean } }) => {
+        recordingEngineEnabledCache = Boolean(data?.enabled || data?.recording?.enabled);
+        return recordingEngineEnabledCache;
+      })
+      .catch(() => {
+        recordingEngineEnabledCache = false;
+        return false;
+      });
+  }
+  return recordingEngineEnabledInflight;
+}
+
+/** Record/Stop: SUPER_ADMIN only, and only while the recording engine is enabled. */
+export function useShowManualRecordingControls(): boolean {
+  const [engineEnabled, setEngineEnabled] = useState(
+    () => recordingEngineEnabledCache === true,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void readRecordingEngineEnabled().then((enabled) => {
+      if (!cancelled) setEngineEnabled(enabled);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return isSuperAdminUser(authService.getCurrentUser()) && engineEnabled;
+}
 
 interface Camera {
   id: string;
@@ -39,6 +84,7 @@ function CameraCard({
 }: CameraCardProps) {
   const tileRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<HTMLDivElement>(null);
+  const showManualRecordingControls = useShowManualRecordingControls();
 
   const { isConnecting, isQueued, streamStatus, inView } = useGo2RtcLive(
     camera.online ? camera : null,
@@ -157,15 +203,17 @@ function CameraCard({
               </button>
             )}
 
-            <button
-              onClick={() => onToggleRecording(camera.id)}
-              className={`flex items-center space-x-1.5 py-1 px-2 rounded transition-colors bg-black/30 backdrop-blur-sm ${
-                isRecording ? 'text-red-400' : 'text-gray-200 hover:bg-white/20'
-              }`}
-            >
-              <Circle size={12} className={isRecording ? 'fill-current' : ''} />
-              <span>{isRecording ? 'Stop' : 'Record'}</span>
-            </button>
+            {showManualRecordingControls && (
+              <button
+                onClick={() => onToggleRecording(camera.id)}
+                className={`flex items-center space-x-1.5 py-1 px-2 rounded transition-colors bg-black/30 backdrop-blur-sm ${
+                  isRecording ? 'text-red-400' : 'text-gray-200 hover:bg-white/20'
+                }`}
+              >
+                <Circle size={12} className={isRecording ? 'fill-current' : ''} />
+                <span>{isRecording ? 'Stop' : 'Record'}</span>
+              </button>
+            )}
           </div>
         </div>
           </>

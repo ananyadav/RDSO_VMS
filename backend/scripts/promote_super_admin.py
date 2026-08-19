@@ -32,7 +32,7 @@ from app.services.audit_service import write_audit
 
 ALL_PERMISSIONS = [
     "Live View",
-    "Playback",
+    "recording.view",
     "Events",
     "Cameras",
     "System",

@@ -12,7 +12,8 @@ from app.services.camera_access import is_admin
 from app.services.camera_identity import get_camera_by_ref
 from app.services.camera_access import user_can_access_camera
 
-PERMISSION_PLAYBACK = "Playback"
+PERMISSION_PLAYBACK = "Playback"  # legacy operator assignment; not used for recording APIs
+PERMISSION_RECORDING_VIEW = "recording.view"
 PERMISSION_LIVE_VIEW = "Live View"
 PERMISSION_SYSTEM = "System"
 
@@ -28,6 +29,16 @@ def has_permission(user: Optional[dict], permission: str) -> bool:
         return True
     perms = user.get("permissions") or []
     return permission in perms
+
+
+def has_recording_view(user: Optional[dict]) -> bool:
+    """SUPER_ADMIN and ADMIN always; others only with explicit recording.view."""
+    if not user:
+        return False
+    if is_admin(user):
+        return True
+    perms = user.get("permissions") or []
+    return PERMISSION_RECORDING_VIEW in perms
 
 
 async def require_user(request: web.Request) -> dict:
@@ -75,14 +86,16 @@ async def deny_unless_super_admin(request: web.Request) -> web.Response | None:
 
 
 async def deny_unless_playback_permission(request: web.Request) -> web.Response | None:
-    """Return 401/403 when the caller may not use recorded playback APIs."""
+    """Return 401/403 when the caller may not view/search/play recordings.
+
+    SUPER_ADMIN and ADMIN are allowed. OPERATOR/Viewer need recording.view.
+    Legacy 'Playback' is not treated as recording.view.
+    """
     user = await get_effective_user(request)
     if user is None:
         return _json_error("Authentication required", 401)
-    if is_admin(user):
-        return None
-    if not has_permission(user, PERMISSION_PLAYBACK):
-        return _json_error("Playback permission required", 403)
+    if not has_recording_view(user):
+        return _json_error("Recording view permission required", 403)
     return None
 
 

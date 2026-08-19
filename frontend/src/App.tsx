@@ -8,8 +8,8 @@ import { useTheme } from './hooks/useTheme';
 // --- Component & Layout Imports ---
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
-import { renderProtected, renderHome, renderControlCenter } from "./components/ProtectedRoute";
-import { isOpsAdminUser, isSuperAdminUser, PERMISSIONS, firstAllowedPath } from './lib/permissions';
+import { renderProtected, renderHome, renderControlCenter, renderSuperAdminOnly } from "./components/ProtectedRoute";
+import { isAdminUser, isOpsAdminUser, isSuperAdminUser, PERMISSIONS, firstAllowedPath } from './lib/permissions';
 
 // --- Page Imports ---
 import LoginPage from "./pages/LoginPage";
@@ -304,24 +304,30 @@ function AppShell({
               <Switch>
                 <Route exact path="/" render={() => renderHome(currentUser, liveView)} />
                 <Route path="/live" render={() => renderProtected(currentUser, PERMISSIONS.LIVE_VIEW, liveView)} />
-                <Route path="/storage" render={() => renderProtected(currentUser, PERMISSIONS.SYSTEM, (
+                <Route path="/storage" render={() => renderSuperAdminOnly(currentUser, (
                   <Storage schedule={recordingSchedule} isRecordingEnabled={isRecordingEnabled} onScheduleChange={onScheduleChange} onToggleMasterRecording={onToggleMasterRecording}/>
                 ))} />
                 <Route exact path="/ptz" render={() => renderProtected(currentUser, PERMISSIONS.LIVE_VIEW, <PTZ />)} />
                 <Route path="/ptz/:cameraId" render={() => renderProtected(currentUser, PERMISSIONS.LIVE_VIEW, <PTZ />)} />
-                <Route path="/camera-management" render={() => renderProtected(currentUser, PERMISSIONS.CAMERAS, <CameraManagement />, 'Camera Management')} />
-                <Route path="/playback" render={() => renderProtected(currentUser, PERMISSIONS.PLAYBACK, <Playback key={accessProfileKey} />)} />
+                <Route path="/camera-management" render={() => (
+                  isOpsAdminUser(currentUser)
+                    ? <CameraManagement />
+                    : <Redirect to={firstAllowedPath(currentUser) || '/live'} />
+                )} />
+                <Route path="/playback" render={() => renderProtected(currentUser, PERMISSIONS.RECORDING_VIEW, <Playback key={accessProfileKey} />, 'Playback')} />
                 <Route path="/events" render={() => renderProtected(currentUser, PERMISSIONS.EVENTS, <Events />)} />
-                <Route path="/network-settings" render={() => renderProtected(currentUser, PERMISSIONS.SYSTEM, <NetworkSettings />, 'Network Settings')} />
+                <Route path="/network-settings" render={() => renderSuperAdminOnly(currentUser, <NetworkSettings />)} />
                 <Route path="/user-management" render={() => (
                   isSuperAdminUser(currentUser)
                     ? <Redirect to="/control-center?tab=users" />
-                    : renderProtected(currentUser, PERMISSIONS.USERS, <UserManagement />, 'User Management')
+                    : isAdminUser(currentUser)
+                      ? <UserManagement />
+                      : <Redirect to={firstAllowedPath(currentUser) || '/live'} />
                 )} />
                 <Route path="/notifications" render={() => renderProtected(currentUser, PERMISSIONS.SYSTEM, <Notifications />, 'Alerts')} />
-                <Route path="/system-status" render={() => renderProtected(currentUser, PERMISSIONS.SYSTEM, <SystemStatus />, 'System Status')} />
-                <Route path="/go2rtc-diagnostics" render={() => renderProtected(currentUser, PERMISSIONS.SYSTEM, <Go2RtcDiagnostics />, 'go2rtc Diagnostics')} />
-                <Route path="/maintenance" render={() => renderProtected(currentUser, PERMISSIONS.SYSTEM, <Maintenance />, 'Maintenance')} />
+                <Route path="/system-status" render={() => renderSuperAdminOnly(currentUser, <SystemStatus />)} />
+                <Route path="/go2rtc-diagnostics" render={() => renderSuperAdminOnly(currentUser, <Go2RtcDiagnostics />)} />
+                <Route path="/maintenance" render={() => renderSuperAdminOnly(currentUser, <Maintenance />)} />
                 <Route path="/control-center" render={() => renderControlCenter(currentUser, <ControlCenter currentUser={currentUser} />)} />
                 <Route path="/super-admin" render={() => (
                   <Redirect to={isSuperAdminUser(currentUser) ? '/control-center' : (firstAllowedPath(currentUser) || '/live')} />

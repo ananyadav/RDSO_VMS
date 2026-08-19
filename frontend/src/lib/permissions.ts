@@ -2,6 +2,7 @@ import type { User } from '../services/authService';
 
 export const PERMISSIONS = {
   LIVE_VIEW: 'Live View',
+  RECORDING_VIEW: 'recording.view',
   PLAYBACK: 'Playback',
   EVENTS: 'Events',
   CAMERAS: 'Cameras',
@@ -11,7 +12,18 @@ export const PERMISSIONS = {
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
-export const ALL_PERMISSIONS: Permission[] = Object.values(PERMISSIONS);
+/** Operator-assignable operational permissions. Camera/user/platform pages are not assigned here. */
+export const ALL_PERMISSIONS: Permission[] = [
+  PERMISSIONS.LIVE_VIEW,
+  PERMISSIONS.RECORDING_VIEW,
+  PERMISSIONS.EVENTS,
+  PERMISSIONS.SYSTEM,
+];
+
+export function permissionLabel(permission: string): string {
+  if (permission === PERMISSIONS.RECORDING_VIEW) return 'View Recordings';
+  return permission;
+}
 
 export function isAdminUser(user: Pick<User, 'role'> | null | undefined): boolean {
   return (user?.role ?? '').trim().toLowerCase() === 'admin';
@@ -37,10 +49,16 @@ export function hasPermission(
   return (user.permissions ?? []).includes(permission);
 }
 
+export function hasRecordingView(
+  user: Pick<User, 'role' | 'permissions'> | null | undefined,
+): boolean {
+  return hasPermission(user, PERMISSIONS.RECORDING_VIEW);
+}
+
 /** Route path → required permission (exact or prefix match in canAccessPath). */
 export const ROUTE_PERMISSIONS: Record<string, Permission> = {
   '/live': PERMISSIONS.LIVE_VIEW,
-  '/playback': PERMISSIONS.PLAYBACK,
+  '/playback': PERMISSIONS.RECORDING_VIEW,
   '/events': PERMISSIONS.EVENTS,
   '/ptz': PERMISSIONS.LIVE_VIEW,
   '/camera-management': PERMISSIONS.CAMERAS,
@@ -68,6 +86,15 @@ const ORDERED_PATHS = [
   '/maintenance',
 ] as const;
 
+/** Platform / infrastructure pages — SUPER_ADMIN only. Never advertise these to ADMIN/OPERATOR. */
+const SUPER_ADMIN_ONLY_PATHS = [
+  '/storage',
+  '/network-settings',
+  '/system-status',
+  '/go2rtc-diagnostics',
+  '/maintenance',
+] as const;
+
 export function permissionForPath(pathname: string): Permission | null {
   if (pathname === '/' || pathname === '') {
     return PERMISSIONS.LIVE_VIEW;
@@ -87,12 +114,27 @@ function isControlCenterPath(pathname: string): boolean {
   );
 }
 
+function pathMatches(pathname: string, prefix: string): boolean {
+  return pathname === prefix || pathname.startsWith(`${prefix}/`);
+}
+
+function isSuperAdminOnlyPath(pathname: string): boolean {
+  if (isControlCenterPath(pathname)) return true;
+  return SUPER_ADMIN_ONLY_PATHS.some((prefix) => pathMatches(pathname, prefix));
+}
+
 export function canAccessPath(
   user: Pick<User, 'role' | 'permissions'> | null | undefined,
   pathname: string,
 ): boolean {
-  if (isControlCenterPath(pathname)) {
+  if (isSuperAdminOnlyPath(pathname)) {
     return isSuperAdminUser(user);
+  }
+  if (pathMatches(pathname, '/user-management')) {
+    return isAdminUser(user);
+  }
+  if (pathMatches(pathname, '/camera-management')) {
+    return isOpsAdminUser(user);
   }
   const required = permissionForPath(pathname);
   if (!required) return true;
@@ -103,8 +145,8 @@ export function firstAllowedPath(
   user: Pick<User, 'role' | 'permissions'> | null | undefined,
 ): string | null {
   for (const path of ORDERED_PATHS) {
-    const perm = ROUTE_PERMISSIONS[path];
-    if (hasPermission(user, perm)) return path;
+    if (!canAccessPath(user, path)) continue;
+    return path;
   }
   return null;
 }

@@ -1,0 +1,29 @@
+{
+  "before": {
+    "href": "http://192.168.17.150/live?group=rml_6_isp_labour_housing_2&layout=6x6",
+    "controlRoom": "false",
+    "cols": "6",
+    "total": "77",
+    "mounted": 48,
+    "eligible": 36,
+    "playing": 0,
+    "streams": 16,
+    "fullscreen": false,
+    "ws": 0,
+    "legacy": 0
+  },
+  "cr": {
+    "href": "http://192.168.17.150/live?group=rml_6_isp_labour_housing_2&layout=6x6",
+    "controlRoom": "true",
+    "cols": "6",
+    "total": "77",
+    "mounted": 48,
+    "eligible": 36,
+    "playing": 0,
+    "streams": 16,
+    "fullscreen": true,
+    "ws": 0,
+    "legacy": 0
+  },
+  "reproduced": false
+}

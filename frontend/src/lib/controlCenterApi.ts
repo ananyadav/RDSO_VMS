@@ -74,6 +74,12 @@ export interface HealthStatus {
   mongodb?: boolean;
   cameraCount?: number;
   phase?: string;
+  enabled?: boolean;
+  recordingActive?: boolean;
+  recording?: {
+    enabled?: boolean;
+    recordingActive?: boolean;
+  };
 }
 
 export interface WorkerStatus {

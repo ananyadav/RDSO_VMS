@@ -1,0 +1,284 @@
+{
+  "base": "http://192.168.17.150",
+  "at": "2026-08-07T15:06:14.544Z",
+  "tests": {
+    "health": {
+      "status": 200,
+      "body": {
+        "ready": true,
+        "mongodb": true,
+        "cameraCount": 793,
+        "phase": "ready",
+        "error": null
+      }
+    },
+    "session": {
+      "status": 200,
+      "body": {
+        "id": "6a16a96dcf551aa2ce517ece",
+        "name": "admin123",
+        "role": "Admin",
+        "lastLogin": "2026-08-07T06:54:50.133978+00:00",
+        "status": "Active",
+        "email": "",
+        "permissions": [],
+        "cameraAccess": {
+          "allowedCameraGroups": [],
+          "allowedCameraUids": []
+        }
+      }
+    },
+    "liveConfig": {
+      "status": 200,
+      "body": {
+        "provider": "go2rtc",
+        "go2rtcEnabled": true,
+        "go2rtcWorkersEnabled": true,
+        "directMediaEnabled": true,
+        "mediaWorkers": [
+          {
+            "workerId": 1,
+            "apiPort": 1984,
+            "webrtcPort": 8555,
+            "mediaPath": "/media/w1"
+          },
+          {
+            "workerId": 2,
+            "apiPort": 1985,
+            "webrtcPort": 8557,
+            "mediaPath": "/media/w2"
+          },
+          {
+            "workerId": 3,
+            "apiPort": 1986,
+            "webrtcPort": 8559,
+            "mediaPath": "/media/w3"
+          }
+        ]
+      }
+    },
+    "go2rtcStatus": {
+      "status": 200,
+      "body": {
+        "running": true,
+        "streamCount": 1586,
+        "cameraCount": 793,
+        "workers": [
+          {
+            "workerId": 1,
+            "apiPort": 1984,
+            "running": true,
+            "assignedCameraCount": 294,
+            "liveStreamCount": 588
+          },
+          {
+            "workerId": 2,
+            "apiPort": 1985,
+            "running": true,
+            "assignedCameraCount": 297,
+            "liveStreamCount": 594
+          },
+          {
+            "workerId": 3,
+            "apiPort": 1986,
+            "running": true,
+            "assignedCameraCount": 202,
+            "liveStreamCount": 404
+          }
+        ]
+      }
+    },
+    "samplePerWorker": {
+      "1": {
+        "id": "6a4b7565b6a42e83880b64d1",
+        "ip": "192.168.11.77",
+        "group": "rml_6_isp_sinter",
+        "uid": "ip_192_168_11_77"
+      },
+      "2": {
+        "id": "6a4b8ef4b6a42e83880b663e",
+        "ip": "192.168.11.47",
+        "group": "rml_6_isp_rml6_boundary",
+        "uid": "ip_192_168_11_47"
+      },
+      "3": {
+        "id": "6a6ad184ab17995b58f6cb8d",
+        "ip": "192.168.11.24",
+        "group": "rml_6_rashmi_6_paradigm_limited_precast_office",
+        "uid": "ip_192_168_11_24"
+      }
+    },
+    "mediaLoggedOut": {
+      "status": 401
+    },
+    "go2rtcWsLoggedOut": {
+      "status": 401
+    },
+    "mediaAuthed": {
+      "status": 200,
+      "statusOnly": 200
+    },
+    "go2rtcWsAuthed": {
+      "status": 410,
+      "body": {
+        "error": "Direct media route required",
+        "message": "Python live-video WebSocket proxy was removed. Use /media/w{workerId}/api/ws via Nginx (see deploy/nginx-cctv-direct-media.conf)."
+      }
+    },
+    "publicPorts": {
+      "1984": "unreachable:TimeoutError",
+      "1985": "unreachable:TimeoutError",
+      "1986": "unreachable:TimeoutError",
+      "10000": 200
+    },
+    "workerSpots": {
+      "1": {
+        "sample": {
+          "id": "6a4b7565b6a42e83880b64d1",
+          "ip": "192.168.11.77",
+          "group": "rml_6_isp_sinter",
+          "uid": "ip_192_168_11_77"
+        },
+        "snap": {
+          "mounted": "16",
+          "streamEligible": "16",
+          "videosPlaying": 16,
+          "videoStreams": 16,
+          "metricsCount": null
+        },
+        "mediaWs": [
+          "ws://192.168.17.150/media/w1/api/ws?src=ip_192_168_11_77_sub",
+          "ws://192.168.17.150/media/w1/api/ws?src=ip_192_168_11_84_sub",
+          "ws://192.168.17.150/media/w1/api/ws?src=ip_192_168_46_1_sub"
+        ],
+        "anyMediaWs": [
+          "ws://192.168.17.150/media/w1/api/ws?src=ip_192_168_11_77_sub",
+          "ws://192.168.17.150/media/w1/api/ws?src=ip_192_168_11_84_sub",
+          "ws://192.168.17.150/media/w1/api/ws?src=ip_192_168_46_1_sub",
+          "ws://192.168.17.150/media/w2/api/ws?src=ip_192_168_46_10_sub",
+          "ws://192.168.17.150/media/w2/api/ws?src=ip_192_168_46_11_sub"
+        ],
+        "legacy": []
+      },
+      "2": {
+        "sample": {
+          "id": "6a4b8ef4b6a42e83880b663e",
+          "ip": "192.168.11.47",
+          "group": "rml_6_isp_rml6_boundary",
+          "uid": "ip_192_168_11_47"
+        },
+        "snap": {
+          "mounted": "17",
+          "streamEligible": "17",
+          "videosPlaying": 15,
+          "videoStreams": 15,
+          "metricsCount": null
+        },
+        "mediaWs": [
+          "ws://192.168.17.150/media/w2/api/ws?src=ip_192_168_11_47_sub",
+          "ws://192.168.17.150/media/w2/api/ws?src=ip_192_168_11_53_sub",
+          "ws://192.168.17.150/media/w2/api/ws?src=ip_192_168_12_124_sub"
+        ],
+        "anyMediaWs": [
+          "ws://192.168.17.150/media/w2/api/ws?src=ip_192_168_11_47_sub",
+          "ws://192.168.17.150/media/w2/api/ws?src=ip_192_168_11_53_sub",
+          "ws://192.168.17.150/media/w2/api/ws?src=ip_192_168_12_124_sub",
+          "ws://192.168.17.150/media/w2/api/ws?src=ip_192_168_12_94_sub",
+          "ws://192.168.17.150/media/w2/api/ws?src=ip_192_168_12_95_sub"
+        ],
+        "legacy": []
+      },
+      "3": {
+        "sample": {
+          "id": "6a6ad184ab17995b58f6cb8d",
+          "ip": "192.168.11.24",
+          "group": "rml_6_rashmi_6_paradigm_limited_precast_office",
+          "uid": "ip_192_168_11_24"
+        },
+        "snap": {
+          "mounted": "10",
+          "streamEligible": "10",
+          "videosPlaying": 10,
+          "videoStreams": 10,
+          "metricsCount": null
+        },
+        "mediaWs": [
+          "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_24_sub",
+          "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_25_sub",
+          "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_26_sub"
+        ],
+        "anyMediaWs": [
+          "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_24_sub",
+          "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_25_sub",
+          "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_26_sub",
+          "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_27_sub",
+          "ws://192.168.17.150/media/w3/api/ws?src=ip_192_168_11_28_sub"
+        ],
+        "legacy": []
+      }
+    },
+    "grid5x5": {
+      "group": "rml_6_isp_sinter",
+      "settle": {
+        "href": "http://192.168.17.150/live?group=rml_6_isp_sinter&layout=5x5",
+        "bodySnippet": "Live View\nPlayback\nEvents\nPTZ\nCameras\nStorage\nNetwork\nUsers\nAlerts\nStatus\ngo2rtc\nMaintain\nVMS System\nAdmin\nLive View\n\nSelect a floor to view cameras\n\n192.168.11.77\n192.168.11.84\n192.168.46.1\n192.168.46.10\n192.168.46.11\n192.168.46.19\n192.168.46.2\n192.168.46.3\n192.168.46.4\n192.168.46.42\n192.168.46.47\n192.168.46.49\n192.168.46.5\n192.168.46.6\n192.168.46.7\n192.168.46.8\n1x1\n2x2\n3x3\n4x4\n5x5\nSite / Unit\nSe",
+        "cols": "5",
+        "total": "16",
+        "mounted": "16",
+        "streamEligible": "16",
+        "videoStreams": 16,
+        "videosPlaying": 16,
+        "metrics": null
+      }
+    },
+    "scroll": {
+      "scrolled": {
+        "mounted": "16",
+        "streamEligible": "16",
+        "videoStreams": 16,
+        "cancelled": null
+      },
+      "back": {
+        "mounted": "16",
+        "streamEligible": "16",
+        "videoStreams": 16,
+        "videosPlaying": 16,
+        "metrics": null
+      }
+    },
+    "fullscreen": {
+      "streams": 16,
+      "playing": 16,
+      "hasEscHint": true
+    },
+    "fullscreenReturn": {
+      "mounted": "16"
+    },
+    "ptz": {
+      "buttonCount": 0
+    },
+    "websockets": {
+      "mediaCount": 61,
+      "legacyCount": 0,
+      "workersHit": [
+        "w1",
+        "w2",
+        "w3"
+      ],
+      "sample": [
+        "ws://192.168.17.150/media/w1/api/ws?src=ip_192_168_11_77_sub",
+        "ws://192.168.17.150/media/w1/api/ws?src=ip_192_168_11_84_sub",
+        "ws://192.168.17.150/media/w1/api/ws?src=ip_192_168_46_1_sub",
+        "ws://192.168.17.150/media/w2/api/ws?src=ip_192_168_46_10_sub",
+        "ws://192.168.17.150/media/w2/api/ws?src=ip_192_168_46_11_sub",
+        "ws://192.168.17.150/media/w2/api/ws?src=ip_192_168_46_19_sub",
+        "ws://192.168.17.150/media/w2/api/ws?src=ip_192_168_46_2_sub",
+        "ws://192.168.17.150/media/w2/api/ws?src=ip_192_168_46_4_sub",
+        "ws://192.168.17.150/media/w2/api/ws?src=ip_192_168_46_3_sub",
+        "ws://192.168.17.150/media/w1/api/ws?src=ip_192_168_46_42_sub"
+      ],
+      "directOnly": true
+    },
+    "mediaLogs": []
+  }
+}

@@ -85,6 +85,7 @@ export default function HealthPanel(): React.ReactElement {
           <ul className="text-sm text-gray-300 space-y-1">
             <li>Status: {health?.ready ? 'Ready' : 'Not ready'}</li>
             <li>Phase: {health?.phase || '—'}</li>
+            <li>Recording: {health?.enabled || health?.recording?.enabled ? 'Enabled' : 'Disabled'}</li>
           </ul>
         </Card>
         <Card>
