@@ -38,6 +38,13 @@ interface UseGo2RtcLiveOptions {
   profile: 'sub' | 'main';
   active?: boolean;
   eager?: boolean;
+  /**
+   * Parent stream-eligibility gate (live grid strictly-visible rows).
+   * When false, never start or keep a go2rtc player — even if IntersectionObserver
+   * reports the mounted overscan tile as intersecting (fullscreen root quirk).
+   * Default true so non-grid callers keep observer-based connect.
+   */
+  streamEligible?: boolean;
   sessionKey?: number;
   streamsReady?: boolean;
 }
@@ -216,6 +223,7 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
   const profile = options.profile;
   const active = options.active !== false;
   const eager = options.eager === true;
+  const streamEligible = options.streamEligible !== false;
   const sessionKey = options.sessionKey ?? 0;
   const streamsReady = options.streamsReady !== false;
 
@@ -273,9 +281,13 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
       return;
     }
 
-    // Not parent-eligible (e.g. overscan-only): do not stream until the tile
-    // intersects the grid viewport. Keep the card mounted for scroll smoothness.
+    // Overscan / parent-ineligible: keep the card mounted but do not treat IO
+    // intersection as permission to stream (Control Room fullscreen can mark
+    // clipped overscan tiles as intersecting).
     setInView(false);
+    if (!streamEligible) {
+      return;
+    }
 
     let cancelled = false;
     let observer: IntersectionObserver | null = null;
@@ -308,7 +320,7 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
       if (raf) cancelAnimationFrame(raf);
       observer?.disconnect();
     };
-  }, [camera?.id, eager, observeRef, observeRootRef]);
+  }, [camera?.id, eager, streamEligible, observeRef, observeRootRef]);
 
   useEffect(() => {
     postPlayRetriesRef.current = 0;
@@ -316,7 +328,9 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
   }, [camera?.id]);
 
   useEffect(() => {
-    const shouldConnect = Boolean(camera?.online && active && streamsReady && inView);
+    const shouldConnect = Boolean(
+      camera?.online && active && streamsReady && streamEligible && inView,
+    );
 
     if (!shouldConnect) {
       postPlayRetriesRef.current = 0;
@@ -617,6 +631,7 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
     profile,
     active,
     inView,
+    streamEligible,
     containerRef,
     sessionKey,
     streamsReady,

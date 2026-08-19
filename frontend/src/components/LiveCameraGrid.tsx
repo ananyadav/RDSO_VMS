@@ -223,7 +223,7 @@ const LiveCameraGrid = forwardRef<LiveCameraGridHandle, LiveCameraGridProps>(fun
                       <CameraCard
                         camera={camera}
                         // Mounted (incl. overscan) ≠ stream-eligible.
-                        // Only strictly visible / selected tiles connect eagerly.
+                        // Only strictly visible / selected tiles may open go2rtc.
                         eagerLive={forceEager}
                         observeRootRef={viewportRef}
                         streamsReady={streamsReady}

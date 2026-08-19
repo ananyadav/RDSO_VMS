@@ -48,6 +48,7 @@ function CameraCard({
       observeRootRef,
       profile: 'sub',
       eager: eagerLive,
+      streamEligible: eagerLive,
       active: liveActive && camera.online,
       streamsReady,
     },
