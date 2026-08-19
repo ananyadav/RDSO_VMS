@@ -71,6 +71,9 @@ function CameraCard({
           ? 'bg-black'
           : 'group bg-white dark:bg-gray-900 transition-all duration-300 ring-1 ring-gray-300 dark:ring-gray-700'
       }`}
+      data-live-stream-eligible={eagerLive ? 'true' : 'false'}
+      data-live-stream-status={streamStatus}
+      data-live-stream-queued={isQueued ? 'true' : 'false'}
     >
       <div
         ref={tileRef}
