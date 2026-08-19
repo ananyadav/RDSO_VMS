@@ -34,7 +34,8 @@ def user_helper(user) -> dict:
     if not user: return None
     return {
         "id": str(user["_id"]),
-        "name": user.get("name"),
+        "name": user.get("name") or user.get("username") or "",
+        "username": user.get("username") or user.get("name") or "",
         "role": user.get("role"),
         "lastLogin": user.get("lastLogin"),
         "status": user.get("status"),

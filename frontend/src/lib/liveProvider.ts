@@ -71,21 +71,17 @@ export async function isGo2RtcRunning(): Promise<boolean> {
 }
 
 /**
- * Wait until go2rtc (or worker fleet) is reachable.
- * Does not push MongoDB streams — full sync stays on startup / Diagnostics.
+ * Live View / PTZ readiness. Uses live-config (any authenticated user).
+ * Do not call /api/go2rtc/status or /start here — those are SUPER_ADMIN-only
+ * and would leave ADMIN/OPERATOR tiles stuck with streamsReady=false.
  */
 export async function waitForGo2RtcReady(): Promise<boolean> {
-  if (await isGo2RtcRunning()) return true;
   try {
-    await apiFetch('/api/go2rtc/start', { method: 'POST' });
-    for (let i = 0; i < 12; i += 1) {
-      await new Promise((r) => setTimeout(r, 500));
-      if (await isGo2RtcRunning()) return true;
-    }
+    const config = await fetchLiveConfig();
+    return config.go2rtcEnabled !== false;
   } catch {
-    // fall through
+    return true;
   }
-  return isGo2RtcRunning();
 }
 
 /** Push MongoDB camera streams into go2rtc (admin / Diagnostics — not Live View mount). */

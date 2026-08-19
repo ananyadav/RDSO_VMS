@@ -24,6 +24,8 @@ import {
   Power,
   MapPin,
   Trash2,
+  Camera as CameraIcon,
+  X,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import AddCameraModal, { type CameraFormData, CORPORATE_CAMERA_DEFAULTS } from '../components/AddCameraModal';
@@ -31,6 +33,8 @@ import DuplicateCameraDialog, { type ExistingCameraInfo } from '../components/Du
 import ManageLocationsModal from '../components/ManageLocationsModal';
 import { useLocationsContext } from '../context/LocationsContext';
 import { apiFetch, cameraQuery } from '../lib/api';
+import { go2rtcStreamName } from '../lib/liveProvider';
+import { go2rtcFrameJpegSrc } from '../lib/mediaUrls';
 import { readSessionCache, UI_CACHE_TTL_MS, writeSessionCache } from '../lib/sessionCache';
 import { authService } from '../services/authService';
 import { isOpsAdminUser } from '../lib/permissions';
@@ -53,7 +57,9 @@ interface Camera {
   status?: string;
   online?: boolean;
   displayName?: string;
+  cameraUid?: string;
   camera_uid?: string;
+  workerId?: number | string | null;
   recordingActive?: boolean;
   lastError?: string | null;
   liveStatus?: string;
@@ -112,6 +118,26 @@ const TOOLBAR_BTN_PRIMARY =
 
 const ACTION_BTN =
   'inline-flex items-center gap-1 px-1.5 py-1 text-[11px] font-medium rounded hover:bg-gray-100 dark:hover:bg-gray-700/60 transition-colors';
+
+function cameraRowId(camera: Camera): string {
+  return String(camera._id ?? camera.id ?? '');
+}
+
+function liveViewHref(camera: Camera): string {
+  const q = new URLSearchParams();
+  const id = cameraRowId(camera);
+  if (id) q.set('camera', id);
+  if (camera.camera_group) q.set('group', camera.camera_group);
+  if (camera.site) q.set('site', camera.site);
+  const s = q.toString();
+  return s ? `/live?${s}` : '/live';
+}
+
+function snapshotFrameSrc(camera: Camera): string | null {
+  const uid = (camera.cameraUid || camera.camera_uid || '').trim();
+  if (!uid) return null;
+  return `${go2rtcFrameJpegSrc(go2rtcStreamName(uid, 'sub'), camera.workerId)}&t=${Date.now()}`;
+}
 
 const GROUP_TREE_CACHE_KEY = 'cctv:mgmt:groupTree:v1';
 
@@ -237,6 +263,7 @@ export default function CameraManagement() {
   const [duplicate, setDuplicate] = useState<DuplicatePayload | null>(null);
   const [replaceLoading, setReplaceLoading] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [snapshot, setSnapshot] = useState<{ camera: Camera; src: string } | null>(null);
 
   const [protocolFilter, setProtocolFilter] = useState(() => initialProtocolFilter(initialParams));
   const [search, setSearch] = useState(() => initialStringParam(initialParams, 'q'));
@@ -648,6 +675,15 @@ export default function CameraManagement() {
     setIsEditModalOpen(true);
   };
 
+  const handleOpenSnapshot = (camera: Camera) => {
+    const src = snapshotFrameSrc(camera);
+    if (!src) {
+      toast.error('No stream id for this camera');
+      return;
+    }
+    setSnapshot({ camera, src });
+  };
+
   const handleToggleActive = async (camera: Camera) => {
     if (!camera._id) return;
     const next = camera.is_active === false;
@@ -845,7 +881,7 @@ export default function CameraManagement() {
                       <th className="px-3 py-2 font-semibold">Recording</th>
                       <th className="px-3 py-2 font-semibold min-w-[10rem]">Location</th>
                       <th className="px-3 py-2 font-semibold min-w-[8rem]">Last Error</th>
-                      <th className="px-3 py-2 font-semibold text-right min-w-[14rem]">Actions</th>
+                      <th className="px-3 py-2 font-semibold text-right min-w-[18rem]">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-gray-700/80">
@@ -904,11 +940,19 @@ export default function CameraManagement() {
                           </td>
                           <td className="px-2 py-1.5">
                             <div className="flex flex-wrap justify-end gap-0.5">
-                              <Link to="/live" className={`${ACTION_BTN} text-sky-500`} title="View in Live View">
+                              <Link to={liveViewHref(camera)} className={`${ACTION_BTN} text-sky-500`} title="View in Live View">
                                 <Eye size={12} /> View
                               </Link>
                               {isAdmin && (
                                 <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenSnapshot(camera)}
+                                    className={`${ACTION_BTN} text-violet-400`}
+                                    title="Snapshot"
+                                  >
+                                    <CameraIcon size={12} /> Snapshot
+                                  </button>
                                   <button type="button" onClick={() => handleEditCamera(camera)} className={`${ACTION_BTN} text-sky-400`}>
                                     <Edit size={12} /> Edit
                                   </button>
@@ -988,6 +1032,52 @@ export default function CameraManagement() {
           ? () => handleReactivateExisting(duplicate.existingCamera)
           : undefined}
       />
+      {snapshot && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setSnapshot(null)}
+        >
+          <div
+            className="w-full max-w-3xl rounded-lg border border-gray-700 bg-gray-900 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-gray-700 px-3 py-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-white">{snapshot.camera.name}</p>
+                <p className="truncate font-mono text-[11px] text-gray-400">{snapshot.camera.ip_address}</p>
+              </div>
+              <button
+                type="button"
+                className="rounded p-1 text-gray-400 hover:bg-gray-800 hover:text-white"
+                onClick={() => setSnapshot(null)}
+                title="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="bg-black">
+              <img
+                src={snapshot.src}
+                alt={`Snapshot ${snapshot.camera.name}`}
+                className="mx-auto max-h-[70vh] w-full object-contain"
+                onError={() => toast.error('Could not load snapshot')}
+              />
+            </div>
+            <div className="flex justify-end gap-2 border-t border-gray-700 px-3 py-2">
+              <a
+                href={snapshot.src}
+                download={`${(snapshot.camera.name || 'camera').replace(/\s+/g, '_')}_snapshot.jpg`}
+                className={`${TOOLBAR_BTN} no-underline`}
+              >
+                Download
+              </a>
+              <button type="button" className={TOOLBAR_BTN} onClick={() => setSnapshot(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

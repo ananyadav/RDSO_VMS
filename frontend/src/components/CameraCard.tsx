@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { VideoOff, Circle, Maximize, Loader2 } from 'lucide-react';
 import { useGo2RtcLive } from '../hooks/useGo2RtcLive';
-import { apiFetch } from '../lib/api';
 import { cameraTileLabel } from '../lib/cameraLabel';
 import { isSuperAdminUser } from '../lib/permissions';
 import { authService } from '../services/authService';
@@ -15,7 +14,7 @@ function readRecordingEngineEnabled(): Promise<boolean> {
     return Promise.resolve(recordingEngineEnabledCache);
   }
   if (!recordingEngineEnabledInflight) {
-    recordingEngineEnabledInflight = apiFetch('/api/health')
+    recordingEngineEnabledInflight = fetch('/api/health', { credentials: 'include' })
       .then((res) => res.json())
       .then((data: { enabled?: boolean; recording?: { enabled?: boolean } }) => {
         recordingEngineEnabledCache = Boolean(data?.enabled || data?.recording?.enabled);
@@ -31,11 +30,13 @@ function readRecordingEngineEnabled(): Promise<boolean> {
 
 /** Record/Stop: SUPER_ADMIN only, and only while the recording engine is enabled. */
 export function useShowManualRecordingControls(): boolean {
+  const superAdmin = isSuperAdminUser(authService.getCurrentUser());
   const [engineEnabled, setEngineEnabled] = useState(
     () => recordingEngineEnabledCache === true,
   );
 
   useEffect(() => {
+    if (!superAdmin) return;
     let cancelled = false;
     void readRecordingEngineEnabled().then((enabled) => {
       if (!cancelled) setEngineEnabled(enabled);
@@ -43,9 +44,9 @@ export function useShowManualRecordingControls(): boolean {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [superAdmin]);
 
-  return isSuperAdminUser(authService.getCurrentUser()) && engineEnabled;
+  return superAdmin && engineEnabled;
 }
 
 interface Camera {

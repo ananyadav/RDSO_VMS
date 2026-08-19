@@ -23,6 +23,7 @@ class TestUserRbac(unittest.TestCase):
         self.assertNotIn("root", names)
         self.assertIn("ops2", names)
         self.assertIn("camop", names)
+        self.assertTrue(can_list_user(ADMIN, ADMIN))
         self.assertFalse(can_list_user(ADMIN, SUPER))
         self.assertTrue(can_list_user(SUPER, SUPER))
         self.assertTrue(can_list_user(SUPER, ADMIN))

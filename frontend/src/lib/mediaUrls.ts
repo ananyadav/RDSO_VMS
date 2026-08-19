@@ -27,6 +27,15 @@ export function buildGo2RtcStreamSrc(stream: string, workerId?: number | null): 
   return `${path}?src=${encodeURIComponent(stream)}`;
 }
 
+/** Still JPEG from go2rtc (same Nginx /media auth as live WS). */
+export function go2rtcFrameJpegSrc(
+  stream: string,
+  workerId?: number | string | null,
+): string {
+  const wid = normalizeWorkerId(workerId) ?? 1;
+  return `/media/w${wid}/api/frame.jpeg?src=${encodeURIComponent(stream)}`;
+}
+
 /**
  * Optional readiness check — Live View always uses direct media.
  * Returns true when backend advertises media worker routes (Nginx expected).

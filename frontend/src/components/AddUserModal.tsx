@@ -3,7 +3,7 @@ import { X, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { User, CameraAccess } from '../pages/UserManagement';
 import CameraAccessPicker, { normalizeStoredCameraAccess } from './CameraAccessPicker';
-import { ALL_PERMISSIONS, permissionLabel } from '../lib/permissions';
+import { ALL_PERMISSIONS, PERMISSIONS, permissionLabel } from '../lib/permissions';
 
 interface UserModalProps {
   isOpen: boolean;
@@ -48,7 +48,7 @@ export default function AddUserModal({ isOpen, onClose, onSave, user }: UserModa
           role: 'Viewer',
           status: 'Active',
           lastLogin: 'Never',
-          permissions: [],
+          permissions: [PERMISSIONS.LIVE_VIEW],
           cameraAccess: defaultAccess,
         });
       }
@@ -185,7 +185,7 @@ export default function AddUserModal({ isOpen, onClose, onSave, user }: UserModa
             {activeTab === 'cameras' && (
               <div>
                 {isAdminRole ? (
-                  <p className="text-sm text-gray-400">Admin users can access all buildings, floors, and cameras.</p>
+                  <p className="text-sm text-gray-400">Admin users can access all buildings, floors, and cameras in Live View and PTZ.</p>
                 ) : cameraAccess.accessType === 'all' ? (
                   <div className="space-y-3">
                     <p className="text-sm text-amber-300/90 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
@@ -199,11 +199,16 @@ export default function AddUserModal({ isOpen, onClose, onSave, user }: UserModa
                     />
                   </div>
                 ) : (
-                  <CameraAccessPicker
-                    allowedCameraGroups={cameraAccess.allowedCameraGroups}
-                    allowedCameraUids={cameraAccess.allowedCameraUids}
-                    onChange={handleCameraAccessChange}
-                  />
+                  <div className="space-y-3">
+                    <p className="text-sm text-gray-400">
+                      Operator and Viewer only see assigned cameras in Live View and PTZ.
+                    </p>
+                    <CameraAccessPicker
+                      allowedCameraGroups={cameraAccess.allowedCameraGroups}
+                      allowedCameraUids={cameraAccess.allowedCameraUids}
+                      onChange={handleCameraAccessChange}
+                    />
+                  </div>
                 )}
               </div>
             )}

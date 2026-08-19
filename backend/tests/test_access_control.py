@@ -1,6 +1,7 @@
 import unittest
 
 from app.core.access_control import (
+    PERMISSION_LIVE_VIEW,
     PERMISSION_PLAYBACK,
     PERMISSION_RECORDING_VIEW,
     has_permission,
@@ -66,6 +67,11 @@ class TestAccessControl(unittest.TestCase):
         self.assertTrue(has_recording_view(operator_view))
         self.assertFalse(has_recording_view(legacy_playback))
         self.assertFalse(has_permission(operator, PERMISSION_PLAYBACK))
+
+    def test_operator_and_viewer_have_live_view_by_role(self):
+        self.assertTrue(has_permission({"role": "Operator", "permissions": []}, PERMISSION_LIVE_VIEW))
+        self.assertTrue(has_permission({"role": "Viewer", "permissions": []}, PERMISSION_LIVE_VIEW))
+        self.assertFalse(has_permission({"role": "Operator", "permissions": []}, "System"))
 
 
 if __name__ == "__main__":

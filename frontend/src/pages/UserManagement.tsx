@@ -4,6 +4,8 @@ import { apiFetch } from '../lib/api';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import AddUserModal from '../components/AddUserModal';
+import { authService } from '../services/authService';
+import { isAdminUser, isSuperAdminUser } from '../lib/permissions';
 import {
   useUrlHydration,
   useUrlSync,
@@ -21,6 +23,7 @@ interface CameraAccess {
 interface User {
   id: string;
   name: string;
+  username?: string;
   role: string;
   lastLogin: string;
   status: string;
@@ -31,6 +34,29 @@ interface User {
 }
 
 export type { User, CameraAccess };
+
+function isPrivilegedRole(role: string): boolean {
+  const key = (role || '').trim().toLowerCase().replace(/[-\s]/g, '_');
+  return key === 'admin' || key === 'administrator' || key === 'super_admin' || key === 'superadmin';
+}
+
+function normId(value: unknown): string {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function isSameUser(
+  a: { id?: string; name?: string; username?: string } | null | undefined,
+  b: { id?: string; name?: string; username?: string } | null | undefined,
+): boolean {
+  if (!a || !b) return false;
+  const aId = normId(a.id);
+  const bId = normId(b.id);
+  if (aId && bId && aId === bId) return true;
+  const keys = (u: { name?: string; username?: string }) =>
+    [u.name, u.username].map((v) => normId(v)).filter(Boolean);
+  const aKeys = new Set(keys(a));
+  return keys(b).some((k) => aKeys.has(k));
+}
 
 export default function UserManagement() {
   const { setParams, initialParams, hydratedRef, markHydrated } = useUrlHydration();
@@ -73,10 +99,29 @@ export default function UserManagement() {
     }
   };
 
-  const managedUsers = users.filter((user) => {
-    const role = (user.role || '').trim().toLowerCase().replace(/[-\s]/g, '_');
-    return role !== 'admin' && role !== 'administrator' && role !== 'super_admin' && role !== 'superadmin';
-  });
+  const currentUser = authService.getCurrentUser();
+  const managedUsers = useMemo(() => {
+    const listed = users.filter((user) => isSameUser(user, currentUser) || !isPrivilegedRole(user.role));
+    if (
+      currentUser?.id &&
+      isAdminUser(currentUser) &&
+      !listed.some((user) => isSameUser(user, currentUser))
+    ) {
+      listed.unshift({
+        id: currentUser.id,
+        name: currentUser.name,
+        username: currentUser.name,
+        role: currentUser.role,
+        lastLogin: currentUser.lastLogin || 'N/A',
+        status: currentUser.status || 'Active',
+        email: currentUser.email,
+        permissions: currentUser.permissions,
+        cameraAccess: currentUser.cameraAccess as CameraAccess | undefined,
+      });
+    }
+    listed.sort((a, b) => Number(isSameUser(b, currentUser)) - Number(isSameUser(a, currentUser)));
+    return listed;
+  }, [users, currentUser]);
 
   const handleAddUser = async (userData: User) => {
     try {
@@ -150,9 +195,19 @@ export default function UserManagement() {
             </tr>
           </thead>
           <tbody>
-            {managedUsers.map((user) => (
+            {managedUsers.map((user) => {
+              const isSelf = isSameUser(user, currentUser);
+              const readOnlyRow = isSelf && (isAdminUser(user) || isSuperAdminUser(user));
+              return (
               <tr key={user.id} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/20">
-                <td className="px-6 py-4 font-bold text-gray-900 dark:text-white">{user.name}</td>
+                <td className="px-6 py-4 font-bold text-gray-900 dark:text-white">
+                  {user.name}
+                  {isSelf && (
+                    <span className="ml-2 px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-500/20 text-blue-300">
+                      You
+                    </span>
+                  )}
+                </td>
                 <td className="px-6 py-4">{user.role}</td>
                 <td className="px-6 py-4">{user.lastLogin || 'N/A'}</td>
                 <td className="px-6 py-4">
@@ -163,11 +218,16 @@ export default function UserManagement() {
                   </span>
                 </td>
                 <td className="px-6 py-4 flex items-center justify-end space-x-2">
-                  <button onClick={() => setEditingUser(user)} className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md" title="Edit User"><Edit size={16} /></button>
-                  <button onClick={() => handleDeleteUser(user.id)} className="p-2 text-gray-500 dark:text-gray-400 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md" title="Delete User"><Trash2 size={16} /></button>
+                  {!readOnlyRow && (
+                    <button onClick={() => setEditingUser(user)} className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md" title="Edit User"><Edit size={16} /></button>
+                  )}
+                  {!isSelf && (
+                    <button onClick={() => handleDeleteUser(user.id)} className="p-2 text-gray-500 dark:text-gray-400 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md" title="Delete User"><Trash2 size={16} /></button>
+                  )}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

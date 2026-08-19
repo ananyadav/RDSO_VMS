@@ -1,4 +1,4 @@
-"""PTZ control routes (Hikvision ISAPI)."""
+"""PTZ control routes (Hikvision ISAPI, ONVIF, Dahua)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from app.core.auth_context import get_effective_user
 from app.services.audit_service import ACTION_PTZ_PAN, ACTION_PTZ_STOP, ACTION_PTZ_TILT, ACTION_PTZ_ZOOM, write_audit
 from app.services.camera_access import is_admin
 from app.services.camera_identity import get_camera_by_ref
-from app.services.hikvision_ptz import (
+from app.services.ptz_control import (
     delete_preset,
     goto_preset,
     list_presets,
@@ -43,12 +43,6 @@ async def _require_live_camera(request: web.Request, camera_id: str) -> tuple[di
         return None, web.json_response({"error": "Camera is disabled"}, status=400)
     if not camera.get("ptz"):
         return None, web.json_response({"error": "Camera is not marked as PTZ"}, status=400)
-    protocol = (camera.get("protocol") or "HIKVISION").upper()
-    if protocol not in ("HIKVISION", "HIK"):
-        return None, web.json_response(
-            {"error": f"PTZ via ISAPI is only supported for Hikvision cameras (got {protocol})"},
-            status=400,
-        )
     return camera, None
 
 

@@ -638,7 +638,7 @@ export default function AddCameraModal({
               </label>
               <label className="flex items-center gap-2 text-sm text-gray-300">
                 <input type="checkbox" className="checkbox-style" checked={form.ptz} onChange={(e) => setField('ptz', e.target.checked)} />
-                PTZ camera (pan/tilt/zoom via Hikvision ISAPI)
+                PTZ camera (pan/tilt/zoom — Hikvision, Dahua, ONVIF, and other brands)
               </label>
             </section>
           </div>

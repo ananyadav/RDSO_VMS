@@ -8,6 +8,7 @@ from app.core.roles import (
     is_ops_admin,
     is_operator,
     is_super_admin,
+    is_viewer,
     normalize_role,
 )
 from app.services.camera_access import is_admin
@@ -34,6 +35,8 @@ class TestRoles(unittest.TestCase):
         self.assertFalse(is_super_admin({"role": "Admin"}))
         self.assertTrue(is_operator({"role": "Operator"}))
         self.assertFalse(is_operator({"role": "Admin"}))
+        self.assertTrue(is_viewer({"role": "Viewer"}))
+        self.assertFalse(is_viewer({"role": "Operator"}))
 
 
 if __name__ == "__main__":

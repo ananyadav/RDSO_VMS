@@ -40,12 +40,24 @@ export function isOpsAdminUser(user: Pick<User, 'role'> | null | undefined): boo
   return isAdminUser(user) || isSuperAdminUser(user);
 }
 
+export function isOperatorUser(user: Pick<User, 'role'> | null | undefined): boolean {
+  return (user?.role ?? '').trim().toLowerCase() === 'operator';
+}
+
+export function isViewerUser(user: Pick<User, 'role'> | null | undefined): boolean {
+  return (user?.role ?? '').trim().toLowerCase() === 'viewer';
+}
+
 export function hasPermission(
   user: Pick<User, 'role' | 'permissions'> | null | undefined,
   permission: Permission,
 ): boolean {
   if (!user) return false;
   if (isOpsAdminUser(user)) return true;
+  // Operator/Viewer always get Live View + PTZ; camera ACL still limits which streams play.
+  if (permission === PERMISSIONS.LIVE_VIEW && (isOperatorUser(user) || isViewerUser(user))) {
+    return true;
+  }
   return (user.permissions ?? []).includes(permission);
 }
 

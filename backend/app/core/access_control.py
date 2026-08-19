@@ -7,7 +7,7 @@ from typing import Optional
 from aiohttp import web
 
 from app.core.auth_context import get_effective_user
-from app.core.roles import ROLE_SUPER_ADMIN, normalize_role
+from app.core.roles import ROLE_SUPER_ADMIN, ROLE_VIEWER, is_operator, normalize_role
 from app.services.camera_access import is_admin
 from app.services.camera_identity import get_camera_by_ref
 from app.services.camera_access import user_can_access_camera
@@ -22,11 +22,25 @@ def _json_error(message: str, status: int) -> web.Response:
     return web.json_response({"error": message}, status=status)
 
 
+def has_live_view(user: Optional[dict]) -> bool:
+    """Admin always; Operator/Viewer always (camera ACL still applies)."""
+    if not user:
+        return False
+    if is_admin(user):
+        return True
+    if is_operator(user) or normalize_role(user) == ROLE_VIEWER:
+        return True
+    perms = user.get("permissions") or []
+    return PERMISSION_LIVE_VIEW in perms
+
+
 def has_permission(user: Optional[dict], permission: str) -> bool:
     if not user:
         return False
     if is_admin(user):
         return True
+    if permission == PERMISSION_LIVE_VIEW:
+        return has_live_view(user)
     perms = user.get("permissions") or []
     return permission in perms
 

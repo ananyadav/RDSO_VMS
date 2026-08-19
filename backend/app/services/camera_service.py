@@ -431,21 +431,35 @@ async def get_camera_groups(request) -> dict:
         "true",
         "yes",
     )
+    restricted = user is not None and not is_admin(user)
     if include_stats:
         from app.services.camera_management import get_management_hierarchy
 
         result = await get_management_hierarchy(cameras)
-        return {
+        payload = {
             "sites": result.get("sites") or [],
             "buildings": result["buildings"],
             "totals": result.get("totals"),
             "cameraAccess": camera_access_public(user),
         }
+        if restricted:
+            payload["sites"] = [
+                s for s in payload["sites"] if (s.get("buildings") or [])
+            ]
+            payload["buildings"] = [
+                b
+                for b in payload["buildings"]
+                if any((fg.get("cameraCount") or 0) > 0 for fg in (b.get("floorGroups") or []))
+            ]
+        return payload
 
-    hierarchy = build_groups_hierarchy(cameras, location_buildings)
+    hierarchy = build_groups_hierarchy(
+        cameras, location_buildings, cameras_only=restricted
+    )
     from app.services.camera_management import _merge_configured_sites, group_hierarchy_by_site
 
-    sites = await _merge_configured_sites(group_hierarchy_by_site(hierarchy))
+    grouped = group_hierarchy_by_site(hierarchy)
+    sites = grouped if restricted else await _merge_configured_sites(grouped)
     return {
         "sites": sites,
         "buildings": hierarchy,

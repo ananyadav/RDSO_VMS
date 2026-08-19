@@ -4,13 +4,13 @@ Live video WebSockets go Browser → Nginx /media/wN → go2rtc (not through Pyt
 """
 
 import logging
+from urllib.parse import parse_qs, urlparse
 
 from aiohttp import ClientSession, ClientTimeout, web
 
 from app.core.access_control import deny_unless_super_admin, require_admin, require_user
 from app.core.auth_context import get_effective_user
 from app.services.camera_identity import get_camera_by_ref
-from app.core.roles import is_super_admin
 from app.services.camera_access import (
     is_admin,
     parse_stream_camera_id,
@@ -49,6 +49,29 @@ _GO2RTC_PLAYER_ASSETS = frozenset(
         "video-rtc.js",
     }
 )
+
+
+def _src_from_request(request: web.Request) -> str:
+    """Stream name from query, or from Nginx auth_request X-Original-URI."""
+    src = (request.query.get("src") or "").strip()
+    if src:
+        return src
+    orig = (request.query.get("orig") or request.query.get("uri") or "").strip()
+    if orig:
+        parsed = urlparse(orig)
+        values = parse_qs(parsed.query).get("src") or []
+        if values:
+            return (values[0] or "").strip()
+    original = (
+        request.headers.get("X-Original-URI")
+        or request.headers.get("X-Original-URL")
+        or ""
+    ).strip()
+    if not original:
+        return ""
+    parsed = urlparse(original)
+    values = parse_qs(parsed.query).get("src") or []
+    return (values[0] or "").strip() if values else ""
 
 
 async def _admin_only(request: web.Request) -> web.Response | None:
@@ -227,10 +250,11 @@ async def go2rtc_media_auth(request: web.Request) -> web.Response:
     if user is None:
         return web.Response(status=401, text="Authentication required")
 
-    src = (request.query.get("src") or "").strip()
+    src = _src_from_request(request)
     if not src:
-        # Allow generic worker asset probes only for SUPER_ADMIN; live players always pass src.
-        if is_super_admin(user):
+        # Nginx auth_request often omits ?src= unless configured to forward it.
+        # ADMIN has full camera access. OPERATOR/Viewer must have a stream name for ACL.
+        if is_admin(user):
             return web.Response(status=200, text="ok")
         return web.Response(status=403, text="src query parameter required")
 
@@ -269,7 +293,7 @@ async def _authorize_go2rtc_proxy(request: web.Request, path: str) -> None:
     if user is None:
         raise web.HTTPUnauthorized(text="Authentication required")
 
-    src = (request.query.get("src") or "").strip()
+    src = _src_from_request(request)
     if src:
         stream_ref = parse_stream_camera_id(src)
         if not stream_ref:
@@ -281,7 +305,7 @@ async def _authorize_go2rtc_proxy(request: web.Request, path: str) -> None:
             raise web.HTTPForbidden(text="Camera access denied")
         return
 
-    if is_super_admin(user):
+    if is_admin(user):
         return
 
     path_lower = path.lower()

@@ -29,7 +29,7 @@ import {
 } from '../hooks/useUrlSearchState';
 import { resolvePlaybackFromUrl } from '../lib/urlViewState';
 import { authService } from '../services/authService';
-import { isSuperAdminUser } from '../lib/permissions';
+import { isOpsAdminUser, isSuperAdminUser } from '../lib/permissions';
 
 interface Camera {
   id: string;
@@ -162,6 +162,7 @@ export default function Playback(): React.ReactElement {
 
   const GAP_MESSAGE = 'No recording available for this time.';
   const canManageRecordings = isSuperAdminUser(authService.getCurrentUser());
+  const canCaptureSnapshot = isOpsAdminUser(authService.getCurrentUser());
 
   const calYear = selectedDate.getFullYear();
   const calMonth = selectedDate.getMonth() + 1;
@@ -244,15 +245,24 @@ export default function Playback(): React.ReactElement {
         const data = await res.json();
         const list: BuildingGroup[] = data.buildings ?? [];
         const access: PublicCameraAccess = data.cameraAccess ?? { all: true };
-        setBuildings(list);
+        const unrestricted = hasUnrestrictedCameraAccess(access);
+        const visibleBuildings = unrestricted
+          ? list
+          : list
+              .map((b) => ({
+                ...b,
+                floorGroups: (b.floorGroups || []).filter((fg) => (fg.cameraCount ?? 0) > 0),
+              }))
+              .filter((b) => b.floorGroups.length > 0);
+        setBuildings(visibleBuildings);
         setCameraAccess(access);
 
-        const fromUrl = resolvePlaybackFromUrl(initialParams.current!, list);
+        const fromUrl = resolvePlaybackFromUrl(initialParams.current!, visibleBuildings);
         if (fromUrl?.building && fromUrl.group) {
           setSelectedBuilding(fromUrl.building);
           setSelectedGroup(fromUrl.group);
         } else {
-          const initial = initialPlaybackSelection(list, access);
+          const initial = initialPlaybackSelection(visibleBuildings, access);
           if (initial) {
             setSelectedBuilding(initial.building);
             setSelectedGroup(initial.group);
@@ -917,7 +927,7 @@ export default function Playback(): React.ReactElement {
               ))}
               </div>
 
-            {canManageRecordings && (
+            {canCaptureSnapshot && (
             <button
               type="button"
               onClick={captureSnapshot}

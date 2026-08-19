@@ -133,7 +133,7 @@ server {
     location ~ ^/media/w([0-9]+)/(.*)\$ {
         set \$go2rtc_worker_id \$1;
         set \$go2rtc_path \$2;
-        auth_request /internal/go2rtc-media-auth;
+        auth_request /internal/go2rtc-media-auth?src=\$arg_src;
         proxy_pass \$go2rtc_upstream/\$go2rtc_path\$is_args\$args;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;

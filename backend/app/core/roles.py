@@ -52,6 +52,10 @@ def is_operator(user: Optional[dict]) -> bool:
     return normalize_role(user) == ROLE_OPERATOR
 
 
+def is_viewer(user: Optional[dict]) -> bool:
+    return normalize_role(user) == ROLE_VIEWER
+
+
 def stored_role_label(user: Optional[dict]) -> str:
     """Role string as stored / displayed (not guessed)."""
     if not user:

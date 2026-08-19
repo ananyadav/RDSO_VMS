@@ -36,6 +36,7 @@ interface Camera {
   ip_address?: string;
   online: boolean;
   ptz: boolean;
+  workerId?: number | string | null;
 }
 
 const PTZ = () => {
@@ -46,7 +47,7 @@ const PTZ = () => {
   const [ptzCameras, setPtzCameras] = useState<PtzCamera[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [streamsReady, setStreamsReady] = useState(false);
+  const [streamsReady, setStreamsReady] = useState(true);
   const [presets, setPresets] = useState<PtzPreset[]>([]);
   const [presetsLoading, setPresetsLoading] = useState(false);
   const [selectedPresetId, setSelectedPresetId] = useState<number | null>(null);
@@ -55,6 +56,7 @@ const PTZ = () => {
     return n >= 1 && n <= 3 ? n : 2;
   });
   const [ptzReady, setPtzReady] = useState<boolean | null>(null);
+  const [streamSession, setStreamSession] = useState(0);
   const videoContainerRef = useRef<HTMLDivElement>(null);
   const moveTokenRef = useRef(0);
 
@@ -120,11 +122,17 @@ const PTZ = () => {
           setError('This camera is not marked as PTZ. Enable it in Camera Management.');
           setCamera(selected);
         } else {
-          setCamera(selected);
+          setStreamSession((k) => k + 1);
+          setCamera({
+            ...selected,
+            cameraUid: selected.cameraUid || selected.camera_uid,
+          });
           const status = await ptzCheckStatus(cameraId);
-          setPtzReady(Boolean(status.ok && status.supported));
+          setPtzReady(Boolean(status.ok && status.supported !== false));
           if (!status.ok) {
-            toast.error(status.error || 'Could not verify PTZ on camera HTTP port');
+            const message = status.error || 'Could not verify PTZ on this camera';
+            setError(message);
+            toast.error(message);
           }
           await loadPresets(cameraId);
         }
@@ -139,11 +147,13 @@ const PTZ = () => {
 
   const { isConnecting, error: streamError, streamStatus } = useGo2RtcLive(camera, {
     containerRef: videoContainerRef,
-    profile: 'main',
+    // Same substream as Live View tiles — main is often HEVC and will not play.
+    profile: 'sub',
     // Wait until the loading screen is removed so the player container exists.
     active: Boolean(camera?.online && !loading),
     eager: true,
     streamsReady,
+    sessionKey: streamSession,
   });
 
   const handleMoveStart = useCallback(
@@ -267,7 +277,8 @@ const PTZ = () => {
         {error && <p className="text-amber-400 text-sm mt-2">{error}</p>}
         {ptzReady === false && (
           <p className="text-amber-400 text-sm mt-2">
-            PTZ ISAPI not responding on HTTP port 80 — check camera IP/credentials or set http_port on the camera.
+            PTZ control is not responding on this camera. Mixed brands use ONVIF or the
+            camera&apos;s native HTTP PTZ — confirm IP, credentials, and http_port if needed.
           </p>
         )}
       </div>

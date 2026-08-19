@@ -8,7 +8,7 @@ from app.core.access_control import deny_unless_super_admin, has_permission, PER
 from app.routes.audit import list_audit_logs_endpoint
 from app.routes.auth import login_endpoint, logout_endpoint
 from app.routes.cameras import add_camera_endpoint, delete_camera_endpoint, update_camera_endpoint
-from app.routes.go2rtc import go2rtc_diagnostics, go2rtc_workers_rebalance
+from app.routes.go2rtc import go2rtc_diagnostics, go2rtc_media_auth, go2rtc_workers_rebalance
 from app.routes.locations import post_site_endpoint
 from app.routes.ptz import ptz_stop_handler
 from app.routes.sessions import list_sessions_endpoint, revoke_sessions_endpoint
@@ -24,6 +24,7 @@ def _request(method: str, path: str, user=None, match_info=None):
 
 ADMIN = {"_id": "a1", "name": "ops", "role": "Admin", "permissions": []}
 OPERATOR = {"_id": "o1", "name": "camop", "role": "Operator", "permissions": [PERMISSION_LIVE_VIEW]}
+VIEWER = {"_id": "v1", "name": "watch", "role": "Viewer", "permissions": []}
 SUPER = {"_id": "s1", "name": "root", "role": "SUPER_ADMIN", "permissions": []}
 
 
@@ -134,6 +135,8 @@ class TestSuperAdminOnlyEndpoints(unittest.IsolatedAsyncioTestCase):
     async def test_operator_keeps_live_view_permission(self):
         self.assertTrue(has_permission(OPERATOR, PERMISSION_LIVE_VIEW))
         self.assertFalse(has_permission(OPERATOR, "Cameras"))
+        self.assertTrue(has_permission(VIEWER, PERMISSION_LIVE_VIEW))
+        self.assertFalse(has_permission(VIEWER, "Cameras"))
 
     async def test_login_success_and_failure_audit(self):
         with patch("app.routes.auth.read_json_body", new_callable=AsyncMock) as read_body, patch(
@@ -315,6 +318,81 @@ class TestSuperAdminOnlyEndpoints(unittest.IsolatedAsyncioTestCase):
             response = await delete_camera_endpoint(req)
         self.assertEqual(response.status, 500)
         self.assertIsNotNone(audit.await_args.kwargs.get("compensate"))
+
+
+class TestGo2RtcMediaAuth(unittest.IsolatedAsyncioTestCase):
+    async def test_admin_without_src_allowed(self):
+        response = await go2rtc_media_auth(_request("GET", "/api/go2rtc/media-auth", ADMIN))
+        self.assertEqual(response.status, 200)
+
+    async def test_super_admin_without_src_allowed(self):
+        response = await go2rtc_media_auth(_request("GET", "/api/go2rtc/media-auth", SUPER))
+        self.assertEqual(response.status, 200)
+
+    async def test_operator_without_src_forbidden(self):
+        response = await go2rtc_media_auth(_request("GET", "/api/go2rtc/media-auth", OPERATOR))
+        self.assertEqual(response.status, 403)
+
+    async def test_viewer_without_src_forbidden(self):
+        response = await go2rtc_media_auth(_request("GET", "/api/go2rtc/media-auth", VIEWER))
+        self.assertEqual(response.status, 403)
+
+    async def test_unauthenticated_401(self):
+        response = await go2rtc_media_auth(_request("GET", "/api/go2rtc/media-auth", None))
+        self.assertEqual(response.status, 401)
+
+    async def test_src_from_query_allows_assigned_viewer(self):
+        viewer = {
+            **VIEWER,
+            "cameraAccess": {"allowedCameraUids": ["cam1"]},
+        }
+        req = make_mocked_request("GET", "/api/go2rtc/media-auth?src=cam1_sub")
+        req["auth_user"] = viewer
+        with patch(
+            "app.routes.go2rtc.get_camera_by_ref",
+            new_callable=AsyncMock,
+            return_value={"camera_uid": "cam1", "is_active": True},
+        ):
+            response = await go2rtc_media_auth(req)
+        self.assertEqual(response.status, 200)
+
+    async def test_src_from_x_original_uri_allows_assigned_operator(self):
+        op = {
+            **OPERATOR,
+            "cameraAccess": {"allowedCameraUids": ["cam1"]},
+        }
+        req = make_mocked_request(
+            "GET",
+            "/api/go2rtc/media-auth",
+            headers={"X-Original-URI": "/media/w1/api/ws?src=cam1_sub"},
+        )
+        req["auth_user"] = op
+        with patch(
+            "app.routes.go2rtc.get_camera_by_ref",
+            new_callable=AsyncMock,
+            return_value={"camera_uid": "cam1", "is_active": True},
+        ):
+            response = await go2rtc_media_auth(req)
+        self.assertEqual(response.status, 200)
+
+    async def test_src_from_x_original_uri_denies_other_camera(self):
+        op = {
+            **OPERATOR,
+            "cameraAccess": {"allowedCameraUids": ["cam1"]},
+        }
+        req = make_mocked_request(
+            "GET",
+            "/api/go2rtc/media-auth",
+            headers={"X-Original-URI": "/media/w1/api/ws?src=cam2_sub"},
+        )
+        req["auth_user"] = op
+        with patch(
+            "app.routes.go2rtc.get_camera_by_ref",
+            new_callable=AsyncMock,
+            return_value={"camera_uid": "cam2", "is_active": True},
+        ):
+            response = await go2rtc_media_auth(req)
+        self.assertEqual(response.status, 403)
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ import {
   parseSiteScopeKey,
 } from '../constants/corporateFloors';
 import {
+  hasUnrestrictedCameraAccess,
   initialLiveViewSelection,
   parseBuildingKey,
   type PublicCameraAccess,
@@ -67,13 +68,14 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
 
   const [buildings, setBuildings] = useState<BuildingGroup[]>([]);
   const [configuredSiteNames, setConfiguredSiteNames] = useState<string[]>([]);
+  const [cameraAccess, setCameraAccess] = useState<PublicCameraAccess | null>(null);
   const [selectedSite, setSelectedSite] = useState<string | null>(null);
   const [selectedBuildingKey, setSelectedBuildingKey] = useState<string | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [groupsLoading, setGroupsLoading] = useState(true);
   const [camerasLoading, setCamerasLoading] = useState(false);
-  const [go2rtcReady, setGo2rtcReady] = useState(false);
+  const [go2rtcReady, setGo2rtcReady] = useState(true);
   const [fullscreenCamera, setFullscreenCamera] = useState<Camera | null>(null);
   const [showFullscreenModal, setShowFullscreenModal] = useState(false);
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
@@ -145,14 +147,11 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
 
   useEffect(() => {
     let cancelled = false;
-    setGo2rtcReady(false);
-    // Preload player JS immediately (in parallel with readiness) so T2→T3
-    // does not wait on a cold /go2rtc/video-stream.js download.
     void ensureGo2RtcPlayer().catch(() => {
       // Mount path will surface the error if load still fails.
     });
-    void waitForGo2RtcReady().finally(() => {
-      if (!cancelled) setGo2rtcReady(true);
+    void waitForGo2RtcReady().then((ready) => {
+      if (!cancelled) setGo2rtcReady(ready !== false);
     });
     return () => {
       cancelled = true;
@@ -175,20 +174,32 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
         const data = await res.json();
         const list: BuildingGroup[] = data.buildings ?? [];
         const access: PublicCameraAccess = data.cameraAccess ?? { all: true };
-        setBuildings(list);
+        const unrestricted = hasUnrestrictedCameraAccess(access);
+        const visibleBuildings = unrestricted
+          ? list
+          : list
+              .map((b) => ({
+                ...b,
+                floorGroups: (b.floorGroups || []).filter((fg) => (fg.cameraCount ?? 0) > 0),
+              }))
+              .filter((b) => b.floorGroups.length > 0);
+        setBuildings(visibleBuildings);
+        setCameraAccess(access);
         setConfiguredSiteNames(
-          (data.sites ?? [])
-            .map((s: { site?: string; name?: string }) => (s.site || s.name || '').trim())
-            .filter(Boolean),
+          unrestricted
+            ? (data.sites ?? [])
+                .map((s: { site?: string; name?: string }) => (s.site || s.name || '').trim())
+                .filter(Boolean)
+            : [],
         );
 
-        const fromUrl = resolveLiveViewFromUrl(initialParams.current!, list);
+        const fromUrl = resolveLiveViewFromUrl(initialParams.current!, visibleBuildings);
         if (fromUrl) {
           setSelectedSite(fromUrl.site);
           setSelectedBuildingKey(fromUrl.buildingKey);
           setSelectedGroup(fromUrl.group);
         } else {
-          const initial = initialLiveViewSelection(list, access);
+          const initial = initialLiveViewSelection(visibleBuildings, access);
           setSelectedSite(initial.site);
           setSelectedBuildingKey(initial.buildingKey);
           setSelectedGroup(initial.group);
@@ -437,7 +448,9 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
           <div className="mt-3">
             <LiveViewLocationSelector
               buildings={buildings}
-              extraSiteNames={configuredSiteNames}
+              extraSiteNames={
+                hasUnrestrictedCameraAccess(cameraAccess) ? configuredSiteNames : []
+              }
               selectedSite={selectedSite}
               selectedBuildingKey={selectedBuildingKey}
               selectedGroup={selectedGroup}
