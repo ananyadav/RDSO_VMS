@@ -41,13 +41,18 @@ export default function OverviewPanel(): React.ReactElement {
     const load = async () => {
       setLoading(true);
       const start = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const results = await Promise.allSettled([
-        fetchManagedUsers(),
-        fetchSessions({ active: true, limit: 1, offset: 0 }),
-        fetchAuditLogs({ limit: 8, offset: 0 }),
-        fetchAuditLogs({ action: 'LOGIN_FAILED', success: 'false', start, limit: 1, offset: 0 }),
-        fetchHealthStatus(),
-        fetchGo2RtcStatus(),
+      const wrap = <T,>(p: Promise<T>) =>
+        p.then(
+          (value): { status: 'fulfilled'; value: T } => ({ status: 'fulfilled', value }),
+          (reason): { status: 'rejected'; reason: unknown } => ({ status: 'rejected', reason }),
+        );
+      const results = await Promise.all([
+        wrap(fetchManagedUsers()),
+        wrap(fetchSessions({ active: true, limit: 1, offset: 0 })),
+        wrap(fetchAuditLogs({ limit: 8, offset: 0 })),
+        wrap(fetchAuditLogs({ action: 'LOGIN_FAILED', success: 'false', start, limit: 1, offset: 0 })),
+        wrap(fetchHealthStatus()),
+        wrap(fetchGo2RtcStatus()),
       ]);
       if (cancelled) return;
 
