@@ -47,13 +47,18 @@ export function attachLiveMonitorGuards(
     e.stopPropagation();
   };
 
+  const onDblClick = (e: Event) => {
+    // Block native video fullscreen / pause, but let Live View toggle the grid overlay.
+    e.preventDefault();
+  };
+
   const onPause = () => {
     if (!isActive()) return;
     void video.play().catch(() => {});
   };
 
   video.addEventListener('click', blockToggle, true);
-  video.addEventListener('dblclick', blockToggle, true);
+  video.addEventListener('dblclick', onDblClick, true);
   video.addEventListener('contextmenu', blockToggle, true);
   video.addEventListener('pause', onPause);
 
@@ -61,7 +66,7 @@ export function attachLiveMonitorGuards(
 
   return () => {
     video.removeEventListener('click', blockToggle, true);
-    video.removeEventListener('dblclick', blockToggle, true);
+    video.removeEventListener('dblclick', onDblClick, true);
     video.removeEventListener('contextmenu', blockToggle, true);
     video.removeEventListener('pause', onPause);
     destroyLiveMonitorVideo(video);

@@ -40,6 +40,10 @@ class TestCameraServiceSiteFilters(unittest.TestCase):
         self.assertIsInstance(query["site"], dict)
         self.assertIn("$regex", query["site"])
 
+    def test_ptz_filter_limits_mongo_query(self):
+        query = _location_filters({"ptz": True})
+        self.assertEqual(query.get("ptz"), True)
+
 
 if __name__ == "__main__":
     unittest.main()

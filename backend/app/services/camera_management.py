@@ -17,7 +17,7 @@ from app.services.camera_locations import build_groups_hierarchy, camera_group_k
 from app.services.camera_uid import make_camera_uid
 from app.services.location_store import DEFAULT_SITE_NAME, list_buildings
 from app.services.recording_schedule_store import recording_schedule
-from app.services.stream_issues import ISSUE_LABELS, is_confirmed_offline
+from app.services.stream_issues import ISSUE_LABELS, is_confirmed_offline, is_definitive_issue
 
 logger = logging.getLogger(__name__)
 
@@ -174,23 +174,24 @@ async def _load_go2rtc_context_from_health(
         if health and health.get("alarm"):
             cat = (health.get("category") or "offline").strip()
             msg = (health.get("message") or "").strip() or ISSUE_LABELS.get(cat, "Not streaming")
-            live_rows[cid] = {
-                "cameraId": cid,
-                "cameraUid": uid,
-                "issueCategory": "offline",
-                "confirmedOffline": True,
-                "issueMessage": msg,
-            }
-            stream_errors[cid] = msg
-            if uid:
-                stream_errors[uid] = msg
-        else:
-            live_rows[cid] = {
-                "cameraId": cid,
-                "cameraUid": uid,
-                "issueCategory": "online",
-                "confirmedOffline": False,
-            }
+            if is_definitive_issue(cat, msg):
+                live_rows[cid] = {
+                    "cameraId": cid,
+                    "cameraUid": uid,
+                    "issueCategory": cat,
+                    "confirmedOffline": True,
+                    "issueMessage": msg,
+                }
+                stream_errors[cid] = msg
+                if uid:
+                    stream_errors[uid] = msg
+                return
+        live_rows[cid] = {
+            "cameraId": cid,
+            "cameraUid": uid,
+            "issueCategory": "online",
+            "confirmedOffline": False,
+        }
 
     if cameras is not None:
         for cam in cameras:
@@ -222,15 +223,19 @@ def live_rows_from_memory_cache(cameras: List[dict]) -> Dict[str, dict]:
         )
         health = peek_stream_health(cid, uid)
         if health and health.get("alarm"):
-            live_rows[cid] = {
-                "cameraId": cid,
-                "cameraUid": uid,
-                "issueCategory": "offline",
-                "confirmedOffline": True,
-                "issueMessage": (health.get("message") or "").strip()
-                or ISSUE_LABELS.get((health.get("category") or "offline"), "Not streaming"),
-            }
-        # Missing/unknown → omit row; Live View treats as playable/online.
+            cat = (health.get("category") or "offline").strip()
+            msg = (health.get("message") or "").strip() or ISSUE_LABELS.get(
+                cat, "Not streaming"
+            )
+            if is_definitive_issue(cat, msg):
+                live_rows[cid] = {
+                    "cameraId": cid,
+                    "cameraUid": uid,
+                    "issueCategory": cat,
+                    "confirmedOffline": True,
+                    "issueMessage": msg,
+                }
+        # Timeout / 453 / missing row → playable/online. JPEG probes fail on busy OEM PTZs.
     return live_rows
 
 

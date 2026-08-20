@@ -44,7 +44,7 @@ export function hasUnrestrictedCameraAccess(access?: PublicCameraAccess | null):
 }
 
 export function isAdminUser(): boolean {
-  return (authService.getCurrentUser()?.role ?? '').trim().toLowerCase() === 'admin';
+  return isOpsAdminUser(authService.getCurrentUser());
 }
 
 export function pickDefaultLocation(

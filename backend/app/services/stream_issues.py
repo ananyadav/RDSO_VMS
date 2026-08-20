@@ -121,6 +121,27 @@ def producers_streaming(producers: List[dict]) -> bool:
     return False
 
 
+def stream_payload_for_src(data: Any, src: str) -> Dict[str, Any]:
+    """Unwrap go2rtc /api/streams JSON for one src (do not log URLs)."""
+    if not isinstance(data, dict):
+        return {}
+    inner = data.get(src)
+    if isinstance(inner, dict):
+        return inner
+    if "producers" in data or "consumers" in data:
+        return data
+    return {}
+
+
+def stream_has_active_viewers(info: Optional[dict]) -> bool:
+    """True when a browser (or another client) is already pulling this stream."""
+    if not isinstance(info, dict):
+        return False
+    if info.get("consumers"):
+        return True
+    return producers_streaming(info.get("producers") or [])
+
+
 def stream_issue_from_row(
     *,
     sub_online: bool,

@@ -7,6 +7,7 @@ from app.core.access_control import (
     has_permission,
     has_recording_view,
 )
+from app.core.database import user_helper
 from app.services.camera_access import (
     normalize_camera_access,
     user_can_access_camera,
@@ -71,7 +72,23 @@ class TestAccessControl(unittest.TestCase):
     def test_operator_and_viewer_have_live_view_by_role(self):
         self.assertTrue(has_permission({"role": "Operator", "permissions": []}, PERMISSION_LIVE_VIEW))
         self.assertTrue(has_permission({"role": "Viewer", "permissions": []}, PERMISSION_LIVE_VIEW))
+        self.assertTrue(has_permission({"role": "SUPER_ADMIN", "permissions": []}, PERMISSION_LIVE_VIEW))
+        self.assertTrue(has_permission({"role": "Admin", "permissions": []}, PERMISSION_LIVE_VIEW))
         self.assertFalse(has_permission({"role": "Operator", "permissions": []}, "System"))
+
+    def test_super_admin_session_profile_is_unrestricted(self):
+        payload = user_helper(
+            {
+                "_id": "s1",
+                "name": "root",
+                "role": "superadmin",
+                "cameraAccess": {"allowedCameraGroups": ["only_this_floor"]},
+            }
+        )
+        self.assertEqual(payload["role"], "SUPER_ADMIN")
+        self.assertTrue(payload["cameraAccess"]["all"])
+        cam = {"camera_group": "other_floor", "camera_uid": "ip_1"}
+        self.assertTrue(user_can_access_stream({"role": "SUPER_ADMIN", "permissions": []}, "ip_1_sub", cam))
 
 
 if __name__ == "__main__":

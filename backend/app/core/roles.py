@@ -26,15 +26,16 @@ def normalize_role(user_or_role: Optional[object]) -> str:
     key = str(raw).strip().lower()
     if not key:
         return ""
-    if key in _SUPER_ADMIN_ALIASES or key == "super_admin":
+    compact = key.replace("-", "").replace(" ", "").replace("_", "")
+    if key in _SUPER_ADMIN_ALIASES or compact == "superadmin":
         return ROLE_SUPER_ADMIN
-    if key in _ADMIN_ALIASES:
+    if key in _ADMIN_ALIASES or compact in {"admin", "administrator"}:
         return ROLE_ADMIN
-    if key in _OPERATOR_ALIASES:
+    if key in _OPERATOR_ALIASES or compact == "operator":
         return ROLE_OPERATOR
-    if key in _VIEWER_ALIASES:
+    if key in _VIEWER_ALIASES or compact == "viewer":
         return ROLE_VIEWER
-    if key == "super_admin" or str(raw).strip() == ROLE_SUPER_ADMIN:
+    if str(raw).strip() == ROLE_SUPER_ADMIN:
         return ROLE_SUPER_ADMIN
     return str(raw).strip()
 

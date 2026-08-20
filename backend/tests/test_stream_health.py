@@ -9,7 +9,7 @@ from app.services.stream_health import (
     reset_stream_health_for_tests,
     stream_health_snapshot,
 )
-from app.services.stream_issues import stream_issue_from_row
+from app.services.stream_issues import stream_has_active_viewers, stream_issue_from_row, stream_payload_for_src
 
 
 class TestStreamHealth(unittest.TestCase):
@@ -41,6 +41,18 @@ class TestStreamHealth(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(category, "offline")
         self.assertIn("No video frame", message)
+
+    def test_stream_with_consumers_counts_as_viewed(self):
+        wrapped = stream_payload_for_src(
+            {"ip_192_168_11_29_sub": {"consumers": [{"id": 1}], "producers": []}},
+            "ip_192_168_11_29_sub",
+        )
+        self.assertTrue(stream_has_active_viewers(wrapped))
+        idle = stream_payload_for_src(
+            {"ip_192_168_11_29_sub": {"consumers": [], "producers": [{"url": "rtsp://x"}]}},
+            "ip_192_168_11_29_sub",
+        )
+        self.assertFalse(stream_has_active_viewers(idle))
 
     def test_timeout_needs_three_strikes_before_alarm(self):
         first = finalize_probe_result(

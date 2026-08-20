@@ -23,7 +23,7 @@ def _json_error(message: str, status: int) -> web.Response:
 
 
 def has_live_view(user: Optional[dict]) -> bool:
-    """Admin always; Operator/Viewer always (camera ACL still applies)."""
+    """Admin and Super Admin always; Operator/Viewer always (camera ACL still applies)."""
     if not user:
         return False
     if is_admin(user):

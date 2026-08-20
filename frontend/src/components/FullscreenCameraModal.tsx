@@ -120,6 +120,15 @@ export default function FullscreenCameraModal({
     onChangeCamera(selectedCamera);
   };
 
+  const handleDoubleClickExit = (e: React.MouseEvent) => {
+    e.preventDefault();
+    onClose();
+  };
+
+  const stopDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+  };
+
   const showError = streamStatus === 'error' && Boolean(error);
   const channelLabel = forceSub ? '102 · sub' : '101 · main';
   const statusLabel =
@@ -130,10 +139,14 @@ export default function FullscreenCameraModal({
         : `Connecting · ${channelLabel} · go2rtc`;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black bg-opacity-75 flex items-center justify-center">
+    <div
+      className="fixed inset-0 z-50 bg-black bg-opacity-75 flex items-center justify-center"
+      onDoubleClick={handleDoubleClickExit}
+    >
       <div className="relative w-full h-full flex items-center justify-center">
         <button
           onClick={onClose}
+          onDoubleClick={stopDoubleClick}
           className="absolute top-4 right-4 z-10 p-2 bg-black/30 backdrop-blur-sm text-white rounded-full hover:bg-black/50 transition-colors"
         >
           <X size={24} />
@@ -141,6 +154,7 @@ export default function FullscreenCameraModal({
 
         <button
           onClick={handlePrevious}
+          onDoubleClick={stopDoubleClick}
           className="absolute left-4 top-1/2 transform -translate-y-1/2 p-3 bg-black/30 backdrop-blur-sm text-white rounded-full hover:bg-black/50 transition-colors disabled:opacity-50"
           disabled={allCameras.length <= 1}
         >
@@ -149,6 +163,7 @@ export default function FullscreenCameraModal({
 
         <button
           onClick={handleNext}
+          onDoubleClick={stopDoubleClick}
           className="absolute right-4 top-1/2 transform -translate-y-1/2 p-3 bg-black/30 backdrop-blur-sm text-white rounded-full hover:bg-black/50 transition-colors disabled:opacity-50"
           disabled={allCameras.length <= 1}
         >
@@ -203,7 +218,10 @@ export default function FullscreenCameraModal({
                 {camera.online ? 'Online' : 'Offline'}
               </span>
 
-              <div className="bg-gray-700 border border-gray-600 text-white rounded-md px-2 py-1">
+              <div
+                className="bg-gray-700 border border-gray-600 text-white rounded-md px-2 py-1"
+                onDoubleClick={stopDoubleClick}
+              >
                 <CameraSelector
                   cameras={allCameras}
                   selected={allCameras[currentIndex]}
@@ -218,13 +236,14 @@ export default function FullscreenCameraModal({
               <button
                 type="button"
                 onClick={handleUseLowQuality}
+                onDoubleClick={stopDoubleClick}
                 className="text-sm px-4 py-2 rounded-lg bg-amber-900/70 border border-amber-600/50 text-amber-100 hover:bg-amber-800/80 transition-colors"
               >
                 Use sub stream (102)
               </button>
             )}
             {showManualRecordingControls && (
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-4" onDoubleClick={stopDoubleClick}>
                 <button
                   onClick={() => onToggleRecording(camera.id)}
                   className={`flex items-center space-x-2 py-2 px-4 rounded transition-colors bg-black/30 backdrop-blur-sm ${
@@ -255,6 +274,7 @@ export default function FullscreenCameraModal({
                   <button
                     type="button"
                     onClick={handleRetry}
+                    onDoubleClick={stopDoubleClick}
                     className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500"
                   >
                     Retry
@@ -263,6 +283,7 @@ export default function FullscreenCameraModal({
                     <button
                       type="button"
                       onClick={handleUseLowQuality}
+                      onDoubleClick={stopDoubleClick}
                       className="px-4 py-2 rounded-lg bg-amber-700 text-white hover:bg-amber-600"
                     >
                       Use sub stream (102)
@@ -271,6 +292,7 @@ export default function FullscreenCameraModal({
                   <button
                     type="button"
                     onClick={onClose}
+                    onDoubleClick={stopDoubleClick}
                     className="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600"
                   >
                     Close
@@ -282,7 +304,7 @@ export default function FullscreenCameraModal({
 
           <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm text-white px-3 py-2 rounded text-xs">
             <div className="text-gray-300 mb-1">Navigate:</div>
-            <div>◀ ▶ Arrow keys • ESC Close</div>
+            <div>Double-click video to return to grid • ◀ ▶ Arrow keys • ESC Close</div>
             {streamName && <div className="text-gray-400 mt-1">Stream: {streamName}</div>}
           </div>
         </div>

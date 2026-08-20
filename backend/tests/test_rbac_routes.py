@@ -10,7 +10,7 @@ from app.routes.auth import login_endpoint, logout_endpoint
 from app.routes.cameras import add_camera_endpoint, delete_camera_endpoint, update_camera_endpoint
 from app.routes.go2rtc import go2rtc_diagnostics, go2rtc_media_auth, go2rtc_workers_rebalance
 from app.routes.locations import post_site_endpoint
-from app.routes.ptz import ptz_stop_handler
+from app.routes.ptz import ptz_list_cameras, ptz_stop_handler
 from app.routes.sessions import list_sessions_endpoint, revoke_sessions_endpoint
 from app.routes.users import add_user_endpoint, get_users_list, update_user_endpoint
 from app.services.session_service import _public_session
@@ -305,6 +305,31 @@ class TestSuperAdminOnlyEndpoints(unittest.IsolatedAsyncioTestCase):
             req = _request("POST", "/api/ptz/c1/stop", ADMIN, match_info={"cameraId": "c1"})
             stopped = await ptz_stop_handler(req)
         self.assertEqual(stopped.status, 200)
+
+    async def test_super_admin_ptz_stop_succeeds(self):
+        with patch(
+            "app.routes.ptz._require_live_camera",
+            new_callable=AsyncMock,
+            return_value=({"id": "c1", "ptz": True}, None),
+        ), patch("app.routes.ptz.ptz_stop", new_callable=AsyncMock, return_value={"ok": True}), patch(
+            "app.routes.ptz.write_audit", new_callable=AsyncMock
+        ):
+            req = _request("POST", "/api/ptz/c1/stop", SUPER, match_info={"cameraId": "c1"})
+            stopped = await ptz_stop_handler(req)
+        self.assertEqual(stopped.status, 200)
+
+    async def test_super_admin_and_admin_can_list_ptz_cameras(self):
+        cams = [{"id": "c1", "name": "Dome", "ptz": True, "online": True, "cameraUid": "ip_1", "workerId": 1}]
+        for user in (ADMIN, SUPER):
+            with patch(
+                "app.services.camera_service.get_camera_info",
+                new_callable=AsyncMock,
+                return_value=cams,
+            ):
+                response = await ptz_list_cameras(_request("GET", "/api/ptz/cameras", user))
+            self.assertEqual(response.status, 200, user["role"])
+            body = json.loads(response.text)
+            self.assertEqual(len(body["cameras"]), 1)
 
     async def test_camera_delete_rolls_back_when_audit_fails(self):
         cam_id = "507f1f77bcf86cd799439011"

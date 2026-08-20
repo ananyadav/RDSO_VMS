@@ -93,6 +93,11 @@ export interface Go2RtcMountOptions {
   stream: string;
   mode: 'webrtc' | 'mse';
   workerId?: number | string | null;
+  /**
+   * Keep the WebSocket up if the pane briefly has 0 height (PTZ layout).
+   * Teardown still calls ondisconnect() in destroyGo2RtcPlayerElement.
+   */
+  background?: boolean;
   onFirstFrame?: (ms: number) => void;
   onModeLabel?: (label: string) => void;
   onError?: (message: string) => void;
@@ -243,8 +248,9 @@ export async function mountGo2RtcPlayer(
 
   el.mode = 'mse,webrtc,mjpeg';
   // mode option kept for API compatibility; VideoRTC picks/falls back internally.
-  // We manage lifecycle in useGo2RtcLive — never use background=true (it blocks DOM teardown).
-  el.background = false;
+  // background=true skips VideoRTC's own DOM teardown — destroyGo2RtcPlayerElement
+  // still calls ondisconnect(), so PTZ can survive a 0-height layout pass.
+  el.background = options.background === true;
   el.visibilityCheck = false;
   el.visibilityThreshold = 0;
   el.style.display = 'block';

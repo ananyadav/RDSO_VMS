@@ -26,7 +26,8 @@ export function permissionLabel(permission: string): string {
 }
 
 export function isAdminUser(user: Pick<User, 'role'> | null | undefined): boolean {
-  return (user?.role ?? '').trim().toLowerCase() === 'admin';
+  const key = (user?.role ?? '').trim().toLowerCase().replace(/[-\s]/g, '_');
+  return key === 'admin' || key === 'administrator';
 }
 
 /** Matches backend SUPER_ADMIN aliases. Do not treat this as Admin in the normal VMS UI. */

@@ -693,6 +693,10 @@ def report_consumer(stream: str, delta: int) -> None:
         _consumer_counts.pop(stream, None)
 
 
+def ui_consumer_count(stream: str) -> int:
+    return int(_consumer_counts.get(stream, 0) or 0)
+
+
 async def start_go2rtc(*, reload: bool = False) -> Dict[str, Any]:
     global _proc
 

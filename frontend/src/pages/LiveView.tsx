@@ -64,7 +64,6 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
   const { controlRoom, setControlRoom } = useLiveControlRoom();
   const gridRef = useRef<LiveCameraGridHandle>(null);
   const wallRef = useRef<HTMLDivElement>(null);
-  const savedScrollRowRef = useRef(0);
 
   const [buildings, setBuildings] = useState<BuildingGroup[]>([]);
   const [configuredSiteNames, setConfiguredSiteNames] = useState<string[]>([]);
@@ -95,7 +94,6 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
   const enterControlRoom = useCallback(() => {
     setShowFullscreenModal(false);
     setFullscreenCamera(null);
-    savedScrollRowRef.current = gridRef.current?.getVisibleStartRow() ?? 0;
     const el = wallRef.current;
     if (!el) return;
     const anyEl = el as HTMLElement & {
@@ -128,7 +126,6 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
         return;
       }
       if (!controlRoom) return;
-      savedScrollRowRef.current = gridRef.current?.getVisibleStartRow() ?? savedScrollRowRef.current;
       setControlRoom(false);
     };
     document.addEventListener('fullscreenchange', syncFullscreen);
@@ -138,12 +135,6 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
       document.removeEventListener('webkitfullscreenchange', syncFullscreen as EventListener);
     };
   }, [controlRoom, setControlRoom]);
-
-  useEffect(() => {
-    const row = savedScrollRowRef.current;
-    const id = window.setTimeout(() => gridRef.current?.restoreStartRow(row), 80);
-    return () => window.clearTimeout(id);
-  }, [controlRoom]);
 
   useEffect(() => {
     let cancelled = false;
@@ -160,10 +151,11 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
 
   useEffect(() => {
     return () => {
+      setControlRoom(false);
       destroyAllGo2RtcPlayers();
       flushAllUiConsumers();
     };
-  }, []);
+  }, [setControlRoom]);
 
   useEffect(() => {
     const loadGroups = async () => {
@@ -417,8 +409,11 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
         className="relative flex flex-col h-full min-h-0"
         data-live-control-room={controlRoom ? 'true' : 'false'}
       >
-        {!controlRoom && (
-        <div className="shrink-0 px-3 pt-2 pb-2 border-b border-gray-300 dark:border-gray-700 bg-gray-200 dark:bg-gray-900 z-20">
+        <div
+          className={`shrink-0 px-3 pt-2 pb-2 border-b border-gray-300 dark:border-gray-700 bg-gray-200 dark:bg-gray-900 z-20 ${
+            controlRoom ? 'hidden' : ''
+          }`}
+        >
           <PageHeader
             title="Live View"
             subtitle={subtitle}
@@ -460,7 +455,6 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
             />
           </div>
         </div>
-        )}
 
         <div
           className={`flex-1 min-h-0 overflow-hidden flex flex-col ${
@@ -507,7 +501,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
           {selectedGroup && !camerasLoading && sortedCameras.length > 0 && (
             <div
               ref={wallRef}
-              className="live-control-room-wall flex-1 min-h-0 overflow-hidden flex flex-col bg-black"
+              className="live-control-room-wall relative flex-1 min-h-0 overflow-hidden flex flex-col bg-black"
               data-live-control-room-wall="true"
             >
             <LiveCameraGrid
@@ -520,25 +514,25 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
               showFullscreenModal={showFullscreenModal}
               recordingSchedule={recordingSchedule}
               onToggleRecording={onToggleRecording}
-              onFullscreen={controlRoom ? undefined : openFullscreen}
+              onFullscreen={openFullscreen}
               scrollResetKey={selectedGroup}
               controlRoom={controlRoom}
             />
+            {showFullscreenModal && fullscreenCamera && (
+              <FullscreenCameraModal
+                key={fullscreenCamera.id}
+                camera={fullscreenCamera}
+                allCameras={sortedCameras}
+                onClose={closeFullscreen}
+                onChangeCamera={setFullscreenCamera}
+                isRecording={recordingSchedule[fullscreenCamera.id] || false}
+                onToggleRecording={onToggleRecording}
+              />
+            )}
             </div>
           )}
         </div>
       </div>
-      {!controlRoom && showFullscreenModal && fullscreenCamera && (
-        <FullscreenCameraModal
-          key={fullscreenCamera.id}
-          camera={fullscreenCamera}
-          allCameras={sortedCameras}
-          onClose={closeFullscreen}
-          onChangeCamera={setFullscreenCamera}
-          isRecording={recordingSchedule[fullscreenCamera.id] || false}
-          onToggleRecording={onToggleRecording}
-        />
-      )}
     </>
   );
 }

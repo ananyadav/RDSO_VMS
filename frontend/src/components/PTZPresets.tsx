@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, RotateCw, Plus, Minus } from 'lucide-react';
+import { Plus, Minus, RotateCw } from 'lucide-react';
 import Card from './Card';
 import type { PtzPreset } from '../lib/ptzApi';
 
@@ -10,8 +10,8 @@ const Section = ({
   title: string;
   children: React.ReactNode;
 }) => (
-  <div className="py-4 border-b border-gray-700">
-    <h4 className="text-sm font-semibold text-gray-400 mb-3">{title}</h4>
+  <div className="py-2">
+    <h4 className="text-sm font-semibold text-gray-400 mb-2">{title}</h4>
     {children}
   </div>
 );
@@ -38,7 +38,7 @@ export default function PTZPresets({
   loading = false,
 }: PTZPresetsProps) {
   return (
-    <Card>
+    <Card className="!p-3">
       <Section title="Presets">
         {loading ? (
           <p className="text-xs text-gray-500">Loading presets from camera…</p>
@@ -78,7 +78,7 @@ export default function PTZPresets({
             type="button"
             disabled={disabled || selectedPresetId == null}
             onClick={onRecall}
-            className="bg-gray-700 hover:bg-blue-600 disabled:opacity-40 text-white rounded-md flex items-center justify-center gap-1 h-10 px-2 transition-colors text-sm font-medium"
+            className="bg-gray-700 hover:bg-blue-600 disabled:opacity-40 text-white rounded-md flex items-center justify-center gap-1 h-9 px-2 transition-colors text-sm font-medium"
           >
             <RotateCw size={14} /> Recall
           </button>
@@ -86,7 +86,7 @@ export default function PTZPresets({
             type="button"
             disabled={disabled || selectedPresetId == null}
             onClick={onSet}
-            className="bg-gray-700 hover:bg-blue-600 disabled:opacity-40 text-white rounded-md flex items-center justify-center gap-1 h-10 px-2 transition-colors text-sm font-medium"
+            className="bg-gray-700 hover:bg-blue-600 disabled:opacity-40 text-white rounded-md flex items-center justify-center gap-1 h-9 px-2 transition-colors text-sm font-medium"
           >
             <Plus size={14} /> Set
           </button>
@@ -94,23 +94,12 @@ export default function PTZPresets({
             type="button"
             disabled={disabled || selectedPresetId == null}
             onClick={onRemove}
-            className="bg-gray-700 hover:bg-red-700 disabled:opacity-40 text-white rounded-md flex items-center justify-center gap-1 h-10 px-2 transition-colors text-sm font-medium"
+            className="bg-gray-700 hover:bg-red-700 disabled:opacity-40 text-white rounded-md flex items-center justify-center gap-1 h-9 px-2 transition-colors text-sm font-medium"
           >
             <Minus size={14} /> Remove
           </button>
         </div>
       </Section>
-
-      <Section title="Speed">
-        <p className="text-xs text-gray-500">Use speed buttons in the header (1 = slow, 3 = fast).</p>
-      </Section>
-
-      <div className="pt-4">
-        <h4 className="text-sm font-semibold text-gray-400 mb-3">Patrol</h4>
-        <p className="text-xs text-gray-500 flex items-center gap-1">
-          <Play size={14} /> Configure patrol on the camera/NVR directly (not via this UI yet).
-        </p>
-      </div>
     </Card>
   );
 }

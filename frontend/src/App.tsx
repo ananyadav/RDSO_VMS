@@ -115,6 +115,9 @@ export default function App(): React.ReactElement {
   // / diagnostics error columns stay current without requiring a manual refresh.
   useVisibilityInterval(
     () => {
+      // Fleet JPEG probes steal the only RTSP slot on Uniview/OEM PTZ cams.
+      const path = window.location.pathname || '';
+      if (path.startsWith('/ptz')) return;
       void apiFetch('/api/go2rtc/health-scan', { cache: 'no-store' }).catch(() => {});
     },
     30000,
@@ -285,9 +288,11 @@ function AppShell({
   return (
     <>
         <div className="flex h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
-          {!controlRoom && <Sidebar user={currentUser} />}
+          <div className={controlRoom ? 'hidden' : 'contents'}>
+            <Sidebar user={currentUser} />
+          </div>
           <div className="flex flex-1 flex-col min-h-0 min-w-0">
-            {!controlRoom && (
+            <div className={controlRoom ? 'hidden' : undefined}>
             <TopBar
               userName={currentUser.name}
               userRole={currentUser.role}
@@ -295,7 +300,7 @@ function AppShell({
               theme={theme}
               toggleTheme={toggleTheme}
             />
-            )}
+            </div>
             <main className={`flex-1 min-h-0 overflow-hidden flex flex-col ${
               controlRoom ? 'bg-black' : 'bg-gray-200 dark:bg-gray-900'
             }`}>
@@ -339,14 +344,14 @@ function AppShell({
             </main>
           </div>
         </div>
-        {!controlRoom && (
+        <div className={controlRoom ? 'hidden' : undefined}>
         <Toaster position="top-right" toastOptions={{
           style: {
             background: theme === 'dark' ? '#333' : '#fff',
             color: theme === 'dark' ? '#fff' : '#333'
           }
         }}/>
-        )}
+        </div>
     </>
   );
 }

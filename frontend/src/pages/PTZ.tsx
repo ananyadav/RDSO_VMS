@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { apiFetch } from '../lib/api';
 import { useParams, useHistory, Link } from 'react-router-dom';
 import { useGo2RtcLive } from '../hooks/useGo2RtcLive';
 import { waitForGo2RtcReady } from '../lib/liveProvider';
 import {
   fetchPtzCameras,
   fetchPtzPresets,
-  ptzCheckStatus,
   ptzDeletePreset,
   ptzGotoPreset,
   ptzMove,
@@ -15,7 +13,6 @@ import {
   type PtzCamera,
   type PtzPreset,
 } from '../lib/ptzApi';
-import { ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authService } from '../services/authService';
 import { hasPermission, PERMISSIONS } from '../lib/permissions';
@@ -50,12 +47,11 @@ const PTZ = () => {
   const [streamsReady, setStreamsReady] = useState(true);
   const [presets, setPresets] = useState<PtzPreset[]>([]);
   const [presetsLoading, setPresetsLoading] = useState(false);
-  const [selectedPresetId, setSelectedPresetId] = useState<number | null>(null);
+  const [selectedPresetId, setSelectedPresetId] = useState<number | null>(1);
   const [speed, setSpeed] = useState(() => {
     const n = Number(initialStringParam(initialParams, 'speed', '2'));
     return n >= 1 && n <= 3 ? n : 2;
   });
-  const [ptzReady, setPtzReady] = useState<boolean | null>(null);
   const [streamSession, setStreamSession] = useState(0);
   const videoContainerRef = useRef<HTMLDivElement>(null);
   const moveTokenRef = useRef(0);
@@ -90,6 +86,8 @@ const PTZ = () => {
       let finishLoading = true;
       setLoading(true);
       setError(null);
+      setPresets([]);
+      setSelectedPresetId(1);
       try {
         const ptzList = await fetchPtzCameras();
         setPtzCameras(ptzList);
@@ -108,52 +106,50 @@ const PTZ = () => {
               ? 'No PTZ cameras available. Mark cameras as PTZ in Camera Management.'
               : 'No PTZ cameras configured. Enable "PTZ camera" when adding/editing a camera.',
           );
-          setLoading(false);
+          setCamera(null);
           return;
         }
 
-        const response = await apiFetch('/api/cameras');
-        const cameras: Camera[] = await response.json();
-        const selected = cameras.find((c) => c.id === cameraId) ?? null;
+        const selected = ptzList.find((c) => c.id === cameraId) ?? null;
         if (!selected) {
-          setError(`Camera not found.`);
+          setError(
+            'This camera is not marked as PTZ. Enable "PTZ camera" in Camera Management.',
+          );
           setCamera(null);
-        } else if (!selected.ptz) {
-          setError('This camera is not marked as PTZ. Enable it in Camera Management.');
-          setCamera(selected);
-        } else {
-          setStreamSession((k) => k + 1);
-          setCamera({
-            ...selected,
-            cameraUid: selected.cameraUid || selected.camera_uid,
-          });
-          const status = await ptzCheckStatus(cameraId);
-          setPtzReady(Boolean(status.ok && status.supported !== false));
-          if (!status.ok) {
-            const message = status.error || 'Could not verify PTZ on this camera';
-            setError(message);
-            toast.error(message);
-          }
-          await loadPresets(cameraId);
+          return;
         }
+
+        setStreamSession((k) => k + 1);
+        setCamera({
+          id: selected.id,
+          name: selected.name,
+          cameraUid: selected.cameraUid,
+          workerId: Number(selected.workerId) > 0 ? Number(selected.workerId) : 1,
+          ip_address: selected.ip_address,
+          online: selected.online !== false,
+          ptz: true,
+        });
       } catch {
         setError('Failed to load PTZ cameras.');
+        setCamera(null);
       } finally {
         if (finishLoading) setLoading(false);
       }
     };
     void initialize();
-  }, [cameraId, history, loadPresets]);
+  }, [cameraId, history]);
 
   const { isConnecting, error: streamError, streamStatus } = useGo2RtcLive(camera, {
     containerRef: videoContainerRef,
     // Same substream as Live View tiles — main is often HEVC and will not play.
     profile: 'sub',
     // Wait until the loading screen is removed so the player container exists.
-    active: Boolean(camera?.online && !loading),
+    active: Boolean(camera && !loading),
     eager: true,
     streamsReady,
     sessionKey: streamSession,
+    background: true,
+    maxPostPlayRetries: 1,
   });
 
   const handleMoveStart = useCallback(
@@ -233,17 +229,14 @@ const PTZ = () => {
     return <div className="text-red-400 text-center p-8">Camera not found.</div>;
   }
 
-  const controlsDisabled = !camera.online || ptzReady === false;
+  const controlsDisabled = false;
   const streamBusy = isConnecting || streamStatus === 'connecting';
 
   return (
-    <div className="flex flex-col h-full bg-gray-900 text-gray-300">
-      <div className="flex-shrink-0 px-4 pt-4">
-        <Link to="/live" className="inline-flex items-center text-blue-400 hover:text-blue-300 mb-4">
-          <ArrowLeft size={18} className="mr-2" /> Back to Live View
-        </Link>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-bold text-white">PTZ: {camera.name}</h1>
+    <div className="flex flex-col h-full min-h-0 overflow-hidden bg-gray-900 text-gray-300">
+      <div className="flex-shrink-0 px-4 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h1 className="text-xl font-bold text-white leading-tight">PTZ: {camera.name}</h1>
           <div className="flex items-center gap-2 flex-wrap">
             {ptzCameras.length > 1 && (
               <select
@@ -264,6 +257,7 @@ const PTZ = () => {
                   key={s}
                   type="button"
                   onClick={() => setSpeed(s)}
+                  title={s === 1 ? 'Slow' : s === 3 ? 'Fast' : 'Medium'}
                   className={`px-3 py-1 rounded text-sm font-medium ${
                     speed === s ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'
                   }`}
@@ -274,44 +268,36 @@ const PTZ = () => {
             </div>
           </div>
         </div>
-        {error && <p className="text-amber-400 text-sm mt-2">{error}</p>}
-        {ptzReady === false && (
-          <p className="text-amber-400 text-sm mt-2">
-            PTZ control is not responding on this camera. Mixed brands use ONVIF or the
-            camera&apos;s native HTTP PTZ — confirm IP, credentials, and http_port if needed.
-          </p>
-        )}
+        {error && <p className="text-amber-400 text-sm mt-1">{error}</p>}
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-4">
-          <div className="lg:col-span-2 bg-black rounded-md relative min-h-[360px]">
-            <div ref={videoContainerRef} className="absolute inset-0 w-full h-full" />
-            {(streamBusy || streamError) && (
-              <div className="absolute inset-0 flex items-center justify-center text-white bg-black/60 z-10 px-4 text-center">
-                {streamError ? `Stream: ${streamError}` : 'Connecting video…'}
-              </div>
-            )}
-          </div>
+      <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-3 gap-3 px-4 pb-3">
+        <div className="lg:col-span-2 bg-black rounded-md relative min-h-[240px] lg:min-h-0 overflow-hidden">
+          <div ref={videoContainerRef} className="absolute inset-0 w-full h-full" />
+          {(streamBusy || streamError) && (
+            <div className="absolute inset-0 flex items-center justify-center text-white bg-black/60 z-10 px-4 text-center">
+              {streamError ? `Stream: ${streamError}` : 'Connecting video…'}
+            </div>
+          )}
+        </div>
 
-          <div className="lg:col-span-1 flex flex-col gap-6">
-            <PTZControls
-              speed={speed}
-              disabled={controlsDisabled}
-              onMoveStart={handleMoveStart}
-              onMoveStop={handleMoveStop}
-            />
-            <PTZPresets
-              presets={presets}
-              selectedPresetId={selectedPresetId}
-              onPresetChange={setSelectedPresetId}
-              onRecall={handleRecallPreset}
-              onSet={handleSetPreset}
-              onRemove={handleRemovePreset}
-              disabled={controlsDisabled}
-              loading={presetsLoading}
-            />
-          </div>
+        <div className="lg:col-span-1 min-h-0 overflow-y-auto flex flex-col gap-3">
+          <PTZControls
+            speed={speed}
+            disabled={controlsDisabled}
+            onMoveStart={handleMoveStart}
+            onMoveStop={handleMoveStop}
+          />
+          <PTZPresets
+            presets={presets}
+            selectedPresetId={selectedPresetId}
+            onPresetChange={setSelectedPresetId}
+            onRecall={handleRecallPreset}
+            onSet={handleSetPreset}
+            onRemove={handleRemovePreset}
+            disabled={controlsDisabled}
+            loading={presetsLoading}
+          />
         </div>
       </div>
     </div>

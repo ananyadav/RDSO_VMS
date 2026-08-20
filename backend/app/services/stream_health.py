@@ -14,7 +14,7 @@ from bson import ObjectId
 from app.core.database import camera_collection
 from app.services.camera_uid import make_camera_uid
 from app.services.go2rtc_workers import get_api_url_for_camera_doc
-from app.services.stream_issues import classify_stream_error
+from app.services.stream_issues import classify_stream_error, stream_has_active_viewers, stream_payload_for_src
 
 logger = logging.getLogger(__name__)
 
@@ -320,6 +320,30 @@ def clear_stream_health_alarm(camera_id: str, camera_uid: str = "") -> Optional[
     return result
 
 
+def _healthy_live_result(cid: str, uid: str, checked_at: str) -> dict:
+    raw = {
+        "cameraId": cid,
+        "cameraUid": uid,
+        "ok": True,
+        "category": "online",
+        "message": "",
+        "checkedAt": checked_at,
+        "skippedProbe": True,
+    }
+    return finalize_probe_result(raw, previous=get_stream_health(cid, uid))
+
+
+def _ui_has_viewers(uid: str) -> bool:
+    if not uid:
+        return False
+    try:
+        from app.services.go2rtc_service import ui_consumer_count
+
+        return ui_consumer_count(f"{uid}_sub") > 0 or ui_consumer_count(f"{uid}_main") > 0
+    except Exception:
+        return False
+
+
 async def _probe_camera(session: aiohttp.ClientSession, camera: dict) -> dict:
     cid = _camera_id(camera)
     ip = (camera.get("ip_address") or "").strip()
@@ -341,11 +365,30 @@ async def _probe_camera(session: aiohttp.ClientSession, camera: dict) -> dict:
     except (TypeError, ValueError):
         rtsp_port = 554
 
+    src = f"{uid}_sub"
+    if _ui_has_viewers(uid):
+        return _healthy_live_result(cid, uid, checked_at)
+
     try:
         base_url = await get_api_url_for_camera_doc(camera)
+        # If someone is already watching, a JPEG probe steals the only RTSP slot
+        # on OEM PTZs and then marks the camera Offline.
+        try:
+            async with session.get(
+                f"{base_url.rstrip('/')}/api/streams",
+                params={"src": src},
+                timeout=aiohttp.ClientTimeout(total=4),
+            ) as stream_resp:
+                if stream_resp.status == 200:
+                    payload = stream_payload_for_src(await stream_resp.json(content_type=None), src)
+                    if stream_has_active_viewers(payload):
+                        return _healthy_live_result(cid, uid, checked_at)
+        except Exception:
+            pass
+
         async with session.get(
             f"{base_url.rstrip('/')}/api/frame.jpeg",
-            params={"src": f"{uid}_sub", "timeout": str(PROBE_TIMEOUT_SECONDS - 2)},
+            params={"src": src, "timeout": str(PROBE_TIMEOUT_SECONDS - 2)},
             timeout=aiohttp.ClientTimeout(total=PROBE_TIMEOUT_SECONDS),
         ) as response:
             body = await response.read()

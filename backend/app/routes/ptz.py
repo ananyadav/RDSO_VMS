@@ -6,10 +6,9 @@ import logging
 
 from aiohttp import web
 
-from app.core.access_control import deny_unless_camera_access, has_permission, PERMISSION_LIVE_VIEW
+from app.core.access_control import deny_unless_camera_access, has_live_view
 from app.core.auth_context import get_effective_user
 from app.services.audit_service import ACTION_PTZ_PAN, ACTION_PTZ_STOP, ACTION_PTZ_TILT, ACTION_PTZ_ZOOM, write_audit
-from app.services.camera_access import is_admin
 from app.services.camera_identity import get_camera_by_ref
 from app.services.ptz_control import (
     delete_preset,
@@ -29,7 +28,7 @@ async def _require_live_camera(request: web.Request, camera_id: str) -> tuple[di
     user = await get_effective_user(request)
     if user is None:
         return None, web.json_response({"error": "Authentication required"}, status=401)
-    if not is_admin(user) and not has_permission(user, PERMISSION_LIVE_VIEW):
+    if not has_live_view(user):
         return None, web.json_response({"error": "Live View permission required"}, status=403)
 
     denied = await deny_unless_camera_access(request, camera_id)
@@ -50,12 +49,12 @@ async def ptz_list_cameras(request: web.Request) -> web.Response:
     user = await get_effective_user(request)
     if user is None:
         return web.json_response({"error": "Authentication required"}, status=401)
-    if not is_admin(user) and not has_permission(user, PERMISSION_LIVE_VIEW):
+    if not has_live_view(user):
         return web.json_response({"error": "Live View permission required"}, status=403)
 
     from app.services.camera_service import get_camera_info
 
-    cameras = await get_camera_info(request)
+    cameras = await get_camera_info(request, filters={"ptz": True})
     ptz_cams = [
         {
             "id": c.get("id"),
@@ -63,6 +62,9 @@ async def ptz_list_cameras(request: web.Request) -> web.Response:
             "displayName": c.get("displayName"),
             "online": c.get("online"),
             "ip_address": c.get("ip_address"),
+            "cameraUid": c.get("cameraUid") or c.get("camera_uid"),
+            "workerId": c.get("workerId") or 1,
+            "ptz": True,
         }
         for c in cameras
         if c.get("ptz")

@@ -72,6 +72,7 @@ const LiveCameraGrid = forwardRef<LiveCameraGridHandle, LiveCameraGridProps>(fun
   const [viewportHeight, setViewportHeight] = useState(0);
   const [scrollTop, setScrollTop] = useState(0);
   const rafScrollRef = useRef(0);
+  const rowHeightRef = useRef(0);
 
   const totalRows = Math.ceil(cameras.length / gridCols) || 0;
   const rowStride = rowHeightPx > 0 ? rowHeightPx + GAP_PX : 0;
@@ -84,11 +85,23 @@ const LiveCameraGrid = forwardRef<LiveCameraGridHandle, LiveCameraGridProps>(fun
     const el = viewportRef.current;
     if (!el) return;
     const h = el.clientHeight;
+    // Keep the last good size so chrome/fullscreen toggles do not unmount tiles
+    // (rowHeight 0 → mountedRows empty → every go2rtc player reconnects).
+    if (h <= 0) return;
     const minRow = gridCols >= 6 ? 48 : gridCols >= 5 ? 64 : 80;
-    const nextRow =
-      h > 0 ? Math.max(minRow, Math.ceil((h - GAP_PX * (gridCols - 1)) / gridCols)) : 0;
+    const nextRow = Math.max(minRow, Math.ceil((h - GAP_PX * (gridCols - 1)) / gridCols));
+    const prevRow = rowHeightRef.current;
+    const prevStride = prevRow > 0 ? prevRow + GAP_PX : 0;
+    const startRow = prevStride > 0 ? Math.max(0, Math.floor(el.scrollTop / prevStride)) : 0;
     setViewportHeight(h);
+    if (nextRow === prevRow) return;
+    rowHeightRef.current = nextRow;
     setRowHeightPx(nextRow);
+    if (prevRow > 0) {
+      const nextTop = startRow * (nextRow + GAP_PX);
+      el.scrollTop = nextTop;
+      setScrollTop(nextTop);
+    }
   }, [gridCols]);
 
   useLayoutEffect(() => {
@@ -232,7 +245,7 @@ const LiveCameraGrid = forwardRef<LiveCameraGridHandle, LiveCameraGridProps>(fun
                         }
                         isRecording={recordingSchedule[camera.id] || false}
                         onToggleRecording={() => onToggleRecording(camera.id)}
-                        onFullscreen={controlRoom ? undefined : onFullscreen}
+                        onFullscreen={onFullscreen}
                         controlRoom={controlRoom}
                       />
                     </div>

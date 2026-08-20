@@ -12,12 +12,17 @@ export interface PtzCamera {
   displayName?: string;
   online?: boolean;
   ip_address?: string;
+  cameraUid?: string;
+  workerId?: number | string | null;
+  ptz?: boolean;
 }
 
 export async function fetchPtzCameras(): Promise<PtzCamera[]> {
   const res = await apiFetch('/api/ptz/cameras');
-  if (!res.ok) return [];
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `Failed to load PTZ cameras (${res.status})`);
+  }
   return data.cameras ?? [];
 }
 
@@ -82,5 +87,8 @@ export async function ptzDeletePreset(
 export async function ptzCheckStatus(cameraId: string): Promise<{ ok: boolean; supported?: boolean; error?: string }> {
   const res = await apiFetch(`/api/ptz/${cameraId}/status`);
   const data = await res.json().catch(() => ({}));
+  if (!res.ok && data.ok == null) {
+    return { ok: false, supported: false, error: data.error || `PTZ status failed (${res.status})` };
+  }
   return data;
 }

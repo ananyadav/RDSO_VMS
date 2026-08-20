@@ -23,7 +23,11 @@ class TestRoles(unittest.TestCase):
         self.assertEqual(normalize_role("SUPER_ADMIN"), ROLE_SUPER_ADMIN)
         self.assertEqual(normalize_role("super_admin"), ROLE_SUPER_ADMIN)
 
-    def test_is_admin_includes_super_admin(self):
+    def test_super_admin_aliases(self):
+        for raw in ("SUPER_ADMIN", "superadmin", "Super Admin", "super-admin"):
+            self.assertEqual(normalize_role(raw), ROLE_SUPER_ADMIN)
+            self.assertTrue(is_admin({"role": raw}))
+            self.assertTrue(is_ops_admin({"role": raw}))
         self.assertTrue(is_admin({"role": "Admin"}))
         self.assertTrue(is_admin({"role": "SUPER_ADMIN"}))
         self.assertTrue(is_ops_admin({"role": "SUPER_ADMIN"}))

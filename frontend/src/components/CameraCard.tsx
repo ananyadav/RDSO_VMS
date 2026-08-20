@@ -107,16 +107,15 @@ function CameraCard({
     (isQueued || isConnecting || !streamsReady || (eagerLive && !inView));
 
   const handleDoubleClick = () => {
-    if (controlRoom) return;
     if (onFullscreen) onFullscreen(camera);
   };
 
   return (
     <div
-      className={`w-full h-full overflow-hidden flex flex-col relative ${
+      className={`w-full h-full overflow-hidden flex flex-col relative group ${
         controlRoom
           ? 'bg-black'
-          : 'group bg-white dark:bg-gray-900 transition-all duration-300 ring-1 ring-gray-300 dark:ring-gray-700'
+          : 'bg-white dark:bg-gray-900 transition-all duration-300 ring-1 ring-gray-300 dark:ring-gray-700'
       }`}
       data-live-stream-eligible={eagerLive ? 'true' : 'false'}
       data-live-stream-status={streamStatus}
@@ -124,7 +123,7 @@ function CameraCard({
     >
       <div
         ref={tileRef}
-        className={`relative flex-1 min-h-0 bg-black ${controlRoom ? '' : 'cursor-pointer'}`}
+        className="relative flex-1 min-h-0 bg-black cursor-pointer"
         onDoubleClick={handleDoubleClick}
       >
         <div className="absolute inset-0">
@@ -182,42 +181,49 @@ function CameraCard({
                      opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"
         >
           <div className="bg-black/50 backdrop-blur-sm text-white px-2 py-1 rounded text-xs">
-            Double-click for fullscreen
-          </div>
-        </div>
-
-        <div
-          className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/60 to-transparent
-                     opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex justify-end z-10"
-        >
-          <div className="flex items-center space-x-2">
-            {onFullscreen && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onFullscreen(camera);
-                }}
-                className="p-1.5 rounded text-gray-200 hover:bg-white/20 bg-black/30 backdrop-blur-sm transition-colors"
-                title="Fullscreen"
-              >
-                <Maximize size={14} />
-              </button>
-            )}
-
-            {showManualRecordingControls && (
-              <button
-                onClick={() => onToggleRecording(camera.id)}
-                className={`flex items-center space-x-1.5 py-1 px-2 rounded transition-colors bg-black/30 backdrop-blur-sm ${
-                  isRecording ? 'text-red-400' : 'text-gray-200 hover:bg-white/20'
-                }`}
-              >
-                <Circle size={12} className={isRecording ? 'fill-current' : ''} />
-                <span>{isRecording ? 'Stop' : 'Record'}</span>
-              </button>
-            )}
+            Double-click to fullscreen / exit
           </div>
         </div>
           </>
+        )}
+
+        {(onFullscreen || (!controlRoom && showManualRecordingControls)) && (
+          <div
+            className={`absolute z-20 ${
+              controlRoom
+                ? 'bottom-1 right-1 opacity-80 group-hover:opacity-100'
+                : 'inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex justify-end'
+            }`}
+          >
+            <div className="flex items-center space-x-2">
+              {onFullscreen && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFullscreen(camera);
+                  }}
+                  className="p-1.5 rounded text-gray-200 hover:bg-white/20 bg-black/50 backdrop-blur-sm transition-colors"
+                  title="Fullscreen"
+                  aria-label={`Fullscreen ${cameraTileLabel(camera)}`}
+                >
+                  <Maximize size={14} />
+                </button>
+              )}
+
+              {!controlRoom && showManualRecordingControls && (
+                <button
+                  onClick={() => onToggleRecording(camera.id)}
+                  className={`flex items-center space-x-1.5 py-1 px-2 rounded transition-colors bg-black/30 backdrop-blur-sm ${
+                    isRecording ? 'text-red-400' : 'text-gray-200 hover:bg-white/20'
+                  }`}
+                >
+                  <Circle size={12} className={isRecording ? 'fill-current' : ''} />
+                  <span>{isRecording ? 'Stop' : 'Record'}</span>
+                </button>
+              )}
+            </div>
+          </div>
         )}
       </div>
     </div>

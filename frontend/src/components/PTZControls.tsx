@@ -60,7 +60,7 @@ export default function PTZControls({
     <button
       type="button"
       disabled={disabled}
-      className="bg-gray-700 hover:bg-blue-600 disabled:opacity-40 rounded-md flex items-center justify-center h-16 w-16 transition-colors select-none touch-none"
+      className="bg-gray-700 hover:bg-blue-600 disabled:opacity-40 rounded-md flex items-center justify-center h-12 w-12 transition-colors select-none touch-none"
       {...bindPress(direction)}
     >
       {children}
@@ -68,58 +68,58 @@ export default function PTZControls({
   );
 
   return (
-    <Card className="flex flex-col gap-4">
+    <Card className="flex flex-col gap-3 !p-3">
       <div className="flex flex-col items-center">
-        <div className="grid grid-cols-3 grid-rows-3 gap-2">
+        <div className="grid grid-cols-3 grid-rows-3 gap-1.5">
           <div />
           <DPadButton direction="up">
-            <ArrowUp size={24} />
+            <ArrowUp size={20} />
           </DPadButton>
           <div />
           <DPadButton direction="left">
-            <ArrowLeft size={24} />
+            <ArrowLeft size={20} />
           </DPadButton>
           <button
             type="button"
             disabled={disabled}
-            className="bg-gray-900/50 hover:bg-gray-700 disabled:opacity-40 rounded-full flex items-center justify-center h-16 w-16 transition-colors select-none touch-none"
+            className="bg-gray-900/50 hover:bg-gray-700 disabled:opacity-40 rounded-full flex items-center justify-center h-12 w-12 transition-colors select-none touch-none"
             {...bindPress('home')}
             title="Stop / home"
           >
-            <Home size={20} className="text-gray-400" />
+            <Home size={18} className="text-gray-400" />
           </button>
           <DPadButton direction="right">
-            <ArrowRight size={24} />
+            <ArrowRight size={20} />
           </DPadButton>
           <div />
           <DPadButton direction="down">
-            <ArrowDown size={24} />
+            <ArrowDown size={20} />
           </DPadButton>
           <div />
         </div>
-        <p className="text-xs text-gray-400 mt-2">Hold to move · Speed {speed}</p>
+        <p className="text-xs text-gray-400 mt-1.5">Hold to move · Speed {speed}</p>
       </div>
 
-      <div className="flex flex-col items-center gap-2">
-        <p className="text-xs text-gray-400 mb-1">Zoom</p>
+      <div className="flex flex-col items-center gap-1">
+        <p className="text-xs text-gray-400">Zoom</p>
         <div className="flex gap-2">
           <button
             type="button"
             disabled={disabled}
-            className="bg-gray-700 hover:bg-blue-600 disabled:opacity-40 rounded-md flex items-center justify-center h-16 w-16 transition-colors select-none touch-none"
+            className="bg-gray-700 hover:bg-blue-600 disabled:opacity-40 rounded-md flex items-center justify-center h-11 w-11 transition-colors select-none touch-none"
             title="Zoom Out"
             {...bindPress('zoom_out')}
           >
-            <ZoomOut size={18} />
+            <ZoomOut size={16} />
           </button>
           <button
             type="button"
             disabled={disabled}
-            className="bg-gray-700 hover:bg-blue-600 disabled:opacity-40 rounded-md flex items-center justify-center h-16 w-16 transition-colors select-none touch-none"
+            className="bg-gray-700 hover:bg-blue-600 disabled:opacity-40 rounded-md flex items-center justify-center h-11 w-11 transition-colors select-none touch-none"
             title="Zoom In"
             {...bindPress('zoom_in')}
           >
-            <ZoomIn size={18} />
+            <ZoomIn size={16} />
           </button>
         </div>
       </div>

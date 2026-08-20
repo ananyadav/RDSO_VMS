@@ -29,22 +29,24 @@ except Exception as e:
     logging.error(f"❌ Could not connect to MongoDB. Is the server running? Error: {e}")
 
 # --- Helpers ---
+from app.core.roles import stored_role_label
+from app.services.camera_access import camera_access_public
+
+
 def user_helper(user) -> dict:
     """Converts a user document from MongoDB into a JSON-serializable dict."""
-    if not user: return None
+    if not user:
+        return None
     return {
         "id": str(user["_id"]),
         "name": user.get("name") or user.get("username") or "",
         "username": user.get("username") or user.get("name") or "",
-        "role": user.get("role"),
+        "role": stored_role_label(user) or user.get("role"),
         "lastLogin": user.get("lastLogin"),
         "status": user.get("status"),
         "email": user.get("email", ""),
         "permissions": user.get("permissions", []),
-        "cameraAccess": user.get("cameraAccess") or {
-            "allowedCameraGroups": [],
-            "allowedCameraUids": [],
-        },
+        "cameraAccess": camera_access_public(user),
     }
 
 # --- User Database Functions ---

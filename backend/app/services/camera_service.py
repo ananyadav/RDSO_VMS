@@ -309,6 +309,8 @@ def _location_filters(
         )
     if filters.get("protocol"):
         q["protocol"] = filters["protocol"]
+    if filters.get("ptz") is True:
+        q["ptz"] = True
     if and_clauses:
         q["$and"] = and_clauses
     return q

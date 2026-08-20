@@ -9,6 +9,7 @@ import os
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse, urlunparse
 
 import aiohttp
 
@@ -19,6 +20,8 @@ logger = logging.getLogger(__name__)
 ONVIF_TIMEOUT = aiohttp.ClientTimeout(total=8, connect=4)
 SPEED_MAP = {1: 0.35, 2: 0.6, 3: 1.0}
 _PROFILE_CACHE: Dict[str, str] = {}
+_SERVICE_CACHE: Dict[str, Dict[str, str]] = {}
+_AUTH_CACHE: Dict[str, str] = {}
 
 _SOAP_NS = "http://www.w3.org/2003/05/soap-envelope"
 _WSSE = "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd"
@@ -26,9 +29,33 @@ _WSU = "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utili
 _TRT = "http://www.onvif.org/ver10/media/wsdl"
 _TPTZ = "http://www.onvif.org/ver20/ptz/wsdl"
 _TT = "http://www.onvif.org/ver10/schema"
+_TDS = "http://www.onvif.org/ver10/device/wsdl"
+_PASSWORD_DIGEST = (
+    "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordDigest"
+)
+_PASSWORD_TEXT = (
+    "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText"
+)
 
-_MEDIA_PATHS = ("/onvif/media_service", "/onvif/Media", "/onvif/media")
-_PTZ_PATHS = ("/onvif/ptz_service", "/onvif/PTZ", "/onvif/ptz")
+# Uniview/OEM cameras that use /media/video1 often expose ONVIF on device_service.
+_DEVICE_PATHS = (
+    "/onvif/device_service",
+    "/onvif/device",
+    "/onvif/Device",
+    "/device_service",
+)
+_MEDIA_PATHS = (
+    "/onvif/media_service",
+    "/onvif/Media",
+    "/onvif/media",
+    "/Media",
+)
+_PTZ_PATHS = (
+    "/onvif/ptz_service",
+    "/onvif/PTZ",
+    "/onvif/ptz",
+    "/PTZ",
+)
 
 
 def _local(tag: str) -> str:
@@ -68,18 +95,24 @@ def _credentials(camera: dict) -> Tuple[str, str]:
     return username, password
 
 
-def _wsse_header(username: str, password: str) -> str:
+def _wsse_header(username: str, password: str, *, password_text: bool = False) -> str:
     nonce_raw = os.urandom(16)
     nonce_b64 = base64.b64encode(nonce_raw).decode("ascii")
     created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    digest = base64.b64encode(
-        hashlib.sha1(nonce_raw + created.encode("utf-8") + password.encode("utf-8")).digest()
-    ).decode("ascii")
+    if password_text:
+        password_el = (
+            f'<wsse:Password Type="{_PASSWORD_TEXT}">{_xml_escape(password)}</wsse:Password>'
+        )
+    else:
+        digest = base64.b64encode(
+            hashlib.sha1(nonce_raw + created.encode("utf-8") + password.encode("utf-8")).digest()
+        ).decode("ascii")
+        password_el = f'<wsse:Password Type="{_PASSWORD_DIGEST}">{digest}</wsse:Password>'
     return (
         f'<wsse:Security s:mustUnderstand="1" xmlns:wsse="{_WSSE}" xmlns:wsu="{_WSU}">'
         f"<wsse:UsernameToken>"
         f"<wsse:Username>{_xml_escape(username)}</wsse:Username>"
-        f'<wsse:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordDigest">{digest}</wsse:Password>'
+        f"{password_el}"
         f'<wsse:Nonce EncodingType="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary">{nonce_b64}</wsse:Nonce>'
         f"<wsu:Created>{created}</wsu:Created>"
         f"</wsse:UsernameToken>"
@@ -96,15 +129,52 @@ def _xml_escape(text: str) -> str:
     )
 
 
-def _envelope(username: str, password: str, body: str) -> bytes:
+def _envelope(username: str, password: str, body: str, *, password_text: bool = False) -> bytes:
     xml = (
         f'<?xml version="1.0" encoding="UTF-8"?>'
         f'<s:Envelope xmlns:s="{_SOAP_NS}">'
-        f"<s:Header>{_wsse_header(username, password)}</s:Header>"
+        f"<s:Header>{_wsse_header(username, password, password_text=password_text)}</s:Header>"
         f"<s:Body>{body}</s:Body>"
         f"</s:Envelope>"
     )
     return xml.encode("utf-8")
+
+
+def _rewrite_xaddr(camera: dict, xaddr: str) -> str:
+    """Keep the camera's reachable IP/port; use the path from GetCapabilities."""
+    parsed = urlparse((xaddr or "").strip())
+    if not parsed.path:
+        return ""
+    ip = (camera.get("ip_address") or camera.get("ip") or "").strip()
+    if not ip:
+        return xaddr.strip()
+    scheme = parsed.scheme or "http"
+    port = parsed.port or _http_port(camera)
+    if (scheme == "http" and port == 80) or (scheme == "https" and port == 443):
+        netloc = ip
+    else:
+        netloc = f"{ip}:{port}"
+    return urlunparse((scheme, netloc, parsed.path, "", parsed.query, ""))
+
+
+def _xaddrs_from_capabilities(text: str) -> Dict[str, str]:
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError:
+        return {}
+    out: Dict[str, str] = {}
+    current: Optional[str] = None
+    for node in root.iter():
+        name = _local(node.tag)
+        if name in ("Media", "PTZ", "Device"):
+            current = name.lower()
+            attr = (node.attrib.get("XAddr") or "").strip()
+            if attr:
+                out[current] = attr
+        elif name == "XAddr" and current and (node.text or "").strip():
+            out[current] = (node.text or "").strip()
+            current = None
+    return out
 
 
 def _direction_velocity(direction: str, speed: int) -> Tuple[float, float, float]:
@@ -130,9 +200,11 @@ async def _soap(
     url: str,
     action: str,
     body: str,
+    *,
+    password_text: bool = False,
 ) -> Tuple[int, str]:
     username, password = _credentials(camera)
-    payload = _envelope(username, password, body)
+    payload = _envelope(username, password, body, password_text=password_text)
     headers = {
         "Content-Type": f'application/soap+xml; charset=utf-8; action="{action}"',
         "SOAPAction": f'"{action}"',
@@ -152,6 +224,32 @@ async def _soap(
     return status, text
 
 
+def _auth_modes(camera: dict) -> Tuple[bool, ...]:
+    cached = _AUTH_CACHE.get(_camera_key(camera))
+    if cached == "text":
+        return (True,)
+    if cached == "digest":
+        return (False,)
+    return (False, True)
+
+
+async def _soap_with_auth(camera: dict, url: str, action: str, body: str) -> Tuple[int, str]:
+    last_status, last_text = 0, ""
+    for password_text in _auth_modes(camera):
+        try:
+            status, text = await _soap(camera, url, action, body, password_text=password_text)
+        except Exception as exc:
+            last_status, last_text = 0, str(exc)
+            continue
+        last_status, last_text = status, text
+        if status in (200, 201, 204) and "Fault" not in text:
+            _AUTH_CACHE[_camera_key(camera)] = "text" if password_text else "digest"
+            return status, text
+        if status not in (401, 403):
+            return status, text
+    return last_status, last_text
+
+
 def _first_text(root: ET.Element, local_name: str) -> Optional[str]:
     for node in root.iter():
         if _local(node.tag) == local_name and (node.text or "").strip():
@@ -159,20 +257,73 @@ def _first_text(root: ET.Element, local_name: str) -> Optional[str]:
     return None
 
 
-async def _try_paths(camera: dict, paths: tuple[str, ...], action: str, body: str) -> Tuple[int, str, str]:
-    base = _base_url(camera)
+async def _try_urls(camera: dict, urls: List[str], action: str, body: str) -> Tuple[int, str, str]:
     last_status, last_text, last_url = 0, "", ""
-    for path in paths:
-        url = f"{base}{path}"
+    seen: set[str] = set()
+    for url in urls:
+        if not url or url in seen:
+            continue
+        seen.add(url)
         try:
-            status, text = await _soap(camera, url, action, body)
+            status, text = await _soap_with_auth(camera, url, action, body)
         except Exception as exc:
             last_status, last_text, last_url = 0, str(exc), url
             continue
         last_status, last_text, last_url = status, text, url
-        if status in (200, 201) and "Fault" not in text:
+        if status in (200, 201, 204) and "Fault" not in text:
             return status, text, url
     return last_status, last_text, last_url
+
+
+async def _try_paths(camera: dict, paths: tuple[str, ...], action: str, body: str) -> Tuple[int, str, str]:
+    base = _base_url(camera)
+    return await _try_urls(camera, [f"{base}{path}" for path in paths], action, body)
+
+
+async def _discover_services(camera: dict) -> Dict[str, str]:
+    key = _camera_key(camera)
+    cached = _SERVICE_CACHE.get(key)
+    if cached is not None:
+        return cached
+    body = (
+        f'<tds:GetCapabilities xmlns:tds="{_TDS}">'
+        f"<tds:Category>All</tds:Category>"
+        f"</tds:GetCapabilities>"
+    )
+    status, text, _url = await _try_paths(
+        camera,
+        _DEVICE_PATHS,
+        f"{_TDS}/GetCapabilities",
+        body,
+    )
+    services: Dict[str, str] = {}
+    if status in (200, 201) and "Fault" not in text:
+        for name, xaddr in _xaddrs_from_capabilities(text).items():
+            rewritten = _rewrite_xaddr(camera, xaddr)
+            if rewritten:
+                services[name] = rewritten
+    _SERVICE_CACHE[key] = services
+    return services
+
+
+def _service_urls(camera: dict, discovered: Optional[str], fallbacks: tuple[str, ...]) -> List[str]:
+    base = _base_url(camera)
+    urls: List[str] = []
+    if discovered:
+        urls.append(discovered)
+    urls.extend(f"{base}{path}" for path in fallbacks)
+    return urls
+
+
+async def _try_ptz(camera: dict, action: str, body: str) -> Tuple[int, str, str]:
+    # Use cached XAddrs only. GetCapabilities while RTSP is live drops OEM PTZs.
+    services = _SERVICE_CACHE.get(_camera_key(camera)) or {}
+    return await _try_urls(
+        camera,
+        _service_urls(camera, services.get("ptz"), _PTZ_PATHS),
+        action,
+        body,
+    )
 
 
 async def _get_profile_token(camera: dict) -> Tuple[Optional[str], Dict[str, Any]]:
@@ -181,10 +332,11 @@ async def _get_profile_token(camera: dict) -> Tuple[Optional[str], Dict[str, Any
     if cached:
         return cached, {"ok": True}
 
+    # Skip GetCapabilities — Uniview/OEM cameras drop the live RTSP producer.
     body = f'<trt:GetProfiles xmlns:trt="{_TRT}"/>'
-    status, text, _url = await _try_paths(
+    status, text, _url = await _try_urls(
         camera,
-        _MEDIA_PATHS,
+        _service_urls(camera, None, _MEDIA_PATHS),
         f"{_TRT}/GetProfiles",
         body,
     )
@@ -243,12 +395,7 @@ async def ptz_continuous(
         f"</tptz:Velocity>"
         f"</tptz:ContinuousMove>"
     )
-    status, text, _url = await _try_paths(
-        camera,
-        _PTZ_PATHS,
-        f"{_TPTZ}/ContinuousMove",
-        body,
-    )
+    status, text, _url = await _try_ptz(camera, f"{_TPTZ}/ContinuousMove", body)
     if status not in (200, 201, 204) or "Fault" in text:
         logger.warning("[PTZ-ONVIF] ContinuousMove failed status=%s body=%s", status, text[:300])
         return {"ok": False, "status": status, "error": _error_from_response(status, text)}
@@ -266,7 +413,7 @@ async def ptz_stop(camera: dict) -> Dict[str, Any]:
         f"<tptz:Zoom>true</tptz:Zoom>"
         f"</tptz:Stop>"
     )
-    status, text, _url = await _try_paths(camera, _PTZ_PATHS, f"{_TPTZ}/Stop", body)
+    status, text, _url = await _try_ptz(camera, f"{_TPTZ}/Stop", body)
     if status not in (200, 201, 204) or "Fault" in text:
         return {"ok": False, "status": status, "error": _error_from_response(status, text)}
     return {"ok": True, "backend": "onvif"}
@@ -289,7 +436,7 @@ async def list_presets(camera: dict) -> Dict[str, Any]:
         f"<tptz:ProfileToken>{_xml_escape(token)}</tptz:ProfileToken>"
         f"</tptz:GetPresets>"
     )
-    status, text, _url = await _try_paths(camera, _PTZ_PATHS, f"{_TPTZ}/GetPresets", body)
+    status, text, _url = await _try_ptz(camera, f"{_TPTZ}/GetPresets", body)
     if status != 200 or "Fault" in text:
         return {"ok": False, "status": status, "error": _error_from_response(status, text), "presets": []}
     presets: List[Dict[str, Any]] = []
@@ -331,7 +478,7 @@ async def goto_preset(camera: dict, preset_id: int) -> Dict[str, Any]:
         f"<tptz:PresetToken>{_xml_escape(preset_token)}</tptz:PresetToken>"
         f"</tptz:GotoPreset>"
     )
-    status, text, _url = await _try_paths(camera, _PTZ_PATHS, f"{_TPTZ}/GotoPreset", body)
+    status, text, _url = await _try_ptz(camera, f"{_TPTZ}/GotoPreset", body)
     if status not in (200, 201, 204) or "Fault" in text:
         return {"ok": False, "status": status, "error": _error_from_response(status, text)}
     return {"ok": True, "backend": "onvif"}
@@ -347,7 +494,7 @@ async def set_preset(camera: dict, preset_id: int, name: str) -> Dict[str, Any]:
         f"<tptz:PresetName>{_xml_escape(name or f'Preset {preset_id}')}</tptz:PresetName>"
         f"</tptz:SetPreset>"
     )
-    status, text, _url = await _try_paths(camera, _PTZ_PATHS, f"{_TPTZ}/SetPreset", body)
+    status, text, _url = await _try_ptz(camera, f"{_TPTZ}/SetPreset", body)
     if status not in (200, 201, 204) or "Fault" in text:
         return {"ok": False, "status": status, "error": _error_from_response(status, text)}
     return {"ok": True, "backend": "onvif"}
@@ -368,7 +515,7 @@ async def delete_preset(camera: dict, preset_id: int) -> Dict[str, Any]:
         f"<tptz:PresetToken>{_xml_escape(preset_token)}</tptz:PresetToken>"
         f"</tptz:RemovePreset>"
     )
-    status, text, _url = await _try_paths(camera, _PTZ_PATHS, f"{_TPTZ}/RemovePreset", body)
+    status, text, _url = await _try_ptz(camera, f"{_TPTZ}/RemovePreset", body)
     if status not in (200, 201, 204) or "Fault" in text:
         return {"ok": False, "status": status, "error": _error_from_response(status, text)}
     return {"ok": True, "backend": "onvif"}

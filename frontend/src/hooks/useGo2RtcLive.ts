@@ -25,10 +25,22 @@ export type Go2RtcStreamStatus = 'idle' | 'connecting' | 'playing' | 'error';
 const CONNECT_TIMEOUT_MS = 16000;
 /** Later retries while tile keeps showing Connecting… */
 const RETRY_TIMEOUT_MS = 10000;
-/** Visible tile got "playing" or WS open but no usable frame — one bounded reconnect. */
+/** Visible tile got "playing" or WS open but no usable frame — bounded reconnect. */
 const POST_PLAY_STALL_MS = 4500;
 const MAX_POST_PLAY_RETRIES = 1;
 const PLAYBACK_MONITOR_INTERVAL_MS = 400;
+
+function decodedFrameCount(video: HTMLVideoElement): number | null {
+  try {
+    const quality = video.getVideoPlaybackQuality?.();
+    if (quality && Number.isFinite(quality.totalVideoFrames)) {
+      return quality.totalVideoFrames;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
 
 interface UseGo2RtcLiveOptions {
   containerRef: RefObject<HTMLElement | null>;
@@ -47,6 +59,10 @@ interface UseGo2RtcLiveOptions {
   streamEligible?: boolean;
   sessionKey?: number;
   streamsReady?: boolean;
+  /** PTZ: keep WS alive through 0-height layout. Live grid stays false. */
+  background?: boolean;
+  /** Extra reconnects after first frame if the picture freezes. */
+  maxPostPlayRetries?: number;
 }
 
 function isAuthError(raw: string): boolean {
@@ -153,6 +169,7 @@ async function waitForFirstFrame(
   workerId?: number | string | null,
   signal?: AbortSignal,
   latencySession?: LiveLatencySession | null,
+  background?: boolean,
 ): Promise<() => void> {
   if (signal?.aborted) {
     throw new DOMException('go2rtc connect aborted', 'AbortError');
@@ -187,6 +204,7 @@ async function waitForFirstFrame(
       stream,
       mode,
       workerId,
+      background,
       latencySession,
       onFirstFrame: () => {
         frameSeen = true;
@@ -226,6 +244,8 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
   const streamEligible = options.streamEligible !== false;
   const sessionKey = options.sessionKey ?? 0;
   const streamsReady = options.streamsReady !== false;
+  const background = options.background === true;
+  const maxPostPlayRetries = options.maxPostPlayRetries ?? MAX_POST_PLAY_RETRIES;
 
   const [isConnecting, setIsConnecting] = useState(false);
   const [isQueued, setIsQueued] = useState(false);
@@ -333,6 +353,25 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
     );
 
     if (!shouldConnect) {
+      // Layout/fullscreen toggles can drop streamEligible for a frame. Keep an
+      // already-playing player so the grid does not reconnect every tile.
+      const keepUntilLayoutSettles =
+        Boolean(teardownRef.current) &&
+        Boolean(camera?.online) &&
+        active &&
+        streamsReady &&
+        !streamEligible;
+      if (keepUntilLayoutSettles) {
+        const timeout = window.setTimeout(() => {
+          postPlayRetriesRef.current = 0;
+          stopPlayer(true);
+          setIsConnecting(false);
+          setIsQueued(false);
+          setError(null);
+          setStreamStatus('idle');
+        }, 300);
+        return () => window.clearTimeout(timeout);
+      }
       postPlayRetriesRef.current = 0;
       stopPlayer(true);
       setIsConnecting(false);
@@ -471,6 +510,7 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
             camera.workerId,
             abortController.signal,
             latencySession,
+            background,
           );
           if (isStale()) {
             cleanup();
@@ -495,37 +535,50 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
             `mountCalled=1 wsOpened=1 firstFrame=1 profile=${profile} stream=${stream} worker=${camera.workerId ?? '?'}`,
           );
 
-          // Post-play: go2rtc may error internally after first frame; onError is not
-          // wired once waitForFirstFrame resolves. Recover visible tiles once.
+          // Post-play: a still picture (last GOP) is not "playing". videoWidth > 0
+          // and WebRTC readyState=live stay true after RTSP drops — count decoded frames.
           clearPlaybackMonitor();
+          let lastMediaTime = -1;
+          let lastDecodedFrames = -1;
           playbackMonitorRef.current = window.setInterval(() => {
             if (isStale()) return;
             const el = containerRef.current;
             if (!el) return;
 
             const video = el.querySelector('video');
-            const mode =
+            const modeLabel =
               el.querySelector('video-stream .mode')?.textContent?.trim() ?? '';
             const statusText =
               el.querySelector('video-stream .status')?.textContent?.trim() ?? '';
 
-            if (video instanceof HTMLVideoElement && video.videoWidth > 0) {
-              lastVideoFrameAtRef.current = performance.now();
-              return;
+            if (video instanceof HTMLVideoElement) {
+              const mediaTime = video.currentTime;
+              const frames = decodedFrameCount(video);
+              const frameAdvanced =
+                frames != null && lastDecodedFrames >= 0 && frames > lastDecodedFrames;
+              const timeAdvanced =
+                frames == null && mediaTime > lastMediaTime + 0.04;
+              lastMediaTime = mediaTime;
+              if (frames != null) lastDecodedFrames = frames;
+              if (video.videoWidth > 0 && (frameAdvanced || timeAdvanced)) {
+                postPlayRetriesRef.current = 0;
+                lastVideoFrameAtRef.current = performance.now();
+                return;
+              }
             }
 
-            const errored = mode === 'error' || Boolean(statusText);
+            const errored = modeLabel === 'error';
             const stalled =
               errored ||
               performance.now() - lastVideoFrameAtRef.current > POST_PLAY_STALL_MS;
 
-            if (!stalled || postPlayRetriesRef.current >= MAX_POST_PLAY_RETRIES) {
+            if (!stalled || postPlayRetriesRef.current >= maxPostPlayRetries) {
               return;
             }
 
             postPlayRetriesRef.current += 1;
             gridDebug(
-              `stall-retry=1 metadata=${video?.readyState ?? 'n/a'} playing=${!video?.paused} mode=${mode} error=${statusText || 'none'}`,
+              `stall-retry=${postPlayRetriesRef.current} metadata=${video?.readyState ?? 'n/a'} playing=${video instanceof HTMLVideoElement ? !video.paused : 'n/a'} mode=${modeLabel} error=${statusText || 'none'}`,
             );
             clearPlaybackMonitor();
             stopPlayer(true, label);
@@ -636,6 +689,8 @@ export function useGo2RtcLive(camera: Camera | null, options: UseGo2RtcLiveOptio
     sessionKey,
     streamsReady,
     retryKey,
+    background,
+    maxPostPlayRetries,
   ]);
 
   useEffect(() => {
