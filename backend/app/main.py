@@ -10,8 +10,10 @@ import aiohttp_cors
 
 from app.routes.cameras import (
     get_camera_list, get_camera_groups_endpoint, get_configured_cameras, scan_for_cameras,
+    get_discovery_subnets_endpoint,
     add_camera_endpoint, update_camera_endpoint, delete_camera_endpoint, import_cameras_endpoint,
     test_camera_stream_endpoint, reload_group_go2rtc_endpoint,
+    get_camera_stream_profile_endpoint, update_camera_stream_profile_endpoint,
 )
 from app.routes.users import (
     get_users_list, add_user_endpoint, update_user_endpoint,
@@ -26,6 +28,9 @@ from app.routes.go2rtc import setup_go2rtc_routes
 from app.routes.ptz import setup_ptz_routes
 from app.routes.audit import setup_audit_routes
 from app.routes.sessions import setup_session_routes
+from app.routes.alarm_rules import setup_alarm_rule_routes
+from app.routes.camera_sequences import setup_camera_sequence_routes
+from app.routes.events import setup_event_routes
 
 from app.core.auth_context import session_middleware
 from app.core.http_utils import json_error_middleware
@@ -57,6 +62,9 @@ async def create_app():
     setup_ptz_routes(app)
     setup_audit_routes(app)
     setup_session_routes(app)
+    setup_alarm_rule_routes(app)
+    setup_camera_sequence_routes(app)
+    setup_event_routes(app)
 
     # --- Register routes ---
     app.router.add_get("/api/cameras", get_camera_list)
@@ -67,7 +75,10 @@ async def create_app():
     app.router.add_put("/api/cameras/{id}", update_camera_endpoint)
     app.router.add_delete("/api/cameras/{id}", delete_camera_endpoint)
     app.router.add_post("/api/cameras/scan", scan_for_cameras)
+    app.router.add_get("/api/cameras/discovery/subnets", get_discovery_subnets_endpoint)
     app.router.add_post("/api/cameras/{id}/test-stream", test_camera_stream_endpoint)
+    app.router.add_get("/api/cameras/{id}/stream-profile", get_camera_stream_profile_endpoint)
+    app.router.add_put("/api/cameras/{id}/stream-profile", update_camera_stream_profile_endpoint)
     app.router.add_post(
         "/api/cameras/groups/{camera_group}/reload-go2rtc",
         reload_group_go2rtc_endpoint,

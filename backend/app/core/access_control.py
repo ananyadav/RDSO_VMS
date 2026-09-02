@@ -16,6 +16,7 @@ PERMISSION_PLAYBACK = "Playback"  # legacy operator assignment; not used for rec
 PERMISSION_RECORDING_VIEW = "recording.view"
 PERMISSION_LIVE_VIEW = "Live View"
 PERMISSION_SYSTEM = "System"
+PERMISSION_EVENTS = "Events"
 
 
 def _json_error(message: str, status: int) -> web.Response:
@@ -53,6 +54,16 @@ def has_recording_view(user: Optional[dict]) -> bool:
         return True
     perms = user.get("permissions") or []
     return PERMISSION_RECORDING_VIEW in perms
+
+
+def has_events_permission(user: Optional[dict]) -> bool:
+    """SUPER_ADMIN and ADMIN always; others need explicit Events permission."""
+    if not user:
+        return False
+    if is_admin(user):
+        return True
+    perms = user.get("permissions") or []
+    return PERMISSION_EVENTS in perms
 
 
 async def require_user(request: web.Request) -> dict:
@@ -156,3 +167,32 @@ async def deny_unless_camera_access(
     if not user_can_access_camera(user, camera_ref, cam):
         return _json_error("Camera access denied", 403)
     return None
+
+
+async def deny_unless_events_permission(request: web.Request) -> web.Response | None:
+    user = await get_effective_user(request)
+    if user is None:
+        return _json_error("Authentication required", 401)
+    if not has_events_permission(user):
+        return _json_error("Events permission required", 403)
+    return None
+
+
+async def deny_unless_admin_or_events_read(request: web.Request) -> web.Response | None:
+    """Read alarm rules: ADMIN/SUPER_ADMIN or Events permission."""
+    user = await get_effective_user(request)
+    if user is None:
+        return _json_error("Authentication required", 401)
+    if is_admin(user) or has_events_permission(user):
+        return None
+    return _json_error("Forbidden", 403)
+
+
+async def deny_unless_admin_or_live_view(request: web.Request) -> web.Response | None:
+    """Read camera sequences: ADMIN/SUPER_ADMIN or Live View permission."""
+    user = await get_effective_user(request)
+    if user is None:
+        return _json_error("Authentication required", 401)
+    if is_admin(user) or has_live_view(user):
+        return None
+    return _json_error("Forbidden", 403)

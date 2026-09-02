@@ -156,19 +156,19 @@ function CameraCard({
 
         {!controlRoom && (
           <>
-        <div className="absolute top-0 left-0 right-0 p-2 flex justify-between items-start bg-gradient-to-b from-black/60 to-transparent z-10">
-          <div className="flex items-center space-x-2 min-w-0 flex-wrap gap-1">
+        <div className="absolute top-0 left-0 right-0 p-1.5 sm:p-2 flex justify-between items-start bg-gradient-to-b from-black/60 to-transparent z-10">
+          <div className="flex items-center space-x-1.5 sm:space-x-2 min-w-0 flex-wrap gap-1">
             {isRecording && (
-              <div className="flex-shrink-0 flex items-center bg-red-600 text-white text-xs font-bold pl-1.5 pr-2 py-0.5 rounded-full">
+              <div className="flex-shrink-0 flex items-center bg-red-600 text-white text-[10px] sm:text-xs font-bold pl-1 sm:pl-1.5 pr-1.5 sm:pr-2 py-0.5 rounded-full">
                 <span className="rec-dot mr-1"></span>
                 <span>REC</span>
               </div>
             )}
-            <h3 className="font-bold text-white text-sm truncate">{cameraTileLabel(camera)}</h3>
+            <h3 className="font-bold text-white text-xs sm:text-sm truncate">{cameraTileLabel(camera)}</h3>
           </div>
 
           <span
-            className={`flex-shrink-0 px-2 py-0.5 text-xs font-semibold rounded-full ${
+            className={`flex-shrink-0 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-semibold rounded-full ${
               camera.online ? 'text-green-800 bg-green-200' : 'text-red-800 bg-red-200'
             }`}
           >

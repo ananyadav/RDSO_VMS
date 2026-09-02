@@ -35,6 +35,7 @@ export interface CameraFormData {
   location_path: string;
   main_channel: string;
   sub_channel: string;
+  recording_channel: 'main' | 'sub';
   main_rtsp_url: string;
   sub_rtsp_url: string;
   rtsp_url_source: string;
@@ -59,6 +60,7 @@ export const CORPORATE_CAMERA_DEFAULTS: CameraFormData = {
   location_path: '',
   main_channel: '101',
   sub_channel: '102',
+  recording_channel: 'main',
   main_rtsp_url: '',
   sub_rtsp_url: '',
   rtsp_url_source: 'auto_hikvision',
@@ -205,9 +207,10 @@ export default function AddCameraModal({
         const base = defaultsForLocations(locationSites, locationBuildings);
         setForm({ ...base, ...initialData });
       } else {
-        // Add mode: start blank; optionally prefill if a tree location is already selected.
+        // Add mode: blank defaults; merge tree location then optional discovery prefill.
         const blank = { ...CORPORATE_CAMERA_DEFAULTS };
-        setForm(defaultLocation ? { ...blank, ...defaultLocation } : blank);
+        const withLocation = defaultLocation ? { ...blank, ...defaultLocation } : blank;
+        setForm(initialData ? { ...withLocation, ...initialData } : withLocation);
       }
       setShowStream(initialData?.protocol === 'ONVIF' || initialData?.protocol === 'CUSTOM');
       setShowPassword(false);
@@ -605,6 +608,19 @@ export default function AddCameraModal({
                   <div>
                     <label className={labelClass}>Sub Channel</label>
                     <input className={inputClass} value={form.sub_channel} onChange={(e) => setField('sub_channel', e.target.value)} disabled={isAutoRtsp} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Recording Stream</label>
+                    <select
+                      className={inputClass}
+                      value={form.recording_channel}
+                      onChange={(e) =>
+                        setField('recording_channel', e.target.value as 'main' | 'sub')
+                      }
+                    >
+                      <option value="main">Main (101)</option>
+                      <option value="sub">Sub (102)</option>
+                    </select>
                   </div>
                   {isManualRtsp ? (
                     <>

@@ -73,12 +73,14 @@ export const ROUTE_PERMISSIONS: Record<string, Permission> = {
   '/live': PERMISSIONS.LIVE_VIEW,
   '/playback': PERMISSIONS.RECORDING_VIEW,
   '/events': PERMISSIONS.EVENTS,
+  '/alarm-rules': PERMISSIONS.EVENTS,
+  '/camera-sequences': PERMISSIONS.CAMERAS,
   '/ptz': PERMISSIONS.LIVE_VIEW,
   '/camera-management': PERMISSIONS.CAMERAS,
   '/storage': PERMISSIONS.SYSTEM,
   '/network-settings': PERMISSIONS.SYSTEM,
   '/user-management': PERMISSIONS.USERS,
-  '/notifications': PERMISSIONS.SYSTEM,
+  '/notifications': PERMISSIONS.EVENTS,
   '/system-status': PERMISSIONS.SYSTEM,
   '/go2rtc-diagnostics': PERMISSIONS.SYSTEM,
   '/maintenance': PERMISSIONS.SYSTEM,
@@ -88,6 +90,8 @@ const ORDERED_PATHS = [
   '/live',
   '/playback',
   '/events',
+  '/alarm-rules',
+  '/camera-sequences',
   '/ptz',
   '/camera-management',
   '/storage',
@@ -147,6 +151,12 @@ export function canAccessPath(
     return isAdminUser(user);
   }
   if (pathMatches(pathname, '/camera-management')) {
+    return isOpsAdminUser(user);
+  }
+  if (pathMatches(pathname, '/alarm-rules')) {
+    return isOpsAdminUser(user);
+  }
+  if (pathMatches(pathname, '/camera-sequences')) {
     return isOpsAdminUser(user);
   }
   const required = permissionForPath(pathname);

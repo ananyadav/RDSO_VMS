@@ -15,7 +15,7 @@ import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from app.core.database import camera_collection, database
 
@@ -148,6 +148,27 @@ def needed_workers_for_camera_count(camera_count: int) -> int:
     if camera_count <= 0:
         return 0
     return max(1, (camera_count + MAX_CAMERAS_PER_WORKER - 1) // MAX_CAMERAS_PER_WORKER)
+
+
+def worker_ids_required_for_fleet(
+    camera_count: int,
+    assigned_worker_ids: Iterable[Any],
+) -> List[int]:
+    """Worker IDs that must be provisioned after restart or fleet growth.
+
+    Includes every slot 1..needed for the active camera count plus any worker
+    id already referenced on camera documents (preserves orphan assignments
+    until rebalance runs).
+    """
+    needed = needed_workers_for_camera_count(camera_count)
+    ids: set[int] = set()
+    for raw in assigned_worker_ids:
+        wid = normalize_worker_id(raw)
+        if wid:
+            ids.add(wid)
+    if needed > 0:
+        ids.update(range(1, needed + 1))
+    return sorted(ids)
 
 
 async def _count_cameras(worker_id: int) -> int:
@@ -679,19 +700,20 @@ async def rebalance_if_needed(*, reason: str = "auto") -> dict:
 
 
 async def ensure_workers_for_assigned_cameras() -> List[int]:
-    """Ensure go2rtc_workers records exist for every worker_id assigned to active cameras."""
-    worker_ids: set[int] = set()
+    """Ensure records and processes exist for every worker required by the fleet."""
+    assigned: List[Any] = []
     async for cam in camera_collection.find(_active_cameras_query(), {"worker_id": 1}):
-        wid = normalize_worker_id(cam.get("worker_id"))
-        if wid:
-            worker_ids.add(wid)
+        assigned.append(cam.get("worker_id"))
 
-    if not worker_ids:
+    total = await camera_collection.count_documents(_active_cameras_query())
+    required = worker_ids_required_for_fleet(total, assigned)
+
+    if not required:
         await ensure_default_worker()
         return [1]
 
-    await _ensure_worker_records(sorted(worker_ids))
-    return sorted(worker_ids)
+    await _ensure_worker_records(required)
+    return required
 
 
 async def stop_legacy_monolithic_go2rtc() -> None:

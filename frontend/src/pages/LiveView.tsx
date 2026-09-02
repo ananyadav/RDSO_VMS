@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import FullscreenCameraModal from '../components/FullscreenCameraModal';
 import CameraSelector from '../components/CameraSelector';
 import LiveCameraGrid from '../components/LiveCameraGrid';
+import LiveCameraPool from '../components/LiveCameraPool';
 import LiveViewLocationSelector, {
   type BuildingGroup,
 } from '../components/LiveViewLocationSelector';
@@ -24,9 +25,20 @@ import {
 } from '../lib/cameraAccess';
 import { cameraTileLabel } from '../lib/cameraLabel';
 import { useUrlHydration, useUrlSync } from '../hooks/useUrlSearchState';
+import { useIsPhoneLayout } from '../hooks/useMediaQuery';
 import { resolveLiveViewFromUrl } from '../lib/urlViewState';
 import { useLiveControlRoom } from '../context/LiveControlRoomContext';
 import type { LiveCameraGridHandle } from '../components/LiveCameraGrid';
+import {
+  assignCameraToSlot,
+  assignSequenceToSlot,
+  assignedCameraIds,
+  assignedSequenceIds,
+  buildDefaultAssignments,
+  migrateAssignmentsForLayout,
+  type SlotAssignments,
+} from '../lib/liveTileAssignments';
+import { listCameraSequences, type CameraSequence } from '../lib/cameraSequencesApi';
 
 const LIVE_LAYOUTS = [
   { cols: 1, label: '1x1' },
@@ -62,8 +74,10 @@ interface LiveViewProps {
 function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
   const { params, setParams, initialParams, hydratedRef, markHydrated } = useUrlHydration();
   const { controlRoom, setControlRoom } = useLiveControlRoom();
+  const isPhone = useIsPhoneLayout();
   const gridRef = useRef<LiveCameraGridHandle>(null);
   const wallRef = useRef<HTMLDivElement>(null);
+  const layoutUserPickedRef = useRef(false);
 
   const [buildings, setBuildings] = useState<BuildingGroup[]>([]);
   const [configuredSiteNames, setConfiguredSiteNames] = useState<string[]>([]);
@@ -79,7 +93,17 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
   const [showFullscreenModal, setShowFullscreenModal] = useState(false);
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
   const [selectedLayout, setSelectedLayout] = useState<LiveLayout>(LIVE_LAYOUTS[1]);
+  const [slotAssignments, setSlotAssignments] = useState<SlotAssignments>([]);
+  const [sequences, setSequences] = useState<CameraSequence[]>([]);
+  const [sequenceCameras, setSequenceCameras] = useState<Camera[]>([]);
+  const prevLayoutColsRef = useRef(selectedLayout.cols);
+  const assignmentsGroupRef = useRef<string | null>(null);
   const camerasFetchDoneAtRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!isPhone || layoutUserPickedRef.current) return;
+    setSelectedLayout(LIVE_LAYOUTS[0]);
+  }, [isPhone]);
 
   const openFullscreen = (camera: Camera) => {
     setFullscreenCamera(camera);
@@ -334,6 +358,131 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
     [cameras],
   );
 
+  useEffect(() => {
+    let cancelled = false;
+    void listCameraSequences({ enabled: true, limit: 200 })
+      .then((data) => {
+        if (!cancelled) {
+          setSequences(data.items.filter((seq) => seq.enabled && seq.camera_ids.length > 0));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSequences([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const needed = new Set<string>();
+    for (const seq of sequences) {
+      for (const id of seq.camera_ids) needed.add(id);
+    }
+    if (needed.size === 0) {
+      setSequenceCameras([]);
+      return;
+    }
+    const localIds = new Set(cameras.map((c) => c.id));
+    const missing = [...needed].filter((id) => !localIds.has(id));
+    if (missing.length === 0) {
+      setSequenceCameras([]);
+      return;
+    }
+    let cancelled = false;
+    const q = new URLSearchParams();
+    q.set('ids', missing.join(','));
+    void apiFetch(`/api/cameras?${q.toString()}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Failed to load sequence cameras');
+        return res.json() as Promise<Camera[]>;
+      })
+      .then((items) => {
+        if (!cancelled) setSequenceCameras(Array.isArray(items) ? items : []);
+      })
+      .catch(() => {
+        if (!cancelled) setSequenceCameras([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sequences, cameras]);
+
+  const cameraById = useMemo(() => {
+    const map = new Map<string, Camera>();
+    for (const cam of sortedCameras) map.set(cam.id, cam);
+    for (const cam of sequenceCameras) {
+      if (!map.has(cam.id)) map.set(cam.id, cam);
+    }
+    return map;
+  }, [sortedCameras, sequenceCameras]);
+
+  const sequenceById = useMemo(() => {
+    const map = new Map<string, CameraSequence>();
+    for (const seq of sequences) map.set(seq.id, seq);
+    return map;
+  }, [sequences]);
+
+  const authorizedIds = useMemo(
+    () => new Set(sortedCameras.map((c) => c.id)),
+    [sortedCameras],
+  );
+
+  const authorizedSequenceIds = useMemo(
+    () => new Set(sequences.map((s) => s.id)),
+    [sequences],
+  );
+
+  // Reset tile assignments once per location scope load (not on online-status refresh).
+  useEffect(() => {
+    if (!selectedGroup) {
+      setSlotAssignments([]);
+      assignmentsGroupRef.current = null;
+      return;
+    }
+    if (camerasLoading) return;
+    if (assignmentsGroupRef.current === selectedGroup) return;
+    assignmentsGroupRef.current = selectedGroup;
+    const ids = sortedCameras.map((c) => c.id);
+    setSlotAssignments(buildDefaultAssignments(ids, gridCols));
+    prevLayoutColsRef.current = gridCols;
+  }, [selectedGroup, camerasLoading, sortedCameras, gridCols]);
+
+  // Preserve assignments when layout changes during the session.
+  useEffect(() => {
+    const prevCols = prevLayoutColsRef.current;
+    if (prevCols === gridCols) return;
+    setSlotAssignments((prev) =>
+      migrateAssignmentsForLayout(prev, prevCols, gridCols, authorizedIds, authorizedSequenceIds),
+    );
+    prevLayoutColsRef.current = gridCols;
+  }, [gridCols, authorizedIds, authorizedSequenceIds]);
+
+  const handleAssignCamera = useCallback(
+    (slotIndex: number, cameraId: string | null) => {
+      if (cameraId && !authorizedIds.has(cameraId)) {
+        toast.error('You do not have access to that camera.');
+        return;
+      }
+      setSlotAssignments((prev) => assignCameraToSlot(prev, slotIndex, cameraId));
+    },
+    [authorizedIds],
+  );
+
+  const handleAssignSequence = useCallback(
+    (slotIndex: number, sequenceId: string | null) => {
+      if (sequenceId && !authorizedSequenceIds.has(sequenceId)) {
+        toast.error('You do not have access to that sequence.');
+        return;
+      }
+      setSlotAssignments((prev) => assignSequenceToSlot(prev, slotIndex, sequenceId));
+    },
+    [authorizedSequenceIds],
+  );
+
+  const assignedIds = useMemo(() => assignedCameraIds(slotAssignments), [slotAssignments]);
+  const assignedSeqIds = useMemo(() => assignedSequenceIds(slotAssignments), [slotAssignments]);
+
   // Temporary Task-2 timing: API JSON received → first grid paint.
   useEffect(() => {
     if (camerasLoading || sortedCameras.length === 0) return;
@@ -384,18 +533,21 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
     );
   }
 
+  const layoutOptions = isPhone ? LIVE_LAYOUTS.slice(0, 3) : LIVE_LAYOUTS;
+
   const layoutSelect = (
     <select
       value={selectedLayout.label}
-      onChange={(e) =>
+      onChange={(e) => {
+        layoutUserPickedRef.current = true;
         setSelectedLayout(
-          LIVE_LAYOUTS.find((l) => l.label === e.target.value) ?? LIVE_LAYOUTS[1],
-        )
-      }
-      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-3 py-1"
+          LIVE_LAYOUTS.find((l) => l.label === e.target.value) ?? LIVE_LAYOUTS[0],
+        );
+      }}
+      className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-2 py-0.5 sm:px-3 sm:py-1 text-xs sm:text-sm"
       title="Grid layout"
     >
-      {LIVE_LAYOUTS.map((layout) => (
+      {layoutOptions.map((layout) => (
         <option key={layout.label} value={layout.label}>
           {layout.label}
         </option>
@@ -410,7 +562,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
         data-live-control-room={controlRoom ? 'true' : 'false'}
       >
         <div
-          className={`shrink-0 px-3 pt-2 pb-2 border-b border-gray-300 dark:border-gray-700 bg-gray-200 dark:bg-gray-900 z-20 ${
+          className={`shrink-0 px-2 pt-1.5 pb-1.5 sm:px-3 sm:pt-2 sm:pb-2 border-b border-gray-300 dark:border-gray-700 bg-gray-200 dark:bg-gray-900 z-20 ${
             controlRoom ? 'hidden' : ''
           }`}
         >
@@ -418,8 +570,8 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
             title="Live View"
             subtitle={subtitle}
             rightContent={
-              <div className="flex items-center space-x-4">
-                {cameras.length > 0 && (
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {cameras.length > 0 && !isPhone && (
                   <CameraSelector
                     cameras={cameras}
                     selected={selectedCamera}
@@ -431,7 +583,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
                   type="button"
                   onClick={enterControlRoom}
                   disabled={!selectedGroup || camerasLoading || sortedCameras.length === 0}
-                  className="inline-flex items-center justify-center p-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center p-1 sm:p-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Fullscreen video wall"
                   aria-label="Fullscreen video wall"
                 >
@@ -440,7 +592,13 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
               </div>
             }
           />
-          <div className="mt-3">
+          {isPhone && selectedGroup && !camerasLoading && cameras.length > 0 && (
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate -mt-0.5 mb-1 sm:hidden">
+              {cameras.length} camera{cameras.length === 1 ? '' : 's'}
+              {selectedFloor ? ` — ${selectedFloor.floor_group || selectedFloor.floor}` : ''}
+            </p>
+          )}
+          <div className="mt-1.5 sm:mt-3">
             <LiveViewLocationSelector
               buildings={buildings}
               extraSiteNames={
@@ -458,7 +616,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
 
         <div
           className={`flex-1 min-h-0 overflow-hidden flex flex-col ${
-            controlRoom ? 'gap-0 p-0 bg-black' : 'gap-2 p-2'
+            controlRoom ? 'gap-0 p-0 bg-black' : 'gap-1 p-1 sm:gap-2 sm:p-2'
           }`}
         >
           {(awaitingSite || awaitingBuilding || awaitingFloor) && (
@@ -501,23 +659,44 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
           {selectedGroup && !camerasLoading && sortedCameras.length > 0 && (
             <div
               ref={wallRef}
-              className="live-control-room-wall relative flex-1 min-h-0 overflow-hidden flex flex-col bg-black"
+              className="live-control-room-wall relative flex-1 min-h-0 overflow-hidden flex flex-col md:flex-row bg-black"
               data-live-control-room-wall="true"
             >
-            <LiveCameraGrid
-              ref={gridRef}
-              cameras={sortedCameras}
-              gridCols={gridCols}
-              streamsReady={go2rtcReady}
-              selectedCameraId={controlRoom ? null : selectedCamera?.id ?? null}
-              fullscreenCameraId={fullscreenCamera?.id ?? null}
-              showFullscreenModal={showFullscreenModal}
-              recordingSchedule={recordingSchedule}
-              onToggleRecording={onToggleRecording}
-              onFullscreen={openFullscreen}
-              scrollResetKey={selectedGroup}
-              controlRoom={controlRoom}
-            />
+              <LiveCameraPool
+                cameras={sortedCameras}
+                sequences={sequences}
+                assignedCameraIds={assignedIds}
+                assignedSequenceIds={assignedSeqIds}
+                hidden={controlRoom}
+                variant="sidebar"
+              />
+              <LiveCameraGrid
+                ref={gridRef}
+                slotAssignments={slotAssignments}
+                cameraById={cameraById}
+                sequenceById={sequenceById}
+                gridCols={gridCols}
+                streamsReady={go2rtcReady}
+                selectedCameraId={controlRoom ? null : selectedCamera?.id ?? null}
+                fullscreenCameraId={fullscreenCamera?.id ?? null}
+                showFullscreenModal={showFullscreenModal}
+                recordingSchedule={recordingSchedule}
+                onToggleRecording={onToggleRecording}
+                onFullscreen={openFullscreen}
+                onAssignCamera={handleAssignCamera}
+                onAssignSequence={handleAssignSequence}
+                scrollResetKey={selectedGroup}
+                controlRoom={controlRoom}
+                dragDropEnabled={!controlRoom}
+              />
+              <LiveCameraPool
+                cameras={sortedCameras}
+                sequences={sequences}
+                assignedCameraIds={assignedIds}
+                assignedSequenceIds={assignedSeqIds}
+                hidden={controlRoom}
+                variant="strip"
+              />
             {showFullscreenModal && fullscreenCamera && (
               <FullscreenCameraModal
                 key={fullscreenCamera.id}

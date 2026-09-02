@@ -1,182 +1,303 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Download } from 'lucide-react';
+import PageHeader from '../components/PageHeader';
+import AlarmEventFilter, { type CameraFilterOption } from '../components/events/AlarmEventFilter';
+import AlarmEventList from '../components/events/AlarmEventList';
+import AlarmEventDetailModal from '../components/events/AlarmEventDetailModal';
+import { apiFetch, cameraQuery, readJsonResponse } from '../lib/api';
+import {
+  EVENT_POLL_INTERVAL_MS,
+  buildEventQueryParams,
+  defaultEventFilters,
+  filtersKey,
+  mergeEventPage,
+  type EventListFilters,
+} from '../lib/eventQuery';
+import {
+  EventsRequestError,
+  acknowledgeEvent,
+  getEvent,
+  listEvents,
+  type AlarmEvent,
+} from '../lib/eventsApi';
+import { useVisibilityInterval } from '../hooks/useVisibilityInterval';
 import {
   useUrlHydration,
   useUrlSync,
-  paramFlag,
-  flagParam,
-  joinList,
-  splitList,
-  parseUrlDate,
-  formatUrlDate,
+  initialStringParam,
 } from '../hooks/useUrlSearchState';
 
-// --- Component Imports ---
-import PageHeader from '../components/PageHeader';
-import EventFilter from '../components/EventFilter';
-import EventList from '../components/EventList';
-import EventPlaybackModal from '../components/EventPlaybackModal';
+interface ConfiguredCamera {
+  _id: string;
+  name?: string;
+  display_name?: string;
+  ip_address?: string;
+  camera_uid?: string;
+}
 
-// --- MOCK DATA ---
-const allEvents = [
-  { id: 1, type: 'Person', camera: 'Driveway', timestamp: '2025-08-29T11:57:00', confidence: 95, favorite: true, duration: 15 },
-  { id: 2, type: 'Car', camera: 'Front Door', timestamp: '2025-08-29T11:34:00', confidence: 88, favorite: false, duration: 8 },
-  { id: 3, type: 'Dog', camera: 'Backyard', timestamp: '2025-08-29T11:11:00', confidence: 91, favorite: false, duration: 12 },
-  { id: 4, type: 'Cat', camera: 'Backyard', timestamp: '2025-08-29T10:48:00', confidence: 79, favorite: true, duration: 5 },
-  { id: 5, type: 'Bicycle', camera: 'Kitchen', timestamp: '2025-08-29T10:25:00', confidence: 82, favorite: false, duration: 22 },
-  { id: 6, type: 'Person', camera: 'Garage', timestamp: '2025-08-29T09:15:00', confidence: 98, favorite: false, duration: 18 },
-];
-const availableCameras = ['Driveway', 'Front Door', 'Backyard', 'Garage', 'Kitchen'];
-const availableEventTypes = ['Person', 'Car', 'Dog', 'Cat', 'Bicycle', 'Truck'];
-const initialFilters = {
-  date: new Date().toISOString().split('T')[0],
-  showFavoritesOnly: false,
-  cameras: availableCameras,
-  eventTypes: availableEventTypes,
-};
+function cameraDisplay(cam: ConfiguredCamera): string {
+  return (
+    (cam.display_name || cam.name || cam.camera_uid || '').trim() ||
+    cam.ip_address ||
+    cam._id
+  );
+}
 
-export default function Events() {
-  const { params, setParams, initialParams, hydratedRef, markHydrated } = useUrlHydration();
+function filtersFromParams(params: URLSearchParams): EventListFilters {
+  const base = defaultEventFilters();
+  const off = parseInt(params.get('offset') || '0', 10);
+  return {
+    ...base,
+    camera_id: params.get('camera_id') || '',
+    source_type: params.get('source_type') || '',
+    severity: params.get('severity') || '',
+    status: params.get('status') || '',
+    acknowledged: (params.get('acknowledged') as EventListFilters['acknowledged']) || '',
+    from: params.get('from') || '',
+    to: params.get('to') || '',
+    offset: Number.isFinite(off) ? Math.max(0, off) : 0,
+  };
+}
 
-  const [events, setEvents] = useState(allEvents);
-  const [filters, setFilters] = useState(() => {
-    const dateRaw = initialParams.current?.get('date');
-    const dateParsed = dateRaw ? parseUrlDate(dateRaw) : null;
-    const camerasRaw = splitList(initialParams.current?.get('cameras') ?? null);
-    const typesRaw = splitList(initialParams.current?.get('types') ?? null);
-    return {
-      date: dateParsed ? formatUrlDate(dateParsed) : initialFilters.date,
-      showFavoritesOnly: paramFlag(initialParams.current?.get('favorites') ?? null, false),
-      cameras: camerasRaw.length ? camerasRaw : availableCameras,
-      eventTypes: typesRaw.length ? typesRaw : availableEventTypes,
-    };
+export default function Events(): React.ReactElement {
+  const { setParams, initialParams, hydratedRef, markHydrated } = useUrlHydration();
+
+  const [filters, setFilters] = useState<EventListFilters>(() =>
+    filtersFromParams(initialParams.current ?? new URLSearchParams()),
+  );
+  const [events, setEvents] = useState<AlarmEvent[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [cameras, setCameras] = useState<ConfiguredCamera[]>([]);
+  const [camerasLoading, setCamerasLoading] = useState(true);
+  const [selectedEvent, setSelectedEvent] = useState<AlarmEvent | null>(() => {
+    const id = initialStringParam(initialParams, 'event');
+    return id ? ({ id } as AlarmEvent) : null;
   });
-  const [selectedEventIds, setSelectedEventIds] = useState(new Set<number>());
-  const [playingEvent, setPlayingEvent] = useState<(typeof allEvents)[0] | null>(() => {
-    const id = initialParams.current?.get('event');
-    if (!id) return null;
-    return allEvents.find((e) => String(e.id) === id) ?? null;
-  });
+  const [acknowledging, setAcknowledging] = useState(false);
+
+  const inFlightRef = useRef(false);
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+  const activeFilterKeyRef = useRef(filtersKey(filters));
+
+  const cameraById = useMemo(() => {
+    const map = new Map<string, ConfiguredCamera>();
+    for (const cam of cameras) {
+      map.set(cam._id, cam);
+    }
+    return map;
+  }, [cameras]);
+
+  const cameraOptions: CameraFilterOption[] = useMemo(
+    () =>
+      cameras.map((cam) => ({
+        id: cam._id,
+        label: cam.ip_address ? `${cameraDisplay(cam)} (${cam.ip_address})` : cameraDisplay(cam),
+      })),
+    [cameras],
+  );
+
+  const resolveCameraLabel = useCallback(
+    (cameraId: string, cameraUid: string) => {
+      const cam = cameraById.get(cameraId);
+      if (cam) {
+        return cam.ip_address ? `${cameraDisplay(cam)} (${cam.ip_address})` : cameraDisplay(cam);
+      }
+      return cameraUid || cameraId;
+    },
+    [cameraById],
+  );
+
+  const fetchEvents = useCallback(async (opts?: { silent?: boolean; merge?: boolean }) => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    const currentFilters = filtersRef.current;
+    const requestKey = filtersKey(currentFilters);
+    if (!opts?.silent) {
+      setLoading(true);
+      setLoadError(null);
+    }
+    try {
+      const data = await listEvents(buildEventQueryParams(currentFilters));
+      if (filtersKey(filtersRef.current) !== requestKey) return;
+      setTotal(data.total);
+      setEvents((prev) => {
+        if (opts?.merge && currentFilters.offset === 0) {
+          return mergeEventPage(prev, data.items);
+        }
+        return data.items;
+      });
+      setLoadError(null);
+    } catch (err) {
+      if (!opts?.silent) {
+        const message =
+          err instanceof EventsRequestError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : 'Failed to load events';
+        setLoadError(message);
+      }
+    } finally {
+      inFlightRef.current = false;
+      if (!opts?.silent) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      setCamerasLoading(true);
+      try {
+        const response = await apiFetch(
+          `/api/cameras/configured${cameraQuery({ includeInactive: 'true' })}`,
+        );
+        const data = await readJsonResponse<ConfiguredCamera[] | { items?: ConfiguredCamera[] }>(
+          response,
+        );
+        setCameras(Array.isArray(data) ? data : data.items ?? []);
+      } catch {
+        toast.error('Failed to load cameras for filters');
+      } finally {
+        setCamerasLoading(false);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    activeFilterKeyRef.current = filtersKey(filters);
+    void fetchEvents();
+  }, [filters, fetchEvents]);
 
   useEffect(() => {
     markHydrated();
   }, [markHydrated]);
 
+  useVisibilityInterval(
+    () => {
+      void fetchEvents({ silent: true, merge: true });
+    },
+    EVENT_POLL_INTERVAL_MS,
+    true,
+  );
+
+  useEffect(() => {
+    const id = selectedEvent?.id;
+    if (!id || selectedEvent.title) return;
+    void (async () => {
+      try {
+        const ev = await getEvent(id);
+        setSelectedEvent(ev);
+        setEvents((prev) => prev.map((e) => (e.id === ev.id ? ev : e)));
+      } catch {
+        setSelectedEvent(null);
+      }
+    })();
+  }, [selectedEvent?.id, selectedEvent?.title]);
+
+  const detailEvent = useMemo(() => {
+    if (!selectedEvent) return null;
+    if (selectedEvent.title) return selectedEvent;
+    return events.find((e) => e.id === selectedEvent.id) ?? null;
+  }, [selectedEvent, events]);
+
   const urlValues = useMemo(
     () => ({
-      date: filters.date !== initialFilters.date ? filters.date : null,
-      favorites: flagParam(filters.showFavoritesOnly),
-      cameras:
-        filters.cameras.length !== availableCameras.length
-          ? joinList(filters.cameras)
-          : null,
-      types:
-        filters.eventTypes.length !== availableEventTypes.length
-          ? joinList(filters.eventTypes)
-          : null,
-      event: playingEvent ? String(playingEvent.id) : null,
+      camera_id: filters.camera_id || null,
+      source_type: filters.source_type || null,
+      severity: filters.severity || null,
+      status: filters.status || null,
+      acknowledged: filters.acknowledged || null,
+      from: filters.from || null,
+      to: filters.to || null,
+      offset: filters.offset > 0 ? String(filters.offset) : null,
+      event: selectedEvent?.id ?? null,
     }),
-    [filters, playingEvent],
+    [filters, selectedEvent],
   );
   useUrlSync(hydratedRef, setParams, urlValues);
 
-  useEffect(() => {
-    const eventId = params.get('event');
-    if (!eventId) {
-      setPlayingEvent(null);
-      return;
+  const patchFilters = (patch: Partial<EventListFilters>) => {
+    setFilters((prev) => ({ ...prev, ...patch }));
+  };
+
+  const handleAcknowledge = async (event: AlarmEvent) => {
+    setAcknowledging(true);
+    try {
+      const updated = await acknowledgeEvent(event.id);
+      toast.success('Event acknowledged');
+      setEvents((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+      setSelectedEvent(updated);
+    } catch (err) {
+      toast.error(err instanceof EventsRequestError ? err.message : 'Failed to acknowledge event');
+    } finally {
+      setAcknowledging(false);
     }
-    setPlayingEvent(allEvents.find((e) => String(e.id) === eventId) ?? null);
-  }, [params]);
+  };
 
-  const filteredEvents = useMemo(() => {
-    return events.filter(event => {
-      if (filters.showFavoritesOnly && !event.favorite) return false;
-      if (!filters.cameras.includes(event.camera)) return false;
-      if (!filters.eventTypes.includes(event.type)) return false;
-      return true;
-    });
-  }, [events, filters]);
-  
-  // --- Event Handlers ---
-  const handleFilterChange = (newFilters: Partial<typeof initialFilters>) => setFilters(prev => ({ ...prev, ...newFilters }));
-  const handleToggleFavorite = (eventId: number) => setEvents(events.map(event => event.id === eventId ? { ...event, favorite: !event.favorite } : event));
-  const handleToggleSelection = (eventId: number) => {
-    setSelectedEventIds(prev => {
-      const newSelection = new Set(prev);
-      if (newSelection.has(eventId)) newSelection.delete(eventId);
-      else newSelection.add(eventId);
-      return newSelection;
-    });
-  };
-  const handleSelectAllOnPage = () => {
-    if (selectedEventIds.size === filteredEvents.length) setSelectedEventIds(new Set());
-    else setSelectedEventIds(new Set(filteredEvents.map(e => e.id)));
-  };
-  const handlePlayEvent = (event: typeof allEvents[0]) => setPlayingEvent(event);
-
-  // --- Bulk Action Handlers ---
-  const handleFavoriteSelected = () => {
-    setEvents(events.map(event => selectedEventIds.has(event.id) ? { ...event, favorite: true } : event));
-    toast.success(`${selectedEventIds.size} event(s) added to favorites.`);
-    setSelectedEventIds(new Set());
-  };
-  const onDeleteSelected = () => {
-    setEvents(events.filter(event => !selectedEventIds.has(event.id)));
-    toast.error(`${selectedEventIds.size} event(s) deleted.`);
-    setSelectedEventIds(new Set());
-  };
-  const onExportSelected = () => {
-    toast(`Exporting ${selectedEventIds.size} event(s)... (demo)`);
-    setSelectedEventIds(new Set());
-  };
+  const showInitialLoading = loading && events.length === 0 && !loadError;
 
   return (
     <div className="flex flex-col h-full">
       <PageHeader
         title="Events"
-        subtitle="Review and manage security events"
-        rightContent={
-          <button className="flex items-center text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md">
-            <Download size={16} className="mr-2" />
-            Export
-          </button>
-        }
+        subtitle="Review and acknowledge alarm events from configured rules"
       />
 
       <div className="flex-1 overflow-y-auto p-4">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-1">
-          <EventFilter
-            filters={filters}
-            onFilterChange={handleFilterChange}
-            availableCameras={availableCameras}
-            availableEventTypes={availableEventTypes}
-          />
-        </div>
-        <div className="lg:col-span-3">
-          <EventList
-            events={filteredEvents}
-            selectedEventIds={selectedEventIds}
-            onToggleFavorite={handleToggleFavorite}
-            onToggleSelection={handleToggleSelection}
-            onSelectAll={handleSelectAllOnPage}
-            onPlayEvent={handlePlayEvent}
-            onFavoriteSelected={handleFavoriteSelected}
-            onDeleteSelected={onDeleteSelected}
-            onExportSelected={onExportSelected}
-          />
-        </div>
-      </div>
+        {showInitialLoading && (
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">Loading events…</div>
+        )}
+
+        {!showInitialLoading && loadError && (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-6 text-center mb-4">
+            <p className="text-red-300 mb-3">{loadError}</p>
+            <button type="button" onClick={() => void fetchEvents()} className="btn-secondary px-4 py-2 text-sm w-auto">
+              Retry
+            </button>
+          </div>
+        )}
+
+        {!showInitialLoading && (
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div className="lg:col-span-1">
+              <AlarmEventFilter
+                filters={filters}
+                cameras={cameraOptions}
+                camerasLoading={camerasLoading}
+                onChange={patchFilters}
+                onApply={() => void fetchEvents()}
+              />
+            </div>
+            <div className="lg:col-span-3">
+              <AlarmEventList
+                events={events}
+                total={total}
+                offset={filters.offset}
+                limit={filters.limit}
+                loading={loading}
+                cameraLabel={resolveCameraLabel}
+                onSelect={setSelectedEvent}
+                onPrev={() => patchFilters({ offset: Math.max(0, filters.offset - filters.limit) })}
+                onNext={() => patchFilters({ offset: filters.offset + filters.limit })}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
-      {playingEvent && (
-        <EventPlaybackModal 
-          event={playingEvent} 
-          onClose={() => setPlayingEvent(null)}
-        />
-      )}
+      <AlarmEventDetailModal
+        event={detailEvent}
+        cameraLabel={
+          detailEvent
+            ? resolveCameraLabel(detailEvent.camera_id, detailEvent.camera_uid)
+            : ''
+        }
+        acknowledging={acknowledging}
+        onClose={() => setSelectedEvent(null)}
+        onAcknowledge={handleAcknowledge}
+      />
     </div>
   );
 }

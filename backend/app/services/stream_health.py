@@ -171,6 +171,7 @@ async def _persist_health(camera: dict, result: dict) -> None:
         return
     if not result.get("ok") and not result.get("alarm"):
         return
+    previous_alarm = bool(camera.get("stream_health_alarm"))
     try:
         await camera_collection.update_one(
             {"_id": ObjectId(cid)},
@@ -187,6 +188,15 @@ async def _persist_health(camera: dict, result: dict) -> None:
         )
     except Exception as exc:
         logger.debug("[stream-health] persist failed for %s: %s", cid, exc)
+        return
+
+    from app.services.stream_health_alarm_adapter import notify_stream_health_alarm_transition
+
+    await notify_stream_health_alarm_transition(
+        camera,
+        previous_alarm=previous_alarm,
+        result=result,
+    )
 
 
 def _result_from_camera_doc(camera: dict) -> Optional[dict]:

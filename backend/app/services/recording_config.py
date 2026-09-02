@@ -16,7 +16,6 @@ class RecordingEngineDisabled(RuntimeError):
 
 
 RECORDING_STREAM = os.getenv("RECORDING_STREAM", "main").strip().lower()
-# 5-minute segments — fewer files, same total disk use
 RECORDING_SEGMENT_SECONDS = os.getenv("RECORDING_HLS_SEGMENT_SECONDS", "300")
 RECORDING_LIST_SIZE = int(os.getenv("RECORDING_HLS_LIST_SIZE", "0"))
 
@@ -65,6 +64,29 @@ def get_retention_policy() -> dict:
     }
 
 
+def resolve_recording_stream_choice(camera_doc: dict) -> str:
+    """Per-camera main/sub choice; RECORDING_STREAM env is fallback when unset."""
+    raw = (camera_doc.get("recording_channel") or "").strip().lower()
+    if raw == "main":
+        return "main"
+    if raw == "sub":
+        return "sub"
+    main_ch = str(camera_doc.get("main_channel") or "101").strip()
+    sub_ch = str(camera_doc.get("sub_channel") or "102").strip()
+    if raw and raw == main_ch:
+        return "main"
+    if raw and raw == sub_ch:
+        return "sub"
+    return "main" if RECORDING_STREAM == "main" else "sub"
+
+
+def recording_stream_profile_for_camera(camera_doc: dict) -> str:
+    stream = resolve_recording_stream_choice(camera_doc)
+    if stream == "main":
+        return "main/101 HEVC copy (evidence quality)"
+    return "sub/102 HEVC copy (~256-512 Kbps, not recommended for evidence)"
+
+
 def recording_stream_profile() -> str:
     if RECORDING_STREAM == "main":
         return "main/101 HEVC copy (evidence quality)"
@@ -90,6 +112,7 @@ def get_recording_stream_info() -> dict:
 
 
 def resolve_recording_rtsp_url(camera_doc: dict, urls: dict) -> tuple[str | None, str]:
+    stream = resolve_recording_stream_choice(camera_doc)
     via_go2rtc = os.getenv("RECORDING_VIA_GO2RTC", "true").strip().lower() in (
         "1",
         "true",
@@ -106,7 +129,6 @@ def resolve_recording_rtsp_url(camera_doc: dict, urls: dict) -> tuple[str | None
                 or str(camera_doc.get("_id") or "")
             )
             if uid:
-                stream = "main" if RECORDING_STREAM == "main" else "sub"
                 label = "main/101 via go2rtc" if stream == "main" else "sub/102 via go2rtc"
                 worker_id = None
                 from app.services.go2rtc_workers import WORKERS_ENABLED, normalize_worker_id
@@ -115,7 +137,7 @@ def resolve_recording_rtsp_url(camera_doc: dict, urls: dict) -> tuple[str | None
                     worker_id = normalize_worker_id(camera_doc.get("worker_id")) or 1
                 return local_recording_rtsp_url(uid, stream, worker_id=worker_id), label
 
-    if RECORDING_STREAM == "main":
+    if stream == "main":
         url = camera_doc.get("main_rtsp_url") or urls.get("main_rtsp_url")
         return url, "main/101"
     url = camera_doc.get("sub_rtsp_url") or urls.get("sub_rtsp_url")

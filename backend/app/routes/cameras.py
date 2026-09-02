@@ -5,12 +5,17 @@ from app.services.camera_service import (
     get_camera_info,
     get_camera_groups,
     get_configured_cameras_for_user,
+    get_discovery_subnet_options,
     scan_cameras,
     handle_add_camera,
     handle_import_cameras,
     handle_update_camera,
 )
 from app.services.camera_management import reload_go2rtc_for_group, test_camera_stream
+from app.services.stream_profile_service import (
+    apply_camera_stream_profile,
+    get_camera_stream_profile,
+)
 from app.core.database import delete_camera
 from app.core.access_control import require_admin
 from app.core.auth_context import get_effective_user
@@ -49,6 +54,17 @@ async def get_configured_cameras(request):
     return web.json_response(configured)
 
 
+async def get_discovery_subnets_endpoint(request):
+    try:
+        await require_admin(request)
+    except web.HTTPUnauthorized:
+        return web.json_response({"error": "Authentication required"}, status=401)
+    except web.HTTPForbidden:
+        return web.json_response({"error": "Admin only"}, status=403)
+    subnets = await get_discovery_subnet_options()
+    return web.json_response({"subnets": subnets})
+
+
 async def scan_for_cameras(request):
     try:
         await require_admin(request)
@@ -56,8 +72,15 @@ async def scan_for_cameras(request):
         return web.json_response({"error": "Authentication required"}, status=401)
     except web.HTTPForbidden:
         return web.json_response({"error": "Admin only"}, status=403)
-    result = await scan_cameras(request)
-    return web.json_response(result)
+    body = {}
+    if request.can_read_body:
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+    subnet = (body.get("subnet") or body.get("cidr") or "").strip() or None
+    result, status = await scan_cameras(request, subnet=subnet)
+    return web.json_response(result, status=status)
 
 
 async def add_camera_endpoint(request):
@@ -254,6 +277,33 @@ async def test_camera_stream_endpoint(request):
         return web.json_response({"error": "Admin only"}, status=403)
     camera_id = request.match_info["id"]
     result = await test_camera_stream(camera_id)
+    status = 200 if result.get("ok") else 400
+    return web.json_response(result, status=status)
+
+
+async def get_camera_stream_profile_endpoint(request):
+    try:
+        await require_admin(request)
+    except web.HTTPUnauthorized:
+        return web.json_response({"error": "Authentication required"}, status=401)
+    except web.HTTPForbidden:
+        return web.json_response({"error": "Admin only"}, status=403)
+    camera_id = request.match_info["id"]
+    result = await get_camera_stream_profile(camera_id)
+    status = 200 if result.get("ok") else 404
+    return web.json_response(result, status=status)
+
+
+async def update_camera_stream_profile_endpoint(request):
+    try:
+        await require_admin(request)
+    except web.HTTPUnauthorized:
+        return web.json_response({"error": "Authentication required"}, status=401)
+    except web.HTTPForbidden:
+        return web.json_response({"error": "Admin only"}, status=403)
+    camera_id = request.match_info["id"]
+    payload = await request.json()
+    result = await apply_camera_stream_profile(camera_id, payload)
     status = 200 if result.get("ok") else 400
     return web.json_response(result, status=status)
 

@@ -1,120 +1,276 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { AlertTriangle, Info, ShieldAlert, X, Trash2 } from "lucide-react";
-import PageHeader from "../components/PageHeader";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { AlertTriangle, Bell, CheckCircle, Info } from 'lucide-react';
+import PageHeader from '../components/PageHeader';
+import { apiFetch, cameraQuery, readJsonResponse } from '../lib/api';
+import { mergeEventPage } from '../lib/eventQuery';
 import {
-  useUrlHydration,
-  useUrlSync,
-  initialEnumParam,
-} from "../hooks/useUrlSearchState";
+  EventsRequestError,
+  acknowledgeEvent,
+  listUiNotifications,
+  type AlarmEvent,
+} from '../lib/eventsApi';
+import {
+  formatOccurredAt,
+  severityBadgeClass,
+  sourceTypeLabel,
+  statusBadgeClass,
+} from '../lib/eventLabels';
+import { useVisibilityInterval } from '../hooks/useVisibilityInterval';
 
-interface Notification {
-  id: number;
-  type: "info" | "warning" | "error";
-  message: string;
-  time: string;
+const POLL_INTERVAL_MS = 8000;
+
+interface ConfiguredCamera {
+  _id: string;
+  name?: string;
+  display_name?: string;
+  ip_address?: string;
+  camera_uid?: string;
 }
 
-type NotificationFilter = "all" | "info" | "warning" | "error";
+type StatusFilter = 'all' | 'active' | 'acknowledged';
+type SeverityFilter = 'all' | 'info' | 'warning' | 'critical';
 
-const initialNotifications: Notification[] = [
-  { id: 1, type: "info", message: "System update v2.5.1 installed successfully.", time: "10:15 AM" },
-  { id: 2, type: "warning", message: "Camera 'Driveway' has disconnected.", time: "10:25 AM" },
-  { id: 3, type: "error", message: "Storage drive D: is 95% full.", time: "10:40 AM" },
-  { id: 4, type: "info", message: "User 'admin' logged in from 192.168.1.50.", time: "11:02 AM" },
-];
+function severityIcon(severity: string) {
+  switch (severity) {
+    case 'critical':
+      return AlertTriangle;
+    case 'warning':
+      return Bell;
+    default:
+      return Info;
+  }
+}
 
-const notificationStyles = {
-  info: { icon: Info, color: "text-blue-400" },
-  warning: { icon: AlertTriangle, color: "text-yellow-400" },
-  error: { icon: ShieldAlert, color: "text-red-400" },
-};
-
-const FILTER_OPTIONS: NotificationFilter[] = ["all", "info", "warning", "error"];
+function cameraDisplay(cam: ConfiguredCamera): string {
+  return (
+    (cam.display_name || cam.name || cam.camera_uid || '').trim() ||
+    cam.ip_address ||
+    cam._id
+  );
+}
 
 export default function Notifications(): React.ReactElement {
-  const { setParams, initialParams, hydratedRef, markHydrated } = useUrlHydration();
-  const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
-  const [filter, setFilter] = useState<NotificationFilter>(() =>
-    initialEnumParam(initialParams, "filter", FILTER_OPTIONS, "all"),
+  const [notifications, setNotifications] = useState<AlarmEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
+  const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
+  const [cameras, setCameras] = useState<ConfiguredCamera[]>([]);
+
+  const inFlightRef = useRef(false);
+
+  const cameraById = useMemo(() => {
+    const map = new Map<string, ConfiguredCamera>();
+    for (const cam of cameras) {
+      map.set(cam._id, cam);
+    }
+    return map;
+  }, [cameras]);
+
+  const resolveCameraLabel = useCallback(
+    (event: AlarmEvent) => {
+      const cam = cameraById.get(event.camera_id);
+      if (cam) {
+        const label = cameraDisplay(cam);
+        return cam.ip_address ? `${label} (${cam.ip_address})` : label;
+      }
+      return event.camera_uid || event.camera_id;
+    },
+    [cameraById],
   );
+
+  const fetchNotifications = useCallback(async (opts?: { silent?: boolean }) => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    if (!opts?.silent) {
+      setLoading(true);
+      setLoadError(null);
+    }
+    try {
+      const data = await listUiNotifications({
+        acknowledged:
+          statusFilter === 'active' ? false : statusFilter === 'acknowledged' ? true : undefined,
+        severity: severityFilter === 'all' ? undefined : severityFilter,
+        limit: 50,
+        offset: 0,
+      });
+      setNotifications((prev) =>
+        opts?.silent ? mergeEventPage(prev, data.items) : data.items,
+      );
+      setLoadError(null);
+    } catch (err) {
+      if (!opts?.silent) {
+        const message =
+          err instanceof EventsRequestError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : 'Failed to load notifications';
+        setLoadError(message);
+      }
+    } finally {
+      inFlightRef.current = false;
+      if (!opts?.silent) setLoading(false);
+    }
+  }, [severityFilter, statusFilter]);
 
   useEffect(() => {
-    markHydrated();
-  }, [markHydrated]);
+    void (async () => {
+      try {
+        const response = await apiFetch(
+          `/api/cameras/configured${cameraQuery({ includeInactive: 'true' })}`,
+        );
+        const data = await readJsonResponse<ConfiguredCamera[] | { items?: ConfiguredCamera[] }>(
+          response,
+        );
+        setCameras(Array.isArray(data) ? data : data.items ?? []);
+      } catch {
+        /* camera labels optional */
+      }
+    })();
+  }, []);
 
-  const urlValues = useMemo(
-    () => ({ filter: filter === "all" ? null : filter }),
-    [filter],
-  );
-  useUrlSync(hydratedRef, setParams, urlValues);
+  useEffect(() => {
+    void fetchNotifications();
+  }, [fetchNotifications]);
 
-  const visible = filter === "all"
-    ? notifications
-    : notifications.filter((n) => n.type === filter);
+  useVisibilityInterval(() => {
+    void fetchNotifications({ silent: true });
+  }, POLL_INTERVAL_MS);
 
-  const dismiss = (id: number) => setNotifications((n) => n.filter((x) => x.id !== id));
-  const clearAll = () => setNotifications([]);
+  const handleAcknowledge = async (event: AlarmEvent) => {
+    setAcknowledgingId(event.id);
+    try {
+      const updated = await acknowledgeEvent(event.id);
+      toast.success('Notification acknowledged');
+      setNotifications((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
+    } catch (err) {
+      toast.error(
+        err instanceof EventsRequestError ? err.message : 'Failed to acknowledge notification',
+      );
+    } finally {
+      setAcknowledgingId(null);
+    }
+  };
+
+  const showInitialLoading = loading && notifications.length === 0 && !loadError;
 
   return (
-    <div className="flex flex-col h-full space-y-4">
+    <div className="flex flex-col h-full">
       <PageHeader
-        title="System Notifications"
-        subtitle="Review important system alerts and information"
-        rightContent={
-          <button
-            onClick={clearAll}
-            className="flex items-center text-sm font-semibold bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md"
-            disabled={notifications.length === 0}
-          >
-            <Trash2 size={16} className="mr-2" />
-            Clear All
-          </button>
-        }
+        title="Alerts"
+        subtitle="Alarm notifications from rules with Show UI Notification enabled"
       />
 
-      <div className="flex gap-2 px-1">
-        {FILTER_OPTIONS.map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => setFilter(option)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md capitalize ${
-              filter === option
-                ? "bg-blue-600 text-white"
-                : "bg-gray-800 text-gray-400 hover:text-white"
-            }`}
-          >
-            {option}
-          </button>
-        ))}
-      </div>
-      
-      <div className="bg-gray-800 border border-gray-700 rounded-lg">
-        {visible.length === 0 ? (
-          <p className="text-gray-500 text-center py-16">No notifications in this filter</p>
-        ) : (
-          <div className="divide-y divide-gray-700">
-            {visible.map((n) => {
-              const Style = notificationStyles[n.type];
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex flex-wrap gap-2">
+          {(['all', 'active', 'acknowledged'] as StatusFilter[]).map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => setStatusFilter(opt)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md capitalize ${
+                statusFilter === opt
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              {opt === 'active' ? 'Unacknowledged' : opt}
+            </button>
+          ))}
+          <span className="w-px bg-gray-300 dark:bg-gray-700 mx-1" />
+          {(['all', 'info', 'warning', 'critical'] as SeverityFilter[]).map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => setSeverityFilter(opt)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md capitalize ${
+                severityFilter === opt
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+
+        {showInitialLoading && (
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">Loading notifications…</div>
+        )}
+
+        {!showInitialLoading && loadError && (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-6 text-center">
+            <p className="text-red-300 mb-3">{loadError}</p>
+            <button
+              type="button"
+              onClick={() => void fetchNotifications()}
+              className="btn-secondary px-4 py-2 text-sm w-auto"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {!showInitialLoading && !loadError && notifications.length === 0 && (
+          <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-10 text-center">
+            <p className="text-gray-600 dark:text-gray-300">No notifications found</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+              Alarm rules with Show UI Notification will appear here when triggered.
+            </p>
+          </div>
+        )}
+
+        {!showInitialLoading && !loadError && notifications.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-200 dark:divide-gray-700">
+            {notifications.map((n) => {
+              const Icon = severityIcon(n.severity);
               return (
                 <div
                   key={n.id}
-                  className="flex items-center justify-between p-4 hover:bg-gray-700/50 transition-colors"
+                  className="p-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3"
                 >
-                  <div className="flex items-center space-x-4">
-                    <Style.icon className={`${Style.color} w-6 h-6 shrink-0`} />
-                    <div>
-                      <p className="font-medium text-white">{n.message}</p>
-                      <span className="text-xs text-gray-400">{n.time}</span>
+                  <div className="flex gap-3 min-w-0">
+                    <Icon className={`w-5 h-5 shrink-0 mt-0.5 ${severityBadgeClass(n.severity).split(' ')[1] || 'text-gray-400'}`} />
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <h3 className="font-semibold text-gray-900 dark:text-white">{n.title}</h3>
+                        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${severityBadgeClass(n.severity)}`}>
+                          {n.severity}
+                        </span>
+                        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${statusBadgeClass(n.status)}`}>
+                          {n.acknowledged ? 'Acknowledged' : 'Active'}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">{n.message}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {resolveCameraLabel(n)} · {sourceTypeLabel(n.source_type)} ·{' '}
+                        {formatOccurredAt(n.occurred_at)}
+                      </p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => dismiss(n.id)}
-                    className="p-2 text-gray-500 hover:text-white hover:bg-gray-700 rounded-full"
-                    title="Dismiss notification"
-                  >
-                    <X size={18} />
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0 sm:ml-4">
+                    <Link
+                      to={`/events?event=${encodeURIComponent(n.id)}`}
+                      className="btn-secondary px-3 py-1.5 text-xs w-auto"
+                    >
+                      View Event
+                    </Link>
+                    {!n.acknowledged && (
+                      <button
+                        type="button"
+                        disabled={acknowledgingId === n.id}
+                        onClick={() => void handleAcknowledge(n)}
+                        className="btn-primary px-3 py-1.5 text-xs w-auto flex items-center gap-1 disabled:opacity-50"
+                      >
+                        <CheckCircle size={14} />
+                        {acknowledgingId === n.id ? 'Acknowledging…' : 'Acknowledge'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}

@@ -1,0 +1,28 @@
+---
+description: Local AI POC isolation — no deploy, push, CI, or VMS architecture changes
+alwaysApply: true
+---
+
+# Local AI POC constraints
+
+This repo is a **local AI proof of concept**. Existing VMS (live, record, go2rtc, UI, deploy) stays untouched unless the user explicitly requests a change.
+
+## Never
+
+- `git push` or any remote publish
+- Deploy, SSH to production, or change server/Nginx/PM2 config
+- Edit `.github/workflows/` or other CI/CD
+- `git commit` unless the user explicitly asks in that message
+- Change existing VMS architecture, routes, go2rtc, recording, or Live View to “wire in” AI
+
+## Isolation
+
+- Put AI POC code in a dedicated tree (e.g. `ai_poc/`). Do not register it in `backend/app/main.py`, production PM2, or Nginx until the user says the POC is tested and should integrate.
+- Do not add camera fields, Mongo collections used by the NVR, or go2rtc config changes as part of POC scaffolding unless the user asks.
+- Consume streams locally only (go2rtc `_sub` / `frame.jpeg` / recorded `.ts`). Never open extra RTSP to camera IPs.
+- Do not enable analytics on the full fleet. Default off; few cameras only.
+
+## Allowed
+
+- New isolated files, local scripts, local env examples for the POC
+- Read-only inspection of existing VMS code

@@ -7,7 +7,7 @@ from aiohttp.test_utils import make_mocked_request
 from app.core.access_control import deny_unless_super_admin, has_permission, PERMISSION_LIVE_VIEW
 from app.routes.audit import list_audit_logs_endpoint
 from app.routes.auth import login_endpoint, logout_endpoint
-from app.routes.cameras import add_camera_endpoint, delete_camera_endpoint, update_camera_endpoint
+from app.routes.cameras import add_camera_endpoint, delete_camera_endpoint, scan_for_cameras, update_camera_endpoint
 from app.routes.go2rtc import go2rtc_diagnostics, go2rtc_media_auth, go2rtc_workers_rebalance
 from app.routes.locations import post_site_endpoint
 from app.routes.ptz import ptz_list_cameras, ptz_stop_handler
@@ -131,6 +131,32 @@ class TestSuperAdminOnlyEndpoints(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(loc.status, 403)
         deleted = await delete_camera_endpoint(_request("DELETE", "/api/cameras/x", OPERATOR))
         self.assertEqual(deleted.status, 403)
+
+    async def test_discovery_admin_and_super_admin_only(self):
+        for user in (OPERATOR, VIEWER):
+            response = await scan_for_cameras(_request("POST", "/api/cameras/scan", user))
+            self.assertEqual(response.status, 403, user["role"])
+
+        with patch(
+            "app.routes.cameras.scan_cameras",
+            new_callable=AsyncMock,
+            return_value=({"configured": [], "discovered": []}, 200),
+        ):
+            for user in (ADMIN, SUPER):
+                response = await scan_for_cameras(_request("POST", "/api/cameras/scan", user))
+                self.assertEqual(response.status, 200, user["role"])
+                body = json.loads(response.text)
+                self.assertIn("discovered", body)
+
+    async def test_discovery_subnets_forbidden_for_operator(self):
+        from app.routes.cameras import get_discovery_subnets_endpoint
+
+        response = await get_discovery_subnets_endpoint(_request("GET", "/api/cameras/discovery/subnets", OPERATOR))
+        self.assertEqual(response.status, 403)
+
+    async def test_discovery_unauthenticated_401(self):
+        response = await scan_for_cameras(_request("POST", "/api/cameras/scan", None))
+        self.assertEqual(response.status, 401)
 
     async def test_operator_keeps_live_view_permission(self):
         self.assertTrue(has_permission(OPERATOR, PERMISSION_LIVE_VIEW))

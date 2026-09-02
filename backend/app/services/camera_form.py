@@ -41,6 +41,13 @@ def _str(val: Any, default: str = "") -> str:
     return str(val).strip()
 
 
+def _normalize_recording_channel(val: Any) -> str:
+    v = _str(val).lower()
+    if v in ("main", "sub"):
+        return v
+    return _str(val)
+
+
 def _protocol(val: str) -> str:
     p = _str(val, "HIKVISION").upper()
     p = MAKE_ALIASES.get(p, p)
@@ -195,15 +202,15 @@ def prepare_camera_fields(
     # Live view is go2rtc-only — ignore legacy HLS / other providers from DB inserts.
     merged["live_provider"] = "go2rtc"
 
-    for ch_key, legacy in (
-        ("main_channel", "main_channel"),
-        ("sub_channel", "recording_channel"),
-    ):
-        val = camera_data.get(ch_key) or camera_data.get(legacy) or existing.get(ch_key) or existing.get(legacy)
+    for ch_key in ("main_channel", "sub_channel"):
+        val = camera_data.get(ch_key) or existing.get(ch_key)
         if val is not None:
             merged[ch_key] = _str(val)
-            if ch_key == "sub_channel":
-                merged["recording_channel"] = _str(val)
+
+    if camera_data.get("recording_channel") is not None:
+        merged["recording_channel"] = _normalize_recording_channel(camera_data["recording_channel"])
+    elif existing.get("recording_channel") is not None:
+        merged["recording_channel"] = _str(existing.get("recording_channel"))
 
     if "password" in camera_data:
         merged["password"] = _str(camera_data.get("password"))

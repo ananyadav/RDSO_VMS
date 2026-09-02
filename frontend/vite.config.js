@@ -140,7 +140,8 @@ function apiEarlyProxyPlugin() {
             handler(server) {
                 server.middlewares.use((req, res, next) => {
                     const path = (req.url ?? '').split('?')[0];
-                    if (!path.startsWith('/api') && !path.startsWith('/media')) {
+                    // /media/wN goes to go2rtc via server.proxy (not Python — no live WS proxy).
+                    if (!path.startsWith('/api')) {
                         return next();
                     }
                     proxyToBackend(req, res, next);
@@ -178,12 +179,16 @@ export default defineConfig({
     base: '/',
     appType: 'spa',
     plugins: [react(), apiEarlyProxyPlugin(), go2rtcEarlyProxyPlugin()],
+    test: {
+        environment: 'node',
+        include: ['src/**/*.test.ts'],
+    },
     server: {
         host: '127.0.0.1',
         port: 3000,
         strictPort: true,
         proxy: {
-            // HTTP assets under /go2rtc (player JS). Live video WS is /media/wN via Nginx — not here.
+            // HTTP assets under /go2rtc (player JS).
             '/go2rtc': {
                 target: `http://${BACKEND_HOST}:${BACKEND_PORT}`,
                 changeOrigin: true,
@@ -195,6 +200,28 @@ export default defineConfig({
                         return '/index.html';
                     }
                 },
+            },
+            // Direct media (local dev without Nginx). Production uses Nginx /media/wN → go2rtc.
+            '/media/w1': {
+                target: 'http://127.0.0.1:1984',
+                changeOrigin: true,
+                ws: true,
+                rewrite: (path) => path.replace(/^\/media\/w1/, ''),
+                configure: configureWsProxy,
+            },
+            '/media/w2': {
+                target: 'http://127.0.0.1:1985',
+                changeOrigin: true,
+                ws: true,
+                rewrite: (path) => path.replace(/^\/media\/w2/, ''),
+                configure: configureWsProxy,
+            },
+            '/media/w3': {
+                target: 'http://127.0.0.1:1986',
+                changeOrigin: true,
+                ws: true,
+                rewrite: (path) => path.replace(/^\/media\/w3/, ''),
+                configure: configureWsProxy,
             },
         },
     },

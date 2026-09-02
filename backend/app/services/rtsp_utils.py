@@ -383,7 +383,13 @@ def apply_rtsp_urls(camera_doc: dict, *, force_auto: bool = False) -> dict:
     doc["protocol"] = built["protocol"]
     doc["main_channel"] = built["main_channel"]
     doc["sub_channel"] = built["sub_channel"]
-    doc["recording_channel"] = built["recording_channel"]
+    preserved_rc = (camera_doc.get("recording_channel") or "").strip()
+    if preserved_rc.lower() in ("main", "sub"):
+        doc["recording_channel"] = preserved_rc.lower()
+    elif preserved_rc:
+        doc["recording_channel"] = preserved_rc
+    else:
+        doc["recording_channel"] = built["recording_channel"]
     doc["main_rtsp_url"] = built["main_rtsp_url"]
     doc["sub_rtsp_url"] = built["sub_rtsp_url"]
     doc["rtsp_url_source"] = built["rtsp_source"]

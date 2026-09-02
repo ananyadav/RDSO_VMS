@@ -79,3 +79,20 @@
 .live-control-room-scroll::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.22);
 }
+
+/* Phone Live View — grid uses full width; tiles edge-to-edge */
+@media (max-width: 767px) {
+  .live-control-room-wall {
+    width: 100%;
+  }
+
+  [data-live-control-room-wall='true'] [data-live-grid-cols] {
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .live-monitor-player video {
+    object-fit: cover;
+  }
+}

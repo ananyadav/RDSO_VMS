@@ -23,6 +23,9 @@ try:
     camera_collection = database.get_collection("cameras")
     recording_sessions_collection = database.get_collection("recording_sessions")
     recording_status_logs_collection = database.get_collection("recording_status_logs")
+    alarm_rules_collection = database.get_collection("alarm_rules")
+    camera_sequences_collection = database.get_collection("camera_sequences")
+    events_collection = database.get_collection("events")
     pilot_recording_collection = database.get_collection("pilot_recording")
     logging.info(f"✅ Successfully connected to MongoDB: {DATABASE_NAME}")
 except Exception as e:
@@ -529,6 +532,13 @@ async def ensure_database_indexes() -> None:
 
         await ensure_session_indexes()
         await ensure_audit_indexes()
+        from app.services.alarm_rule_service import ensure_alarm_rule_indexes
+        from app.services.camera_sequence_service import ensure_camera_sequence_indexes
+        from app.services.event_service import ensure_event_indexes
+
+        await ensure_alarm_rule_indexes()
+        await ensure_camera_sequence_indexes()
+        await ensure_event_indexes()
         try:
             await camera_collection.drop_index("idx_camera_online")
         except Exception:

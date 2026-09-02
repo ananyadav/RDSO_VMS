@@ -21,6 +21,8 @@ import CameraManagement from "./pages/CameraManagement";
 import Storage from "./pages/Storage";
 import NetworkSettings from "./pages/NetworkSettings";
 import UserManagement from "./pages/UserManagement";
+import AlarmRules from "./pages/AlarmRules";
+import CameraSequences from "./pages/CameraSequences";
 import Notifications from "./pages/Notifications";
 import SystemStatus from "./pages/SystemStatus";
 import Go2RtcDiagnostics from "./pages/Go2RtcDiagnostics";
@@ -321,6 +323,16 @@ function AppShell({
                 )} />
                 <Route path="/playback" render={() => renderProtected(currentUser, PERMISSIONS.RECORDING_VIEW, <Playback key={accessProfileKey} />, 'Playback')} />
                 <Route path="/events" render={() => renderProtected(currentUser, PERMISSIONS.EVENTS, <Events />)} />
+                <Route path="/alarm-rules" render={() => (
+                  isOpsAdminUser(currentUser)
+                    ? <AlarmRules />
+                    : <Redirect to={firstAllowedPath(currentUser) || '/live'} />
+                )} />
+                <Route path="/camera-sequences" render={() => (
+                  isOpsAdminUser(currentUser)
+                    ? <CameraSequences />
+                    : <Redirect to={firstAllowedPath(currentUser) || '/live'} />
+                )} />
                 <Route path="/network-settings" render={() => renderSuperAdminOnly(currentUser, <NetworkSettings />)} />
                 <Route path="/user-management" render={() => (
                   isSuperAdminUser(currentUser)
@@ -329,7 +341,7 @@ function AppShell({
                       ? <UserManagement />
                       : <Redirect to={firstAllowedPath(currentUser) || '/live'} />
                 )} />
-                <Route path="/notifications" render={() => renderProtected(currentUser, PERMISSIONS.SYSTEM, <Notifications />, 'Alerts')} />
+                <Route path="/notifications" render={() => renderProtected(currentUser, PERMISSIONS.EVENTS, <Notifications />, 'Alerts')} />
                 <Route path="/system-status" render={() => renderSuperAdminOnly(currentUser, <SystemStatus />)} />
                 <Route path="/go2rtc-diagnostics" render={() => renderSuperAdminOnly(currentUser, <Go2RtcDiagnostics />)} />
                 <Route path="/maintenance" render={() => renderSuperAdminOnly(currentUser, <Maintenance />)} />

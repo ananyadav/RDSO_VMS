@@ -175,6 +175,10 @@ async def monitor_recording_schedule():
                         await start_camera_recording(camera_id)
 
                     elif not should_record and is_currently_recording:
+                        from app.services.alarm_recording_service import is_alarm_owned_recording
+
+                        if is_alarm_owned_recording(camera_id):
+                            continue
                         logging.info(f"[RECORDING] Stopping recording for camera {camera_id}")
                         await stop_camera_recording(camera_id)
 

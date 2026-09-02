@@ -1,7 +1,5 @@
 import logging
 import asyncio
-import socket
-import ipaddress
 import re
 from typing import Any, Dict, List, Optional
 
@@ -31,6 +29,11 @@ from app.services.camera_sync import (
     stream_config_changed,
 )
 from app.services.camera_bulk_import import bulk_import_cameras
+from app.services.camera_discovery import (
+    discover_cameras_full,
+    normalize_discovery_ip,
+    subnets_from_camera_ips,
+)
 from app.core.auth_context import get_effective_user
 from app.services.camera_access import (
     active_camera_filter,
@@ -54,10 +57,7 @@ from app.services.camera_identity import (
     legacy_playback_camera_item,
     make_camera_uid,
 )
-from wsdiscovery import WSDiscovery
-from urllib.parse import urlparse
-
-logging.basicConfig(level=logging.INFO)
+from app.core.auth_context import get_effective_user
 logger = logging.getLogger(__name__)
 
 _CAM_NUM_RE = re.compile(r"^Cam(\d+)$", re.IGNORECASE)
@@ -128,7 +128,8 @@ def _camera_management_item(cam: dict) -> dict:
         "area": cam.get("area", ""),
         "site": cam.get("site", ""),
         "main_channel": cam.get("main_channel", "101"),
-        "sub_channel": cam.get("sub_channel") or cam.get("recording_channel", "102"),
+        "sub_channel": cam.get("sub_channel", "102"),
+        "recording_channel": cam.get("recording_channel", ""),
         "main_rtsp_url": cam.get("main_rtsp_url", ""),
         "sub_rtsp_url": cam.get("sub_rtsp_url", ""),
         "rtsp_url_source": cam.get("rtsp_url_source", ""),
@@ -170,6 +171,15 @@ def _parse_filters(request) -> Dict[str, Any]:
     elif online_raw in ("0", "false", "no", "offline"):
         filters["online"] = False
     filters["include_inactive"] = include_inactive
+    limit_raw = (q.get("limit") or "").strip()
+    if limit_raw.isdigit():
+        filters["limit"] = min(max(1, int(limit_raw)), 500)
+    offset_raw = (q.get("offset") or "").strip()
+    if offset_raw.isdigit():
+        filters["offset"] = max(0, int(offset_raw))
+    ids_raw = (q.get("ids") or "").strip()
+    if ids_raw:
+        filters["ids"] = [part.strip() for part in ids_raw.split(",") if part.strip()]
     return filters
 
 
@@ -379,10 +389,32 @@ async def query_cameras(
         build_access_filter(user) if user is not None else {},
     )
 
+    id_list = filters.get("ids") or []
+    if id_list:
+        from bson import ObjectId
+        from bson.errors import InvalidId
+
+        oids = []
+        for raw_id in id_list:
+            try:
+                oids.append(ObjectId(str(raw_id).strip()))
+            except (InvalidId, TypeError):
+                continue
+        if oids:
+            query = merge_query(query, {"_id": {"$in": oids}})
+
     projection = None if management else _LIVE_CAMERA_PROJECTION
     cameras: List[dict] = []
     t_mongo0 = _time.perf_counter()
     cursor = camera_collection.find(query, projection).sort("name", 1)
+    page_meta = None
+    limit_val = filters.get("limit")
+    offset_val = max(0, int(filters.get("offset") or 0))
+    if limit_val is not None:
+        limit_n = int(limit_val)
+        total_n = await camera_collection.count_documents(query)
+        page_meta = {"total": total_n, "limit": limit_n, "offset": offset_val}
+        cursor = cursor.skip(offset_val).limit(limit_n)
     async for cam in cursor:
         cameras.append(cam)
     mongo_ms = (_time.perf_counter() - t_mongo0) * 1000
@@ -403,6 +435,7 @@ async def query_cameras(
             "mapping_ms": mapping_ms,
             "camera_count": len(items),
         }
+    query_cameras._page_meta = page_meta  # type: ignore[attr-defined]
     return items
 
 
@@ -587,6 +620,9 @@ async def get_configured_cameras_for_user(request) -> List[dict]:
             item["liveStatus"] = "online" if item.get("online") else "offline"
         item["alertEligible"] = bool(item.get("confirmedOffline"))
 
+    page_meta = getattr(query_cameras, "_page_meta", None)
+    if page_meta:
+        return {"items": cameras, **page_meta}
     return cameras
 
 
@@ -627,12 +663,13 @@ async def backfill_camera_locations() -> int:
     return updated
 
 
-def extract_ip(url):
-    parsed = urlparse(url)
-    return parsed.hostname
+async def get_discovery_subnet_options() -> List[str]:
+    all_db = await get_all_cameras_from_db()
+    ips = [cam.get("ip_address") for cam in all_db if cam.get("ip_address")]
+    return subnets_from_camera_ips(ips)
 
 
-async def scan_cameras(request=None):
+async def scan_cameras(request=None, *, subnet: Optional[str] = None):
     user = await get_effective_user(request)
     configured_raw = await query_cameras(
         user,
@@ -641,84 +678,28 @@ async def scan_cameras(request=None):
     )
     configured = [{k: v for k, v in cam.items() if k != "password"} for cam in configured_raw]
 
-    def _run_wsdiscovery():
-        wsd = WSDiscovery()
-        wsd.start()
-        try:
-            return wsd.searchServices()
-        finally:
-            wsd.stop()
+    all_db = await get_all_cameras_from_db()
+    configured_ips = {
+        normalize_discovery_ip(cam.get("ip_address"))
+        for cam in all_db
+        if cam.get("ip_address")
+    }
 
     try:
-        services = await asyncio.to_thread(_run_wsdiscovery)
-    except Exception as e:
-        logger.warning(f"WS-Discovery failed: {e}")
-        services = []
+        result = await discover_cameras_full(
+            configured_ips=configured_ips,
+            subnet=subnet,
+        )
+    except ValueError as exc:
+        return {"error": str(exc)}, 400
 
-    discovered = []
-    for service in services:
-        types = service.getTypes()
-        if 'NetworkVideoTransmitter' in str(types):
-            xaddrs = service.getXAddrs()
-            if xaddrs:
-                url = xaddrs[0]
-                ip = extract_ip(url)
-                name = f"ONVIF Camera at {ip}" if ip else "Discovered Camera"
-                discovered.append({
-                    "name": name,
-                    "ip_address": ip or "",
-                    "type": "rtsp"
-                })
-
-    port_discovered = await port_scan_cameras()
-    discovered.extend(port_discovered)
-
-    return {"configured": configured, "discovered": discovered}
-
-
-async def port_scan_cameras():
-    networks = [
-        ipaddress.IPv4Network('192.168.41.0/24'),
-        ipaddress.IPv4Network('192.168.48.0/24'),
-        ipaddress.IPv4Network('169.254.20.0/24'),
-        ipaddress.IPv4Network('192.168.1.0/24'),
-        ipaddress.IPv4Network('10.0.0.0/24'),
-    ]
-    configured = await get_all_cameras_from_db()
-    configured_ips = {cam['ip_address'] for cam in configured}
-
-    tasks = []
-    port = 554
-    timeout = 2
-
-    async def check_port(ip):
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(timeout)
-            result = await asyncio.get_running_loop().run_in_executor(None, sock.connect_ex, (str(ip), port))
-            sock.close()
-            if result == 0:
-                return str(ip)
-        except Exception:
-            pass
-        return None
-
-    for network in networks:
-        for ip in network.hosts():
-            tasks.append(check_port(ip))
-
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    discovered_ips = [ip for ip in results if ip and ip not in configured_ips]
-
-    discovered = []
-    for ip in discovered_ips:
-        discovered.append({
-            "name": f"Discovered Camera at {ip}",
-            "ip_address": ip,
-            "type": "rtsp"
-        })
-
-    return discovered
+    return {
+        "configured": configured,
+        "discovered": result["discovered"],
+        "ws_discovery_count": result["ws_discovery_count"],
+        "subnet_scan_count": result["subnet_scan_count"],
+        "subnet_scanned": result["subnet_scanned"],
+    }, 200
 
 
 async def handle_add_camera(camera_data):

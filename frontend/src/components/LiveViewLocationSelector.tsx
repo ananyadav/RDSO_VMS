@@ -31,7 +31,7 @@ interface LiveViewLocationSelectorProps {
 }
 
 const selectClass =
-  'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-3 py-1.5 text-sm min-w-[11rem]';
+  'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-2.5 py-1 sm:px-3 sm:py-1.5 text-sm w-full sm:w-auto sm:min-w-[11rem]';
 
 function confirmBulkLoad(label: string, count: number): boolean {
   return window.confirm(
@@ -189,7 +189,7 @@ export default function LiveViewLocationSelector({
   })();
 
   return (
-    <div className="flex flex-col lg:flex-row gap-3 items-start lg:items-center">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-row gap-2 sm:gap-3 items-stretch lg:items-center">
       <div className="flex items-center gap-2 min-w-0">
         <MapPin size={18} className="text-violet-400 shrink-0" />
         <label className="sr-only">Site / Unit</label>
