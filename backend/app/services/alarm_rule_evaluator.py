@@ -109,15 +109,26 @@ async def _execute_rule_actions(
     configured_actions = _actions_for_rule(rule)
     ui_notification = "ui_notification" in configured_actions
 
+    metadata = dict(signal.metadata or {})
+    display_cfg = rule.get("display")
+    if ui_notification and isinstance(display_cfg, dict) and display_cfg:
+        # RDSO 18.2.28 — carry display switch onto the event for Live View clients.
+        metadata["display_switch"] = {
+            **display_cfg,
+            "camera_id": signal.camera_id,
+            "rule_id": rule_id,
+        }
+
     event = await create_event(
         camera_id=signal.camera_id,
         camera_uid=camera_uid,
         source_type=signal.source_type,
         severity=str(rule.get("severity") or "warning"),
+        priority=rule.get("priority"),
         title=signal.title,
         message=signal.message,
         rule_id=rule_id,
-        metadata=signal.metadata,
+        metadata=metadata,
         occurred_at=signal.occurred_at,
         actions_triggered=configured_actions,
         ui_notification=ui_notification,
@@ -130,19 +141,28 @@ async def _execute_rule_actions(
 
     recording_status = None
     recording_session_id = None
+    pre_alarm_info = None
     if "start_recording" in configured_actions:
         recording_cfg = rule.get("recording") or {}
-        duration_seconds = int(recording_cfg.get("duration_seconds") or 60)
+        post_alarm_seconds = int(
+            recording_cfg.get("post_alarm_seconds")
+            or recording_cfg.get("duration_seconds")
+            or 60
+        )
+        pre_alarm_seconds = int(recording_cfg.get("pre_alarm_seconds") or 0)
         try:
             rec_result = await start_alarm_triggered_recording(
                 signal.camera_id,
                 event_id=event["id"],
                 rule_id=rule_id,
                 source_type=signal.source_type,
-                duration_seconds=duration_seconds,
+                pre_alarm_seconds=pre_alarm_seconds,
+                post_alarm_seconds=post_alarm_seconds,
+                duration_seconds=post_alarm_seconds,
             )
             recording_status = rec_result.get("recording_status")
             recording_session_id = rec_result.get("recording_session_id")
+            pre_alarm_info = rec_result.get("pre_alarm")
         except Exception as exc:
             logger.error(
                 "[alarm-evaluator] start_recording failed rule=%s event=%s: %s",
@@ -152,11 +172,13 @@ async def _execute_rule_actions(
                 exc_info=True,
             )
             recording_status = "failed"
+            pre_alarm_info = None
         try:
             await update_event_recording_result(
                 event["id"],
                 recording_status=str(recording_status or "failed"),
                 recording_session_id=recording_session_id,
+                pre_alarm=pre_alarm_info if isinstance(pre_alarm_info, dict) else None,
             )
         except Exception as exc:
             logger.warning(
@@ -249,6 +271,25 @@ async def process_alarm_signal(raw_signal: dict | NormalizedAlarmSignal) -> dict
         elif status == RULE_STATUS_FAILED:
             failed += 1
 
+    motion_activity = None
+    if signal.source_type == "motion":
+        try:
+            from app.services.motion_recording_controller import notify_motion_activity
+
+            # metadata.active=false can clear; default motion signals mean activity
+            meta = signal.metadata or {}
+            active = meta.get("active")
+            if active is None:
+                active = True
+            motion_activity = await notify_motion_activity(
+                signal.camera_id,
+                active=bool(active),
+                source="alarm_signal",
+            )
+        except Exception as exc:
+            logger.warning("[ALARM] motion activity hook failed: %s", exc)
+            motion_activity = {"ok": False, "error": str(exc)}
+
     return {
         "camera_id": signal.camera_id,
         "source_type": signal.source_type,
@@ -258,6 +299,7 @@ async def process_alarm_signal(raw_signal: dict | NormalizedAlarmSignal) -> dict
         "failed_rules": failed,
         "rule_results": rule_results,
         "events_created": events_created,
+        "motion_activity": motion_activity,
     }
 
 

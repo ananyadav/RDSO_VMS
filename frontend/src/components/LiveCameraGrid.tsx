@@ -16,6 +16,7 @@ import {
   type SlotAssignment,
   type SlotAssignments,
 } from '../lib/liveTileAssignments';
+import { computeLiveGridRowHeight } from '../lib/liveMonitor';
 import type { CameraSequence } from '../lib/cameraSequencesApi';
 
 const GAP_PX = 2;
@@ -35,6 +36,7 @@ export interface LiveGridCamera {
   location_path?: string;
   is_active?: boolean;
   workerId?: number | string | null;
+  ptz?: boolean;
 }
 
 interface LiveCameraGridProps {
@@ -49,6 +51,9 @@ interface LiveCameraGridProps {
   recordingSchedule: Record<string, boolean>;
   onToggleRecording: (cameraId: string) => void;
   onFullscreen?: (camera: LiveGridCamera) => void;
+  onInstantReplay?: (camera: LiveGridCamera) => void;
+  instantReplayCameraId?: string | null;
+  onSelectCamera?: (camera: LiveGridCamera) => void;
   onAssignCamera: (slotIndex: number, cameraId: string | null) => void;
   onAssignSequence: (slotIndex: number, sequenceId: string | null) => void;
   scrollResetKey: string | null;
@@ -88,6 +93,9 @@ const LiveCameraGrid = forwardRef<LiveCameraGridHandle, LiveCameraGridProps>(fun
     recordingSchedule,
     onToggleRecording,
     onFullscreen,
+    onInstantReplay,
+    instantReplayCameraId = null,
+    onSelectCamera,
     onAssignCamera,
     onAssignSequence,
     scrollResetKey,
@@ -118,16 +126,8 @@ const LiveCameraGrid = forwardRef<LiveCameraGridHandle, LiveCameraGridProps>(fun
     const h = el.clientHeight;
     const w = el.clientWidth;
     if (h <= 0) return;
-    const minRow = gridCols >= 6 ? 48 : gridCols >= 5 ? 64 : 80;
-    const visibleRows = Math.max(1, gridCols);
-    const isPhone = w > 0 && w < 768;
-    let nextRow: number;
-    if (isPhone) {
-      nextRow = Math.max(minRow, Math.ceil((h - GAP_PX * (visibleRows - 1)) / visibleRows));
-      if (gridCols === 1) nextRow = Math.max(minRow, h);
-    } else {
-      nextRow = Math.max(minRow, Math.ceil((h - GAP_PX * (gridCols - 1)) / gridCols));
-    }
+    const nextRow = computeLiveGridRowHeight(w, h, gridCols, GAP_PX);
+    if (nextRow <= 0) return;
     const prevRow = rowHeightRef.current;
     const prevStride = prevRow > 0 ? prevRow + GAP_PX : 0;
     const startRow = prevStride > 0 ? Math.max(0, Math.floor(el.scrollTop / prevStride)) : 0;
@@ -302,10 +302,14 @@ const LiveCameraGrid = forwardRef<LiveCameraGridHandle, LiveCameraGridProps>(fun
                           eagerLive={rowStrictlyVisible}
                           observeRootRef={viewportRef}
                           streamsReady={streamsReady}
-                          liveActive={!(showFullscreenModal && fullscreenCameraId != null)}
+                          liveActive={
+                            !(showFullscreenModal && fullscreenCameraId != null) &&
+                            !instantReplayCameraId
+                          }
                           recordingSchedule={recordingSchedule}
                           onToggleRecording={onToggleRecording}
                           onFullscreen={onFullscreen}
+                          onInstantReplay={onInstantReplay}
                           controlRoom={controlRoom}
                         />
                       ) : (
@@ -357,10 +361,20 @@ const LiveCameraGrid = forwardRef<LiveCameraGridHandle, LiveCameraGridProps>(fun
                         eagerLive={forceEager}
                         observeRootRef={viewportRef}
                         streamsReady={streamsReady}
-                        liveActive={!(showFullscreenModal && fullscreenCameraId === camera.id)}
+                        liveActive={
+                          !(showFullscreenModal && fullscreenCameraId === camera.id) &&
+                          instantReplayCameraId !== camera.id
+                        }
                         isRecording={recordingSchedule[camera.id] || false}
                         onToggleRecording={() => onToggleRecording(camera.id)}
                         onFullscreen={onFullscreen}
+                        onInstantReplay={onInstantReplay}
+                        showPtzControls={
+                          !controlRoom &&
+                          Boolean(camera.ptz) &&
+                          selectedCameraId === camera.id
+                        }
+                        onSelect={onSelectCamera}
                         controlRoom={controlRoom}
                       />
                     </div>

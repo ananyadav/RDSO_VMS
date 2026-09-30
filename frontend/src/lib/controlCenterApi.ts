@@ -31,6 +31,7 @@ export interface AuditLogQuery {
   action?: string;
   resource_type?: string;
   resource_id?: string;
+  camera_id?: string;
   start?: string;
   end?: string;
   success?: '' | 'true' | 'false';
@@ -160,6 +161,7 @@ export async function fetchAuditLogs(query: AuditLogQuery): Promise<Paginated<Au
       action: query.action,
       resource_type: query.resource_type,
       resource_id: query.resource_id,
+      camera_id: query.camera_id,
       start: query.start,
       end: query.end,
       success: query.success,

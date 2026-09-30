@@ -44,6 +44,43 @@ class TestCameraServiceSiteFilters(unittest.TestCase):
         query = _location_filters({"ptz": True})
         self.assertEqual(query.get("ptz"), True)
 
+    def test_site_scope_with_floor_meta_does_not_bare_match_stale_site(self):
+        """Stale site=RML-6 on an RML-1 camera_group must not match RML-6 site load."""
+        rml6 = location_fields_for_building_floor("RML - 6", "ISP", "Power Plant")
+        rml1 = location_fields_for_building_floor("RML - 1", "RML-DIP", "SDP1")
+        floor_meta = {
+            rml6["camera_group"]: rml6,
+            rml1["camera_group"]: rml1,
+        }
+        clauses = _site_scope_or_clauses("RML - 6", floor_meta=floor_meta)
+        # No top-level bare {"site": ...} — only fallback with unknown/empty group.
+        bare_site = [c for c in clauses if set(c.keys()) == {"site"}]
+        self.assertEqual(bare_site, [])
+        groups = [c.get("camera_group") for c in clauses if isinstance(c.get("camera_group"), str)]
+        self.assertIn(rml6["camera_group"], groups)
+        self.assertNotIn(rml1["camera_group"], groups)
+        fallback = next(
+            c
+            for c in clauses
+            if "site" in c
+            and "$or" in c
+            and any(
+                isinstance(part.get("camera_group"), dict) and "$nin" in part["camera_group"]
+                for part in c["$or"]
+                if isinstance(part, dict)
+            )
+        )
+        nin = next(
+            (
+                part["camera_group"]["$nin"]
+                for part in fallback["$or"]
+                if isinstance(part.get("camera_group"), dict) and "$nin" in part["camera_group"]
+            ),
+            [],
+        )
+        self.assertIn(rml6["camera_group"], nin)
+        self.assertIn(rml1["camera_group"], nin)
+
 
 if __name__ == "__main__":
     unittest.main()

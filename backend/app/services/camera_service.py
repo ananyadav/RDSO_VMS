@@ -115,23 +115,29 @@ def _camera_list_item(cam: dict, *, admin: bool = False) -> dict:
 
 
 def _camera_management_item(cam: dict) -> dict:
+    from app.services.rtsp_utils import mask_rtsp_url
+    from app.services.network_video_transport import public_multicast_config
+
     item = _camera_list_item(cam, admin=True)
     protocol = (cam.get("protocol") or "HIKVISION").upper()
+    main_rtsp = cam.get("main_rtsp_url", "") or ""
+    sub_rtsp = cam.get("sub_rtsp_url", "") or ""
     item.update({
         "_id": str(cam["_id"]) if isinstance(cam.get("_id"), ObjectId) else cam.get("_id"),
         "ip_address": cam.get("ip_address", ""),
         "port": cam.get("port", 554),
         "model": cam.get("model", ""),
         "username": cam.get("username", "admin"),
-        "password": cam.get("password", ""),
+        # RDSO 18.3.15 — never return camera credentials in API responses
+        "password": "***" if cam.get("password") else "",
         "protocol": protocol,
         "area": cam.get("area", ""),
         "site": cam.get("site", ""),
         "main_channel": cam.get("main_channel", "101"),
         "sub_channel": cam.get("sub_channel", "102"),
         "recording_channel": cam.get("recording_channel", ""),
-        "main_rtsp_url": cam.get("main_rtsp_url", ""),
-        "sub_rtsp_url": cam.get("sub_rtsp_url", ""),
+        "main_rtsp_url": mask_rtsp_url(main_rtsp) if main_rtsp else "",
+        "sub_rtsp_url": mask_rtsp_url(sub_rtsp) if sub_rtsp else "",
         "rtsp_url_source": cam.get("rtsp_url_source", ""),
         "worker_id": cam.get("worker_id", ""),
         "live_provider": cam.get("live_provider", "go2rtc"),
@@ -140,6 +146,7 @@ def _camera_management_item(cam: dict) -> dict:
         "ptz_channel": cam.get("ptz_channel", 1),
         "online": False,
         "status": "Disabled" if cam.get("is_active") is False else "Active",
+        "multicast": public_multicast_config(cam.get("multicast")),
     })
     return item
 
@@ -188,30 +195,32 @@ def _site_scope_or_clauses(
     *,
     floor_meta: Dict[str, Dict[str, str]] | None = None,
 ) -> List[Dict[str, Any]]:
-    """Match all cameras for a site (Load all cameras) — same rules as location hierarchy."""
+    """Match all cameras for a site (Load all cameras) — same rules as location hierarchy.
+
+    Prefer camera_group / Location Master over the document ``site`` field so stale
+    site values (e.g. every cam tagged RML-6) do not inflate site-wide loads.
+    """
     from app.services.location_store import slugify
 
     site_name = (site or "").strip()
     if not site_name:
         return []
 
-    or_clauses: List[Dict[str, Any]] = [
-        {"site": {"$regex": f"^{re.escape(site_name)}$", "$options": "i"}},
-    ]
+    site_regex = {"$regex": f"^{re.escape(site_name)}$", "$options": "i"}
+    or_clauses: List[Dict[str, Any]] = []
     site_slug = slugify(site_name)
-    if site_slug:
-        or_clauses.append(
-            {"camera_group": {"$regex": f"^{re.escape(site_slug)}_", "$options": "i"}}
-        )
 
     if floor_meta:
         groups: set[str] = set()
+        all_known: set[str] = set()
         for group, meta in floor_meta.items():
+            all_known.add(group)
             if (meta.get("site") or "").strip().lower() != site_name.lower():
                 continue
             groups.add(group)
             for alias in legacy_camera_group_aliases(group, site=site_name):
                 groups.add(alias)
+                all_known.add(alias)
         for group in groups:
             or_clauses.append({"camera_group": group})
             meta = floor_meta.get(group) or {}
@@ -220,10 +229,32 @@ def _site_scope_or_clauses(
             if building and floor:
                 or_clauses.append(
                     {
+                        "site": site_regex,
                         "building": {"$regex": f"^{re.escape(building)}$", "$options": "i"},
                         "$or": [{"floor": floor}, {"floor_group": floor}],
                     }
                 )
+        # Fallback: site field only when camera_group is empty or unknown to Location Master
+        # (same as hierarchy: meta.site or cam.site). Do not use bare site or slug prefix —
+        # those pull cams whose group belongs to another site or is unmapped.
+        unknown_group_clause: Dict[str, Any] = {
+            "site": site_regex,
+            "$or": [
+                {"camera_group": {"$exists": False}},
+                {"camera_group": None},
+                {"camera_group": ""},
+            ],
+        }
+        if all_known:
+            unknown_group_clause["$or"].append({"camera_group": {"$nin": sorted(all_known)}})
+        or_clauses.append(unknown_group_clause)
+    else:
+        # No Location Master — legacy slug + site field.
+        if site_slug:
+            or_clauses.append(
+                {"camera_group": {"$regex": f"^{re.escape(site_slug)}_", "$options": "i"}}
+            )
+        or_clauses.append({"site": site_regex})
 
     return or_clauses
 
@@ -370,7 +401,9 @@ async def query_cameras(
         or filters.get("floor")
         or filters.get("site")
     )
-    if needs_meta and not lean:
+    # Site-wide Live View (lean) still needs Location Master so counts match the
+    # hierarchy picker (camera_group site), not a stale document site field.
+    if needs_meta and (not lean or filters.get("site")):
         from app.services.location_store import list_buildings
 
         floor_meta = build_floor_group_meta(await list_buildings())

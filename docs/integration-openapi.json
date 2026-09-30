@@ -1,0 +1,301 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "CCTV VMS Integration API",
+    "version": "18.1.30",
+    "description": "Authenticated REST integration surface for cameras, live/media routing, recording, playback, events, ONVIF interoperability (RDSO 18.1.30 / 18.3.15), and CCC open third-party integration facade (RDSO 18.6.22.8 — GIS deferred). Camera passwords and integration secrets are never returned after create/rotate (except once). Thin reference client: sdk/integration/vms_client.py."
+  },
+  "servers": [{ "url": "/" }],
+  "components": {
+    "securitySchemes": {
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "session"
+      },
+      "bearerIntegrationSecret": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "CCC device or VMS integration secret (never returned after create/rotate except once)."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": { "error": { "type": "string" } }
+      },
+      "OnvifProfileS": {
+        "type": "object",
+        "properties": {
+          "supported": { "type": "boolean" },
+          "message": { "type": "string" },
+          "profiles": { "type": "array", "items": { "type": "object" } },
+          "main": { "type": "object" },
+          "sub": { "type": "object" }
+        }
+      },
+      "InteropSummary": {
+        "type": "object",
+        "properties": {
+          "camera_id": { "type": "string" },
+          "profile_s": { "type": "object" },
+          "profile_g": { "type": "object" },
+          "vendor": { "type": "object" },
+          "integration_api": { "type": "object" }
+        }
+      }
+    }
+  },
+  "security": [{ "sessionCookie": [] }],
+  "paths": {
+    "/api/cameras": {
+      "get": {
+        "summary": "List cameras (ACL filtered)",
+        "responses": { "200": { "description": "Camera list" }, "401": { "description": "Unauthorized" } }
+      }
+    },
+    "/api/cameras/configured": {
+      "get": {
+        "summary": "Configured cameras (credentials masked)",
+        "responses": { "200": { "description": "Management list without plaintext passwords" } }
+      }
+    },
+    "/api/cameras/{id}/onvif/profile-s": {
+      "get": {
+        "summary": "ONVIF Profile S profiles and masked stream URIs",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Profile S resolve result", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OnvifProfileS" } } } },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Forbidden" },
+          "404": { "description": "Camera not found" }
+        }
+      }
+    },
+    "/api/cameras/{id}/onvif/resolve-streams": {
+      "post": {
+        "summary": "Resolve GetStreamUri; optional persist",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "persist": { "type": "boolean" } }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Resolved" }, "422": { "description": "Unsupported / failed" } }
+      }
+    },
+    "/api/cameras/{id}/interop": {
+      "get": {
+        "summary": "Profile S/G and vendor interoperability summary",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "resolve", "in": "query", "schema": { "type": "boolean" } }
+        ],
+        "responses": {
+          "200": { "description": "Interop summary", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/InteropSummary" } } } }
+        }
+      }
+    },
+    "/api/cameras/{id}/client-media": {
+      "get": {
+        "summary": "Server-independent live/media routing for a camera",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Media routing" }, "401": { "description": "Unauthorized" }, "403": { "description": "Forbidden" } }
+      }
+    },
+    "/api/system/interop": {
+      "get": {
+        "summary": "Fleet/software ONVIF + integration status (RDSO 18.1.30)",
+        "parameters": [{ "name": "limit", "in": "query", "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "System interop status" },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Forbidden" }
+        }
+      }
+    },
+    "/api/recordings/{cameraId}/status": {
+      "get": { "summary": "Recording status", "responses": { "200": { "description": "Status" } } }
+    },
+    "/api/playback/search": {
+      "get": { "summary": "Playback search", "responses": { "200": { "description": "Search results" } } }
+    },
+    "/api/playback/export": {
+      "post": { "summary": "Export playback clip", "responses": { "200": { "description": "Export job/result" } } }
+    },
+    "/api/events": {
+      "get": { "summary": "List events/alarms", "responses": { "200": { "description": "Events" } } }
+    },
+    "/api/alarm-rules": {
+      "get": { "summary": "List alarm rules", "responses": { "200": { "description": "Rules" } } }
+    },
+    "/api/recordings/edge/capability/{cameraId}": {
+      "get": { "summary": "Edge Profile G / ISAPI capability", "responses": { "200": { "description": "Capability" } } }
+    },
+    "/api/docs/integration": {
+      "get": {
+        "summary": "Integration guide (markdown)",
+        "security": [],
+        "responses": { "200": { "description": "Markdown docs" } }
+      }
+    },
+    "/api/docs/integration/openapi.json": {
+      "get": {
+        "summary": "This OpenAPI document",
+        "security": [],
+        "responses": { "200": { "description": "OpenAPI 3 JSON" } }
+      }
+    },
+    "/api/ccc/integrations/open/capability": {
+      "get": {
+        "summary": "RDSO 18.6.22.8 open integration contract",
+        "security": [],
+        "responses": { "200": { "description": "Common third-party contract (no secrets, GIS deferred)" } }
+      }
+    },
+    "/api/ccc/integrations/open/identity": {
+      "get": {
+        "summary": "CCC system identity stamp",
+        "security": [],
+        "responses": { "200": { "description": "Identity" } }
+      }
+    },
+    "/api/ccc/integrations/open/register": {
+      "post": {
+        "summary": "Admin register device or VMS integration",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "kind": { "type": "string", "enum": ["device", "vms"] },
+                  "name": { "type": "string" },
+                  "type": { "type": "string" },
+                  "source_id": { "type": "string" },
+                  "base_url": { "type": "string" }
+                }
+              },
+              "examples": {
+                "device": { "value": { "kind": "device", "name": "Gate sensor", "type": "external_sensor", "location": "Gate-A" } },
+                "vms": { "value": { "kind": "vms", "source_id": "purchaser-vms", "label": "Site VMS", "base_url": "https://vms.example.com", "credential": "api-token", "enabled": true, "capabilities": { "live": true, "events": true } } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Created (integration secret shown once when applicable)" },
+          "400": { "description": "Validation error" },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Admin required" }
+        }
+      }
+    },
+    "/api/ccc/integrations/open/health": {
+      "post": {
+        "summary": "Heartbeat / health for device or VMS source",
+        "security": [{ "bearerIntegrationSecret": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target": { "type": "string", "enum": ["device", "vms"] },
+                  "device_id": { "type": "string" },
+                  "source_id": { "type": "string" },
+                  "status": { "type": "string" },
+                  "health": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Health accepted" }, "401": { "description": "Unauthorized" }, "403": { "description": "Disabled" } }
+      }
+    },
+    "/api/ccc/integrations/open/devices": {
+      "get": {
+        "summary": "List devices and VMS integrations (secrets redacted)",
+        "responses": { "200": { "description": "Registry summary" }, "401": { "description": "Unauthorized" } }
+      }
+    },
+    "/api/ccc/integrations/open/events": {
+      "post": {
+        "summary": "Ingest alert into existing CCC event pipeline",
+        "description": "Delegates to device or VMS ingest. Supports Idempotency-Key / external_event_id. Location/lat/lon preserved as metadata only — GIS format storage not claimed.",
+        "security": [{ "bearerIntegrationSecret": [] }],
+        "parameters": [
+          { "name": "Idempotency-Key", "in": "header", "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["target", "title"],
+                "properties": {
+                  "target": { "type": "string", "enum": ["device", "vms"] },
+                  "device_id": { "type": "string" },
+                  "source_id": { "type": "string" },
+                  "title": { "type": "string" },
+                  "message": { "type": "string" },
+                  "severity": { "type": "string", "enum": ["info", "warning", "critical"] },
+                  "priority": { "type": "integer" },
+                  "source_type": { "type": "string" },
+                  "occurred_at": { "type": "string", "format": "date-time" },
+                  "location": { "type": "string" },
+                  "latitude": { "type": "number" },
+                  "longitude": { "type": "number" },
+                  "external_event_id": { "type": "string" },
+                  "metadata": { "type": "object" }
+                }
+              },
+              "example": {
+                "target": "device",
+                "device_id": "64f0...",
+                "title": "Door forced",
+                "severity": "critical",
+                "source_type": "external_sensor",
+                "location": "Gate-A",
+                "latitude": 28.6139,
+                "longitude": 77.209,
+                "external_event_id": "ext-2026-001",
+                "occurred_at": "2026-09-14T09:30:00Z"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Event created via existing pipeline" },
+          "200": { "description": "Duplicate idempotent replay" },
+          "400": { "description": "Validation error" },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Disabled source" },
+          "413": { "description": "Payload too large" }
+        }
+      }
+    },
+    "/api/ccc/devices/{id}/ingest": {
+      "post": {
+        "summary": "Canonical device alert/heartbeat ingest",
+        "security": [{ "bearerIntegrationSecret": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Heartbeat" }, "201": { "description": "Event created" } }
+      }
+    },
+    "/api/ccc/vms-integrations/{sourceId}/alerts": {
+      "post": {
+        "summary": "Canonical external VMS alert webhook",
+        "security": [{ "bearerIntegrationSecret": [] }],
+        "parameters": [{ "name": "sourceId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Accepted" }, "401": { "description": "Unauthorized" }, "403": { "description": "Disabled" } }
+      }
+    }
+  }
+}

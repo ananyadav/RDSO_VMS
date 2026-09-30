@@ -137,10 +137,31 @@ def apply_retention_days(days: float) -> None:
     logger.info("[STORAGE] Retention set to %.1f day(s)", days)
 
 
-def apply_recordings_dir(path: str | Path) -> Path:
+def apply_recordings_dir(path: str | Path, *, validate: bool = True) -> Path:
+    """Set the runtime recordings root.
+
+    When validate=True (default for admin changes), the path must exist/be
+    creatable and writable. Failed mounts are reported — never swapped to
+    another disk volume.
+    """
     global _runtime_recordings_dir
     resolved = normalize_recordings_path(path)
-    resolved.mkdir(parents=True, exist_ok=True)
+    if validate:
+        from app.services.storage_volume import probe_storage_path
+
+        probe = probe_storage_path(resolved, create_if_missing=True)
+        if not probe.get("writable"):
+            raise ValueError(
+                probe.get("error")
+                or f"Recording folder is not writable: {resolved}"
+            )
+        resolved = Path(probe["path"])
+    else:
+        try:
+            resolved.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            logger.warning("[STORAGE] Could not create recordings dir %s: %s", resolved, exc)
+
     _runtime_recordings_dir = str(resolved)
 
     import app.services.video_recording as vr
@@ -175,7 +196,8 @@ async def load_storage_settings() -> None:
                 repaired = _repair_mixed_recordings_path(stored) or stored
                 if repaired != stored:
                     persist_fix = True
-            resolved = apply_recordings_dir(repaired)
+            # Startup: apply configured path without failing boot if mount is down.
+            resolved = apply_recordings_dir(repaired, validate=False)
             if persist_fix and str(resolved) != stored:
                 logger.warning(
                     "[STORAGE] Persisting repaired recordings_dir in MongoDB: %s -> %s",
@@ -198,6 +220,9 @@ async def load_storage_settings() -> None:
 def get_storage_settings_public() -> dict:
     days = get_effective_retention_days()
     folder = get_effective_recordings_dir()
+    from app.services.storage_volume import probe_storage_path
+
+    health = probe_storage_path(folder, create_if_missing=False)
     return {
         "retention_days": round(days, 3),
         "retention_seconds": int(days * 86400),
@@ -205,6 +230,15 @@ def get_storage_settings_public() -> dict:
         "recordings_dir": str(folder),
         "recordings_dir_editable": True,
         "retention_editable": True,
+        "storage_status": health.get("status"),
+        "storage_status_label": health.get("status_label"),
+        "storage_writable": bool(health.get("writable")),
+        "storage_allow_recording": bool(health.get("allow_recording")),
+        "storage_model": health.get("storage_model"),
+        "storage_error": health.get("error"),
+        "disk_total_gb": health.get("disk_total_gb"),
+        "disk_used_gb": health.get("disk_used_gb"),
+        "disk_free_gb": health.get("disk_free_gb"),
     }
 
 

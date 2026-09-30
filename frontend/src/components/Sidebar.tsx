@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   Camera, Play, Calendar, Zap, SlidersHorizontal, HardDrive,
-  Network, Users, Bell, Activity, Wrench, Radio, Shield, BellRing, ListOrdered, type LucideIcon,
+  Network, Users, Bell, Activity, Wrench, Radio, Shield, BellRing, ListOrdered, FileText, Settings, LayoutDashboard, type LucideIcon,
 } from 'lucide-react';
 import type { User } from '../services/authService';
 import { PERMISSIONS, type Permission, hasPermission, isAdminUser, isOpsAdminUser, isSuperAdminUser } from '../lib/permissions';
@@ -19,17 +19,20 @@ type NavItem = {
 
 const mainNav: NavItem[] = [
   { label: 'Live View', href: '/live', icon: Camera, permission: PERMISSIONS.LIVE_VIEW },
+  { label: 'CCC', href: '/ccc', icon: LayoutDashboard, permission: PERMISSIONS.LIVE_VIEW },
   { label: 'Playback', href: '/playback', icon: Play, permission: PERMISSIONS.RECORDING_VIEW },
   { label: 'Events', href: '/events', icon: Calendar, permission: PERMISSIONS.EVENTS },
+  { label: 'Reports', href: '/reports', icon: FileText, permission: PERMISSIONS.EVENTS },
   { label: 'Alarm Rules', href: '/alarm-rules', icon: BellRing, permission: PERMISSIONS.EVENTS, opsAdminOnly: true },
   { label: 'PTZ', href: '/ptz', icon: Zap, permission: PERMISSIONS.LIVE_VIEW },
 ];
 
 const configNav: NavItem[] = [
+  { label: 'System Settings', href: '/system-settings', icon: Settings, permission: PERMISSIONS.SYSTEM, opsAdminOnly: true },
   { label: 'Cameras', href: '/camera-management', icon: SlidersHorizontal, permission: PERMISSIONS.CAMERAS, opsAdminOnly: true },
   { label: 'Camera Sequences', href: '/camera-sequences', icon: ListOrdered, permission: PERMISSIONS.CAMERAS, opsAdminOnly: true },
-  { label: 'Storage', href: '/storage', icon: HardDrive, permission: PERMISSIONS.SYSTEM, superAdminOnly: true },
-  { label: 'Network', href: '/network-settings', icon: Network, permission: PERMISSIONS.SYSTEM, superAdminOnly: true },
+  { label: 'Storage', href: '/storage', icon: HardDrive, permission: PERMISSIONS.SYSTEM, opsAdminOnly: true },
+  { label: 'Network', href: '/network-settings', icon: Network, permission: PERMISSIONS.SYSTEM, opsAdminOnly: true },
   { label: 'Users', href: '/user-management', icon: Users, permission: PERMISSIONS.USERS, adminOnly: true },
   { label: 'Alerts', href: '/notifications', icon: Bell, permission: PERMISSIONS.EVENTS },
 ];

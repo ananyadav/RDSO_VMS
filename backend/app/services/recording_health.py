@@ -185,6 +185,12 @@ async def get_recording_health(
         },
         "cameras": cameras,
     }
+    try:
+        from app.services.recording_config import get_recording_capacity_info
+
+        payload["capacity"] = get_recording_capacity_info()
+    except Exception:
+        pass
     _cache["payload"] = payload
     _cache["expires_at"] = now_mono + _CACHE_TTL_SEC
     return payload

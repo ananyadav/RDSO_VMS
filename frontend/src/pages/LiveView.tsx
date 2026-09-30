@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import FullscreenCameraModal from '../components/FullscreenCameraModal';
+import InstantReplayModal from '../components/InstantReplayModal';
 import CameraSelector from '../components/CameraSelector';
 import LiveCameraGrid from '../components/LiveCameraGrid';
 import LiveCameraPool from '../components/LiveCameraPool';
@@ -30,6 +31,13 @@ import { resolveLiveViewFromUrl } from '../lib/urlViewState';
 import { useLiveControlRoom } from '../context/LiveControlRoomContext';
 import type { LiveCameraGridHandle } from '../components/LiveCameraGrid';
 import {
+  LIVE_MONITOR_IDS,
+  loadLiveMonitorState,
+  openLiveMonitorWindow,
+  parseMonitorId,
+  saveLiveMonitorState,
+} from '../lib/liveMonitor';
+import {
   assignCameraToSlot,
   assignSequenceToSlot,
   assignedCameraIds,
@@ -39,17 +47,15 @@ import {
   type SlotAssignments,
 } from '../lib/liveTileAssignments';
 import { listCameraSequences, type CameraSequence } from '../lib/cameraSequencesApi';
+import { useAlarmDisplay } from '../hooks/useAlarmDisplay';
+import { LIVE_LAYOUTS, layoutById, type LiveLayoutDef } from '../lib/liveLayouts';
+import {
+  applyAlarmDisplaySwitch,
+  snapshotLiveViewState,
+  type LiveViewSnapshot,
+} from '../lib/alarmDisplaySwitch';
 
-const LIVE_LAYOUTS = [
-  { cols: 1, label: '1x1' },
-  { cols: 2, label: '2x2' },
-  { cols: 3, label: '3x3' },
-  { cols: 4, label: '4x4' },
-  { cols: 5, label: '5x5' },
-  { cols: 6, label: '6x6' },
-] as const;
-
-type LiveLayout = (typeof LIVE_LAYOUTS)[number];
+type LiveLayout = LiveLayoutDef;
 
 interface Camera {
   id: string;
@@ -64,6 +70,7 @@ interface Camera {
   camera_group?: string;
   location_path?: string;
   is_active?: boolean;
+  ptz?: boolean;
 }
 
 interface LiveViewProps {
@@ -78,6 +85,13 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
   const gridRef = useRef<LiveCameraGridHandle>(null);
   const wallRef = useRef<HTMLDivElement>(null);
   const layoutUserPickedRef = useRef(false);
+  const monitorId = useMemo(
+    () => parseMonitorId(initialParams.current?.get('monitor') ?? params.get('monitor')),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- identity fixed from first URL
+    [],
+  );
+  const restoredMonitorRef = useRef(false);
+  const skipNextAssignmentSeedRef = useRef(false);
 
   const [buildings, setBuildings] = useState<BuildingGroup[]>([]);
   const [configuredSiteNames, setConfiguredSiteNames] = useState<string[]>([]);
@@ -91,6 +105,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
   const [go2rtcReady, setGo2rtcReady] = useState(true);
   const [fullscreenCamera, setFullscreenCamera] = useState<Camera | null>(null);
   const [showFullscreenModal, setShowFullscreenModal] = useState(false);
+  const [instantReplayCamera, setInstantReplayCamera] = useState<Camera | null>(null);
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
   const [selectedLayout, setSelectedLayout] = useState<LiveLayout>(LIVE_LAYOUTS[1]);
   const [slotAssignments, setSlotAssignments] = useState<SlotAssignments>([]);
@@ -105,19 +120,98 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
     setSelectedLayout(LIVE_LAYOUTS[0]);
   }, [isPhone]);
 
-  const openFullscreen = (camera: Camera) => {
+  const openFullscreen = useCallback((camera: Camera) => {
+    setInstantReplayCamera(null);
     setFullscreenCamera(camera);
     setShowFullscreenModal(true);
-  };
+  }, []);
 
-  const closeFullscreen = () => {
+  const closeFullscreen = useCallback(() => {
     setShowFullscreenModal(false);
     setFullscreenCamera(null);
+  }, []);
+
+  const selectedLayoutRef = useRef(selectedLayout);
+  const slotAssignmentsRef = useRef(slotAssignments);
+  const authorizedIdsRef = useRef(new Set<string>());
+  const alarmSnapshotRef = useRef<LiveViewSnapshot | null>(null);
+  selectedLayoutRef.current = selectedLayout;
+  slotAssignmentsRef.current = slotAssignments;
+
+  const handleAlarmLayoutSwitch = useCallback(
+    (args: {
+      event: { id: string; camera_id: string };
+      camera: { id: string };
+      config: Parameters<typeof applyAlarmDisplaySwitch>[0]['config'];
+    }) => {
+      const auth = authorizedIdsRef.current;
+      if (!auth.has(args.camera.id)) return false;
+      if (!alarmSnapshotRef.current) {
+        alarmSnapshotRef.current = snapshotLiveViewState(
+          args.event.id,
+          selectedLayoutRef.current.label,
+          slotAssignmentsRef.current,
+        );
+      }
+      const next = applyAlarmDisplaySwitch({
+        config: args.config,
+        cameraId: args.camera.id,
+        prevLayoutLabel: selectedLayoutRef.current.label,
+        prevSlots: slotAssignmentsRef.current,
+        authorizedCameraIds: auth,
+      });
+      if (!next) return false;
+      layoutUserPickedRef.current = true;
+      setSelectedLayout(layoutById(next.layoutLabel));
+      setSlotAssignments(next.slots);
+      prevLayoutColsRef.current = layoutById(next.layoutLabel).cols;
+      return true;
+    },
+    [],
+  );
+
+  const handleAlarmLayoutRestore = useCallback((_eventId: string) => {
+    const snap = alarmSnapshotRef.current;
+    alarmSnapshotRef.current = null;
+    if (!snap) return;
+    layoutUserPickedRef.current = true;
+    setSelectedLayout(layoutById(snap.layoutLabel));
+    setSlotAssignments(snap.slots);
+    prevLayoutColsRef.current = layoutById(snap.layoutLabel).cols;
+  }, []);
+
+  const {
+    activeEvent: alarmDisplayEvent,
+    queueCount: alarmQueueCount,
+    alarmDisplayActive,
+    alarmLayoutSwitchActive,
+    manualReset: alarmManualReset,
+    acknowledgeActive: alarmAcknowledge,
+    onOperatorCloseFullscreen,
+  } = useAlarmDisplay({
+    cameras,
+    enabled: !controlRoom,
+    monitorId,
+    openFullscreen,
+    closeFullscreen,
+    onLayoutSwitch: handleAlarmLayoutSwitch,
+    onLayoutRestore: handleAlarmLayoutRestore,
+  });
+
+  const openInstantReplay = (camera: Camera) => {
+    setShowFullscreenModal(false);
+    setFullscreenCamera(null);
+    setInstantReplayCamera(camera);
+  };
+
+  const closeInstantReplay = () => {
+    setInstantReplayCamera(null);
   };
 
   const enterControlRoom = useCallback(() => {
     setShowFullscreenModal(false);
     setFullscreenCamera(null);
+    setInstantReplayCamera(null);
     const el = wallRef.current;
     if (!el) return;
     const anyEl = el as HTMLElement & {
@@ -210,10 +304,15 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
         );
 
         const fromUrl = resolveLiveViewFromUrl(initialParams.current!, visibleBuildings);
+        const saved = loadLiveMonitorState(monitorId);
         if (fromUrl) {
           setSelectedSite(fromUrl.site);
           setSelectedBuildingKey(fromUrl.buildingKey);
           setSelectedGroup(fromUrl.group);
+        } else if (saved?.group || saved?.site) {
+          setSelectedSite(saved.site);
+          setSelectedBuildingKey(saved.building);
+          setSelectedGroup(saved.group);
         } else {
           const initial = initialLiveViewSelection(visibleBuildings, access);
           setSelectedSite(initial.site);
@@ -221,11 +320,20 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
           setSelectedGroup(initial.group);
         }
 
-        const layoutLabel = initialParams.current!.get('layout');
-        const layoutMatch = layoutLabel
-          ? LIVE_LAYOUTS.find((l) => l.label === layoutLabel)
-          : undefined;
-        if (layoutMatch) setSelectedLayout(layoutMatch);
+        const layoutLabel = initialParams.current!.get('layout') || saved?.layoutLabel;
+        if (layoutLabel) setSelectedLayout(layoutById(layoutLabel));
+
+        if (saved?.slots?.length && !fromUrl?.group) {
+          skipNextAssignmentSeedRef.current = true;
+          setSlotAssignments(saved.slots);
+          assignmentsGroupRef.current = saved.group;
+          restoredMonitorRef.current = true;
+        } else if (saved?.slots?.length && saved.group && fromUrl?.group === saved.group) {
+          skipNextAssignmentSeedRef.current = true;
+          setSlotAssignments(saved.slots);
+          assignmentsGroupRef.current = saved.group;
+          restoredMonitorRef.current = true;
+        }
 
         markHydrated();
       } catch (err) {
@@ -235,10 +343,11 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
       }
     };
     void loadGroups();
-  }, [markHydrated]);
+  }, [markHydrated, monitorId]);
 
   const urlValues = useMemo(
     () => ({
+      monitor: String(monitorId),
       site: selectedSite,
       building: selectedBuildingKey,
       group: selectedGroup,
@@ -247,6 +356,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
       fs: showFullscreenModal && fullscreenCamera ? fullscreenCamera.id : null,
     }),
     [
+      monitorId,
       selectedSite,
       selectedBuildingKey,
       selectedGroup,
@@ -427,6 +537,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
     () => new Set(sortedCameras.map((c) => c.id)),
     [sortedCameras],
   );
+  authorizedIdsRef.current = authorizedIds;
 
   const authorizedSequenceIds = useMemo(
     () => new Set(sequences.map((s) => s.id)),
@@ -434,6 +545,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
   );
 
   // Reset tile assignments once per location scope load (not on online-status refresh).
+  // If cameras arrive after an empty first paint, seed defaults once so tiles (and IR) appear.
   useEffect(() => {
     if (!selectedGroup) {
       setSlotAssignments([]);
@@ -441,12 +553,43 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
       return;
     }
     if (camerasLoading) return;
-    if (assignmentsGroupRef.current === selectedGroup) return;
-    assignmentsGroupRef.current = selectedGroup;
+    if (skipNextAssignmentSeedRef.current && assignmentsGroupRef.current === selectedGroup) {
+      skipNextAssignmentSeedRef.current = false;
+      return;
+    }
     const ids = sortedCameras.map((c) => c.id);
+    if (assignmentsGroupRef.current === selectedGroup) {
+      if (ids.length === 0) return;
+      setSlotAssignments((prev) => {
+        if (prev.some((a) => a != null)) return prev;
+        return buildDefaultAssignments(ids, gridCols);
+      });
+      return;
+    }
+    assignmentsGroupRef.current = selectedGroup;
     setSlotAssignments(buildDefaultAssignments(ids, gridCols));
     prevLayoutColsRef.current = gridCols;
   }, [selectedGroup, camerasLoading, sortedCameras, gridCols]);
+
+  // Persist independent layout/camera selection per logical monitor (RDSO 18.1.27).
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    saveLiveMonitorState(monitorId, {
+      layoutLabel: selectedLayout.label,
+      site: selectedSite,
+      building: selectedBuildingKey,
+      group: selectedGroup,
+      slots: slotAssignments,
+    });
+  }, [
+    monitorId,
+    selectedLayout.label,
+    selectedSite,
+    selectedBuildingKey,
+    selectedGroup,
+    slotAssignments,
+    hydratedRef,
+  ]);
 
   // Preserve assignments when layout changes during the session.
   useEffect(() => {
@@ -540,20 +683,48 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
       value={selectedLayout.label}
       onChange={(e) => {
         layoutUserPickedRef.current = true;
-        setSelectedLayout(
-          LIVE_LAYOUTS.find((l) => l.label === e.target.value) ?? LIVE_LAYOUTS[0],
-        );
+        setSelectedLayout(layoutById(e.target.value));
       }}
       className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-2 py-0.5 sm:px-3 sm:py-1 text-xs sm:text-sm"
-      title="Grid layout"
+      title="Display layout (RDSO 18.2.7 — Full screen / Quad / 4×4 / site divisions)"
+      aria-label="Live View grid layout"
     >
       {layoutOptions.map((layout) => (
-        <option key={layout.label} value={layout.label}>
-          {layout.label}
+        <option key={layout.id} value={layout.label}>
+          {layout.rdsoName}
         </option>
       ))}
     </select>
   );
+
+  const monitorControls = !isPhone ? (
+    <div className="flex items-center gap-1.5" title="Logical display window (RDSO 18.2.24–18.2.26). Place on workstation or external/LFD via OS. Physical 55-inch acceptance is deployment testing.">
+      <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+        Display {monitorId}/{LIVE_MONITOR_IDS.length}
+      </span>
+      <select
+        className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded px-2 py-0.5 text-xs sm:text-sm"
+        defaultValue=""
+        onChange={(e) => {
+          const next = Number(e.target.value);
+          e.target.value = '';
+          if (!Number.isFinite(next) || next < 1) return;
+          const win = openLiveMonitorWindow(next);
+          if (!win) toast.error('Could not open display window (popup blocked?)');
+        }}
+        aria-label="Open another Live View display window"
+      >
+        <option value="" disabled>
+          Open display…
+        </option>
+        {LIVE_MONITOR_IDS.filter((id) => id !== monitorId).map((id) => (
+          <option key={id} value={id}>
+            Display {id}
+          </option>
+        ))}
+      </select>
+    </div>
+  ) : null;
 
   return (
     <>
@@ -571,6 +742,7 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
             subtitle={subtitle}
             rightContent={
               <div className="flex items-center gap-1.5 sm:gap-2">
+                {monitorControls}
                 {cameras.length > 0 && !isPhone && (
                   <CameraSelector
                     cameras={cameras}
@@ -642,6 +814,42 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
               to reduce load.
             </div>
           )}
+          {alarmLayoutSwitchActive && alarmDisplayEvent && (
+            <div
+              className="shrink-0 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-600/50 bg-red-950/85 px-3 py-2 text-sm text-white"
+              data-testid="alarm-layout-switch-banner"
+            >
+              <div className="min-w-0">
+                <span className="font-semibold uppercase tracking-wide text-red-200 text-xs mr-2">
+                  Alarm display
+                </span>
+                <span className="truncate">
+                  {alarmDisplayEvent.title} · layout switch
+                  {(alarmQueueCount || 0) > 1 ? ` (+${alarmQueueCount - 1} more)` : ''}
+                </span>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  type="button"
+                  className="px-2 py-1 rounded bg-gray-200 text-gray-900 text-xs font-semibold"
+                  onClick={() => {
+                    void alarmManualReset();
+                  }}
+                >
+                  Reset display
+                </button>
+                <button
+                  type="button"
+                  className="px-2 py-1 rounded bg-emerald-700 text-white text-xs font-semibold"
+                  onClick={() => {
+                    void alarmAcknowledge();
+                  }}
+                >
+                  Acknowledge
+                </button>
+              </div>
+            </div>
+          )}
 
           {selectedGroup && camerasLoading && (
             <div className="flex items-center justify-center flex-1 gap-2 text-gray-500">
@@ -683,6 +891,9 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
                 recordingSchedule={recordingSchedule}
                 onToggleRecording={onToggleRecording}
                 onFullscreen={openFullscreen}
+                onInstantReplay={controlRoom ? undefined : openInstantReplay}
+                instantReplayCameraId={instantReplayCamera?.id ?? null}
+                onSelectCamera={controlRoom ? undefined : setSelectedCamera}
                 onAssignCamera={handleAssignCamera}
                 onAssignSequence={handleAssignSequence}
                 scrollResetKey={selectedGroup}
@@ -702,10 +913,31 @@ function LiveView({ recordingSchedule, onToggleRecording }: LiveViewProps) {
                 key={fullscreenCamera.id}
                 camera={fullscreenCamera}
                 allCameras={sortedCameras}
-                onClose={closeFullscreen}
+                onClose={alarmDisplayActive ? onOperatorCloseFullscreen : closeFullscreen}
                 onChangeCamera={setFullscreenCamera}
                 isRecording={recordingSchedule[fullscreenCamera.id] || false}
                 onToggleRecording={onToggleRecording}
+                alarmBanner={
+                  alarmDisplayActive && alarmDisplayEvent
+                    ? {
+                        event: alarmDisplayEvent,
+                        queueCount: alarmQueueCount,
+                        onManualReset: () => {
+                          void alarmManualReset();
+                        },
+                        onAcknowledge: () => {
+                          void alarmAcknowledge();
+                        },
+                      }
+                    : null
+                }
+              />
+            )}
+            {instantReplayCamera && (
+              <InstantReplayModal
+                key={`ir-${instantReplayCamera.id}`}
+                camera={instantReplayCamera}
+                onClose={closeInstantReplay}
               />
             )}
             </div>

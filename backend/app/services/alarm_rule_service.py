@@ -13,6 +13,10 @@ from app.core.database import alarm_rules_collection, camera_collection
 from app.services.alarm_constants import (
     COOLDOWN_MAX_SECONDS,
     COOLDOWN_MIN_SECONDS,
+    DISPLAY_LAYOUTS,
+    DISPLAY_MODES,
+    DISPLAY_MONITOR_MAX,
+    DISPLAY_MONITOR_MIN,
     RECORDING_DURATION_DEFAULT_SECONDS,
     RECORDING_DURATION_MAX_SECONDS,
     RECORDING_DURATION_MIN_SECONDS,
@@ -23,6 +27,11 @@ from app.services.alarm_constants import (
 )
 from app.services.camera_identity import get_camera_by_ref
 from app.services.alarm_rule_evaluator import default_rule_runtime
+from app.services.priority_levels import (
+    PriorityValidationError,
+    priority_from_severity,
+    resolve_alarm_priority,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +69,63 @@ async def _camera_exists(camera_id: str) -> dict:
     return doc
 
 
+def _validate_display_config(data: dict, *, actions: list[str]) -> dict[str, Any] | None:
+    """Optional RDSO 18.2.28 display switch; only with ui_notification."""
+    raw = data.get("display")
+    if raw in (None, {}):
+        return None
+    if not isinstance(raw, dict):
+        raise AlarmRuleValidationError("display must be an object")
+    if "ui_notification" not in actions:
+        raise AlarmRuleValidationError(
+            "display config is only allowed when ui_notification is selected"
+        )
+
+    mode = str(raw.get("mode") or "").strip().lower()
+    layout = str(raw.get("layout") or raw.get("layout_label") or "").strip()
+    if not mode:
+        mode = "layout_switch" if layout else "fullscreen"
+    if mode not in DISPLAY_MODES:
+        raise AlarmRuleValidationError(f"Unsupported display.mode: {mode}")
+
+    out: dict[str, Any] = {"mode": mode}
+
+    if raw.get("monitor_id") not in (None, ""):
+        try:
+            mid = int(raw.get("monitor_id"))
+        except (TypeError, ValueError) as exc:
+            raise AlarmRuleValidationError("display.monitor_id must be an integer") from exc
+        if mid < DISPLAY_MONITOR_MIN or mid > DISPLAY_MONITOR_MAX:
+            raise AlarmRuleValidationError(
+                f"display.monitor_id must be {DISPLAY_MONITOR_MIN}–{DISPLAY_MONITOR_MAX}"
+            )
+        out["monitor_id"] = mid
+
+    if mode == "layout_switch":
+        if layout not in DISPLAY_LAYOUTS:
+            raise AlarmRuleValidationError(
+                "display.layout is required for layout_switch (1x1–6x6)"
+            )
+        out["layout"] = layout
+        slot_raw = raw.get("slot", 0)
+        try:
+            slot = int(slot_raw)
+        except (TypeError, ValueError) as exc:
+            raise AlarmRuleValidationError("display.slot must be an integer") from exc
+        if slot < 0:
+            raise AlarmRuleValidationError("display.slot must be >= 0")
+        cols = int(layout.split("x")[0])
+        max_slot = cols * cols - 1
+        if slot > max_slot:
+            raise AlarmRuleValidationError(
+                f"display.slot must be 0–{max_slot} for layout {layout}"
+            )
+        out["slot"] = slot
+
+    out["restore_on_reset"] = bool(raw.get("restore_on_reset", True))
+    return out
+
+
 def _validate_recording_config(data: dict, *, actions: list[str]) -> dict[str, Any] | None:
     wants_recording = "start_recording" in actions
     raw = data.get("recording")
@@ -70,16 +136,61 @@ def _validate_recording_config(data: dict, *, actions: list[str]) -> dict[str, A
 
     if not isinstance(raw, dict):
         raise AlarmRuleValidationError("recording must be an object when start_recording is selected")
-    try:
-        duration = int(raw.get("duration_seconds", RECORDING_DURATION_DEFAULT_SECONDS))
-    except (TypeError, ValueError) as exc:
-        raise AlarmRuleValidationError("recording.duration_seconds must be an integer") from exc
-    if duration < RECORDING_DURATION_MIN_SECONDS or duration > RECORDING_DURATION_MAX_SECONDS:
-        raise AlarmRuleValidationError(
-            f"recording.duration_seconds must be between "
-            f"{RECORDING_DURATION_MIN_SECONDS} and {RECORDING_DURATION_MAX_SECONDS}"
+
+    from app.services.alarm_constants import (
+        POST_ALARM_DEFAULT_SECONDS,
+        POST_ALARM_MAX_SECONDS,
+        POST_ALARM_MIN_SECONDS,
+        PRE_ALARM_DEFAULT_SECONDS,
+        PRE_ALARM_MAX_SECONDS,
+        PRE_ALARM_MIN_SECONDS,
+        RECORDING_DURATION_DEFAULT_SECONDS,
+        RECORDING_DURATION_MAX_SECONDS,
+        RECORDING_DURATION_MIN_SECONDS,
+    )
+    from app.services.instant_replay_snapshot import max_pre_alarm_seconds
+
+    # Prefer explicit post_alarm_seconds; fall back to legacy duration_seconds.
+    if "post_alarm_seconds" in raw:
+        post_key = "post_alarm_seconds"
+        post_raw = raw.get("post_alarm_seconds")
+        post_min, post_max, post_default = POST_ALARM_MIN_SECONDS, POST_ALARM_MAX_SECONDS, POST_ALARM_DEFAULT_SECONDS
+    else:
+        post_key = "duration_seconds"
+        post_raw = raw.get("duration_seconds", RECORDING_DURATION_DEFAULT_SECONDS)
+        post_min, post_max, post_default = (
+            RECORDING_DURATION_MIN_SECONDS,
+            RECORDING_DURATION_MAX_SECONDS,
+            RECORDING_DURATION_DEFAULT_SECONDS,
         )
-    return {"duration_seconds": duration}
+
+    try:
+        post = int(post_raw if post_raw is not None else post_default)
+    except (TypeError, ValueError) as exc:
+        raise AlarmRuleValidationError(f"recording.{post_key} must be an integer") from exc
+    if post < post_min or post > post_max:
+        raise AlarmRuleValidationError(
+            f"recording.{post_key} must be between {post_min} and {post_max}"
+        )
+
+    pre_raw = raw.get("pre_alarm_seconds", PRE_ALARM_DEFAULT_SECONDS)
+    try:
+        pre = int(pre_raw if pre_raw is not None else PRE_ALARM_DEFAULT_SECONDS)
+    except (TypeError, ValueError) as exc:
+        raise AlarmRuleValidationError("recording.pre_alarm_seconds must be an integer") from exc
+
+    pre_cap = min(PRE_ALARM_MAX_SECONDS, max_pre_alarm_seconds())
+    if pre < PRE_ALARM_MIN_SECONDS or pre > pre_cap:
+        raise AlarmRuleValidationError(
+            f"recording.pre_alarm_seconds must be between {PRE_ALARM_MIN_SECONDS} and {pre_cap}"
+        )
+
+    return {
+        "pre_alarm_seconds": pre,
+        "post_alarm_seconds": post,
+        # Keep legacy alias so older clients/tests keep working.
+        "duration_seconds": post,
+    }
 
 
 def validate_rule_payload(data: dict, *, partial: bool = False, existing: dict | None = None) -> dict:
@@ -134,6 +245,22 @@ def validate_rule_payload(data: dict, *, partial: bool = False, existing: dict |
             raise AlarmRuleValidationError(f"Unsupported severity: {severity or '(empty)'}")
         out["severity"] = severity
 
+    if "priority" in data or not partial:
+        try:
+            sev_for_pri = out.get("severity") or (existing or {}).get("severity") or "warning"
+            if "priority" in data and data.get("priority") not in (None, ""):
+                out["priority"] = resolve_alarm_priority(
+                    priority=data.get("priority"), severity=sev_for_pri
+                )
+            elif not partial:
+                out["priority"] = priority_from_severity(sev_for_pri)
+            elif existing and existing.get("priority") is None:
+                out["priority"] = priority_from_severity(
+                    existing.get("severity") or sev_for_pri
+                )
+        except PriorityValidationError as exc:
+            raise AlarmRuleValidationError(str(exc)) from exc
+
     if "cooldown_seconds" in data or not partial:
         raw = data.get("cooldown_seconds", 60)
         try:
@@ -168,6 +295,22 @@ def validate_rule_payload(data: dict, *, partial: bool = False, existing: dict |
         elif not wants_recording and ("recording" in data or "actions" in out):
             out["recording"] = None
 
+    wants_ui = bool(merged_actions and "ui_notification" in merged_actions)
+    if "display" in data or (wants_ui and not partial and data.get("display")):
+        display = _validate_display_config(
+            data if "display" in data else {"display": (existing or {}).get("display")},
+            actions=list(merged_actions or []),
+        )
+        if display is not None:
+            out["display"] = display
+        elif "display" in data and not wants_ui:
+            out["display"] = None
+        elif "display" in data and data.get("display") in (None, {}):
+            out["display"] = None
+    elif not wants_ui and ("display" in data or "actions" in out):
+        if "display" in data or (existing and existing.get("display")):
+            out["display"] = None
+
     return out
 
 
@@ -181,8 +324,14 @@ def rule_to_public(doc: dict) -> dict:
         "trigger": doc.get("trigger") or {},
         "actions": list(doc.get("actions") or []),
         "severity": doc.get("severity") or "warning",
+        "priority": int(
+            doc["priority"]
+            if doc.get("priority") is not None
+            else priority_from_severity(doc.get("severity"))
+        ),
         "cooldown_seconds": int(doc.get("cooldown_seconds") or 0),
         "recording": doc.get("recording"),
+        "display": doc.get("display"),
         "created_by": doc.get("created_by"),
         "created_at": doc.get("created_at"),
         "updated_at": doc.get("updated_at"),
@@ -279,9 +428,12 @@ async def update_alarm_rule(rule_id: str, data: dict) -> Optional[dict]:
 
     payload["updated_at"] = _iso(_utcnow())
     unset_fields: dict[str, str] = {}
-    if payload.get("recording") is None:
+    if payload.get("recording") is None and "recording" in payload:
         unset_fields["recording"] = ""
         payload = {k: v for k, v in payload.items() if k != "recording"}
+    if payload.get("display") is None and "display" in payload:
+        unset_fields["display"] = ""
+        payload = {k: v for k, v in payload.items() if k != "display"}
     update_doc: dict[str, Any] = {"$set": payload}
     if unset_fields:
         update_doc["$unset"] = unset_fields

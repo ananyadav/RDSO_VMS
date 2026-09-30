@@ -15,8 +15,22 @@ export interface AlarmRule {
   trigger: { source_type: string };
   actions: string[];
   severity: string;
+  /** RDSO 18.1.27 numeric priority 1–5 (5 highest). */
+  priority?: number;
   cooldown_seconds: number;
-  recording?: { duration_seconds: number } | null;
+  recording?: {
+    duration_seconds: number;
+    pre_alarm_seconds?: number;
+    post_alarm_seconds?: number;
+  } | null;
+  /** RDSO 18.2.28 — optional monitor/layout/slot switch for ui_notification. */
+  display?: {
+    mode?: string;
+    monitor_id?: number;
+    layout?: string;
+    slot?: number;
+    restore_on_reset?: boolean;
+  } | null;
   created_by?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -28,10 +42,22 @@ export type AlarmRulePayload = {
   camera_id: string;
   trigger: { source_type: string };
   severity: string;
+  priority?: number;
   actions: string[];
   cooldown_seconds: number;
   enabled: boolean;
-  recording?: { duration_seconds: number };
+  recording?: {
+    duration_seconds: number;
+    pre_alarm_seconds?: number;
+    post_alarm_seconds?: number;
+  };
+  display?: {
+    mode: string;
+    monitor_id?: number;
+    layout?: string;
+    slot?: number;
+    restore_on_reset?: boolean;
+  } | null;
 };
 
 export class AlarmRulesRequestError extends Error {

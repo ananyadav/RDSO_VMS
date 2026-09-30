@@ -4,9 +4,18 @@ import type { AlarmRule } from '../lib/alarmRulesApi';
 import {
   ACTION_OPTIONS,
   ACTIVE_TRIGGER,
+  POST_ALARM_DEFAULT,
+  POST_ALARM_MAX,
+  POST_ALARM_MIN,
+  PRE_ALARM_DEFAULT,
+  PRE_ALARM_MAX,
+  PRE_ALARM_MIN,
   SEVERITY_OPTIONS,
   TRIGGER_OPTIONS,
 } from '../lib/alarmRuleLabels';
+import { PRIORITY_OPTIONS, priorityFromSeverity } from '../lib/priorityLevels';
+import { LIVE_LAYOUTS } from '../lib/liveLayouts';
+import { LIVE_MONITOR_IDS } from '../lib/liveMonitor';
 import {
   defaultAlarmRuleFormValues,
   formValuesToPayload,
@@ -36,15 +45,30 @@ function ruleToFormValues(rule: AlarmRule): AlarmRuleFormValues {
     (a): a is AlarmRuleFormValues['actions'][number] =>
       a === 'create_event' || a === 'ui_notification' || a === 'start_recording',
   );
+  const post =
+    rule.recording?.post_alarm_seconds ?? rule.recording?.duration_seconds ?? POST_ALARM_DEFAULT;
+  const display = rule.display;
+  const layoutSwitch = Boolean(display && (display.mode === 'layout_switch' || display.layout));
   return {
     name: rule.name,
     camera_id: rule.camera_id,
     source_type: rule.trigger?.source_type || ACTIVE_TRIGGER,
     severity: (rule.severity as AlarmRuleFormValues['severity']) || 'warning',
+    priority:
+      typeof rule.priority === 'number'
+        ? rule.priority
+        : priorityFromSeverity(rule.severity || 'warning'),
     actions,
     cooldown_seconds: rule.cooldown_seconds ?? 60,
     enabled: rule.enabled,
-    recording_duration_seconds: rule.recording?.duration_seconds ?? 60,
+    recording_duration_seconds: post,
+    pre_alarm_seconds: rule.recording?.pre_alarm_seconds ?? PRE_ALARM_DEFAULT,
+    post_alarm_seconds: post,
+    display_enabled: layoutSwitch,
+    display_monitor_id: display?.monitor_id ?? 1,
+    display_layout: display?.layout || '2x2',
+    display_slot: typeof display?.slot === 'number' ? display.slot : 0,
+    display_restore_on_reset: display?.restore_on_reset !== false,
   };
 }
 
@@ -204,15 +228,44 @@ export default function AlarmRuleModal({
             </label>
             <select
               value={values.severity}
-              onChange={(e) =>
+              onChange={(e) => {
+                const severity = e.target.value as AlarmRuleFormValues['severity'];
                 setValues((v) => ({
                   ...v,
-                  severity: e.target.value as AlarmRuleFormValues['severity'],
-                }))
-              }
+                  severity,
+                  // Keep explicit priority if user already changed it; else follow severity default
+                  priority:
+                    v.priority === priorityFromSeverity(v.severity)
+                      ? priorityFromSeverity(severity)
+                      : v.priority,
+                }));
+              }}
               className="input-field w-full"
             >
               {SEVERITY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Priority (1–5)
+            </label>
+            <select
+              value={values.priority}
+              onChange={(e) =>
+                setValues((v) => ({
+                  ...v,
+                  priority: Number(e.target.value),
+                }))
+              }
+              className="input-field w-full"
+              title="Numeric priority distinct from severity and RBAC"
+            >
+              {PRIORITY_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
@@ -241,30 +294,146 @@ export default function AlarmRuleModal({
             )}
           </div>
 
-          {values.actions.includes('start_recording') && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Recording Duration (seconds)
+          {values.actions.includes('ui_notification') && (
+            <div className="rounded border border-gray-200 dark:border-gray-700 p-3 space-y-3">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={values.display_enabled}
+                  onChange={(e) =>
+                    setValues((v) => ({ ...v, display_enabled: e.target.checked }))
+                  }
+                />
+                Switch Live View layout on alarm (RDSO 18.2.28)
               </label>
-              <input
-                type="number"
-                min={5}
-                max={3600}
-                value={values.recording_duration_seconds}
-                onChange={(e) =>
-                  setValues((v) => ({
-                    ...v,
-                    recording_duration_seconds: parseInt(e.target.value, 10) || 60,
-                  }))
-                }
-                className="input-field w-full"
-              />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Automatically records this camera for the configured duration when the alarm rule is triggered.
+              <p className="text-xs text-gray-500">
+                Without this, alarms keep the existing fullscreen camera display. Layout switch
+                reuses Live View tiles (not a second player).
               </p>
-              {fieldErrors.recording_duration_seconds && (
-                <p className="mt-1 text-xs text-red-500">{fieldErrors.recording_duration_seconds}</p>
+              {values.display_enabled && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Target display</label>
+                    <select
+                      value={values.display_monitor_id}
+                      onChange={(e) =>
+                        setValues((v) => ({
+                          ...v,
+                          display_monitor_id: Number(e.target.value),
+                        }))
+                      }
+                      className="input-field w-full text-sm"
+                    >
+                      {LIVE_MONITOR_IDS.map((id) => (
+                        <option key={id} value={id}>
+                          Display {id}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Layout</label>
+                    <select
+                      value={values.display_layout}
+                      onChange={(e) =>
+                        setValues((v) => ({ ...v, display_layout: e.target.value, display_slot: 0 }))
+                      }
+                      className="input-field w-full text-sm"
+                    >
+                      {LIVE_LAYOUTS.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.rdsoName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Slot (0-based)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={values.display_slot}
+                      onChange={(e) =>
+                        setValues((v) => ({ ...v, display_slot: Number(e.target.value) }))
+                      }
+                      className="input-field w-full text-sm"
+                    />
+                    {fieldErrors.display_slot && (
+                      <p className="mt-1 text-xs text-red-500">{fieldErrors.display_slot}</p>
+                    )}
+                  </div>
+                  <label className="flex items-end gap-2 text-xs text-gray-600 dark:text-gray-400 pb-2">
+                    <input
+                      type="checkbox"
+                      checked={values.display_restore_on_reset}
+                      onChange={(e) =>
+                        setValues((v) => ({
+                          ...v,
+                          display_restore_on_reset: e.target.checked,
+                        }))
+                      }
+                    />
+                    Restore previous layout on reset
+                  </label>
+                </div>
               )}
+            </div>
+          )}
+
+          {values.actions.includes('start_recording') && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Pre-alarm (seconds)
+                </label>
+                <input
+                  type="number"
+                  min={PRE_ALARM_MIN}
+                  max={PRE_ALARM_MAX}
+                  value={values.pre_alarm_seconds}
+                  onChange={(e) =>
+                    setValues((v) => ({
+                      ...v,
+                      pre_alarm_seconds: parseInt(e.target.value, 10) || 0,
+                    }))
+                  }
+                  className="input-field w-full"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Real footage from before the trigger (Instant Replay buffer), not faked after start.
+                </p>
+                {fieldErrors.pre_alarm_seconds && (
+                  <p className="mt-1 text-xs text-red-500">{fieldErrors.pre_alarm_seconds}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Post-alarm (seconds)
+                </label>
+                <input
+                  type="number"
+                  min={POST_ALARM_MIN}
+                  max={POST_ALARM_MAX}
+                  value={values.post_alarm_seconds}
+                  onChange={(e) => {
+                    const post = parseInt(e.target.value, 10) || POST_ALARM_DEFAULT;
+                    setValues((v) => ({
+                      ...v,
+                      post_alarm_seconds: post,
+                      recording_duration_seconds: post,
+                    }));
+                  }}
+                  className="input-field w-full"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Continues recording after the trigger; repeated alarms extend this window.
+                </p>
+                {(fieldErrors.post_alarm_seconds || fieldErrors.recording_duration_seconds) && (
+                  <p className="mt-1 text-xs text-red-500">
+                    {fieldErrors.post_alarm_seconds || fieldErrors.recording_duration_seconds}
+                  </p>
+                )}
+              </div>
             </div>
           )}
 

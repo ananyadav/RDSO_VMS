@@ -14,8 +14,11 @@ import { isAdminUser, isOpsAdminUser, isSuperAdminUser, PERMISSIONS, firstAllowe
 // --- Page Imports ---
 import LoginPage from "./pages/LoginPage";
 import LiveView from "./pages/LiveView";
+import Ccc from "./pages/Ccc";
 import Playback from "./pages/Playback";
 import Events from "./pages/Events";
+import Reports from "./pages/Reports";
+import SystemSettings from "./pages/SystemSettings";
 import PTZ from "./pages/PTZ";
 import CameraManagement from "./pages/CameraManagement";
 import Storage from "./pages/Storage";
@@ -132,11 +135,16 @@ export default function App(): React.ReactElement {
     try {
       const response = await apiFetch(`/api/recordings/${cameraId}/toggle`, { method: 'POST' });
       const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to update recording');
       setRecordingSchedule(prev => ({ ...prev, [data.id]: data.recording }));
       const schedRes = await apiFetch('/api/recordings/schedule');
       const sched = await schedRes.json();
       setIsRecordingEnabled(Boolean(sched.master_enabled));
-      toast.success(`Recording for camera ${data.id} is now ${data.recording ? 'ON' : 'OFF'}`);
+      const activeLabel =
+        data.active === true ? 'active' : data.active === false ? 'inactive' : 'scheduled';
+      toast.success(
+        `Recording for camera ${data.id} is now ${data.recording ? 'ON' : 'OFF'} (${activeLabel})`,
+      );
     } catch (_error) { toast.error("Failed to update recording status."); }
   }, []);
 
@@ -235,6 +243,14 @@ export default function App(): React.ReactElement {
     />
   );
 
+  const cccView = (
+    <Ccc
+      key={`ccc-${accessProfileKey}`}
+      recordingSchedule={recordingSchedule}
+      onToggleRecording={handleToggleCameraRecording}
+    />
+  );
+
   return (
     <>
       <Router>
@@ -243,6 +259,7 @@ export default function App(): React.ReactElement {
           <AppShell
             currentUser={currentUser}
             liveView={liveView}
+            cccView={cccView}
             recordingSchedule={recordingSchedule}
             isRecordingEnabled={isRecordingEnabled}
             onScheduleChange={handleScheduleUpdate}
@@ -262,6 +279,7 @@ export default function App(): React.ReactElement {
 function AppShell({
   currentUser,
   liveView,
+  cccView,
   recordingSchedule,
   isRecordingEnabled,
   onScheduleChange,
@@ -273,6 +291,7 @@ function AppShell({
 }: {
   currentUser: User;
   liveView: React.ReactElement;
+  cccView: React.ReactElement;
   recordingSchedule: RecordingScheduleType;
   isRecordingEnabled: boolean;
   onScheduleChange: (
@@ -311,9 +330,17 @@ function AppShell({
               <Switch>
                 <Route exact path="/" render={() => renderHome(currentUser, liveView)} />
                 <Route path="/live" render={() => renderProtected(currentUser, PERMISSIONS.LIVE_VIEW, liveView)} />
-                <Route path="/storage" render={() => renderSuperAdminOnly(currentUser, (
-                  <Storage schedule={recordingSchedule} isRecordingEnabled={isRecordingEnabled} onScheduleChange={onScheduleChange} onToggleMasterRecording={onToggleMasterRecording}/>
-                ))} />
+                <Route path="/ccc" render={() => renderProtected(currentUser, PERMISSIONS.LIVE_VIEW, cccView)} />
+                <Route path="/storage" render={() => (
+                  isOpsAdminUser(currentUser)
+                    ? <Storage schedule={recordingSchedule} isRecordingEnabled={isRecordingEnabled} onScheduleChange={onScheduleChange} onToggleMasterRecording={onToggleMasterRecording}/>
+                    : <Redirect to={firstAllowedPath(currentUser) || '/live'} />
+                )} />
+                <Route path="/system-settings" render={() => (
+                  isOpsAdminUser(currentUser)
+                    ? <SystemSettings />
+                    : <Redirect to={firstAllowedPath(currentUser) || '/live'} />
+                )} />
                 <Route exact path="/ptz" render={() => renderProtected(currentUser, PERMISSIONS.LIVE_VIEW, <PTZ />)} />
                 <Route path="/ptz/:cameraId" render={() => renderProtected(currentUser, PERMISSIONS.LIVE_VIEW, <PTZ />)} />
                 <Route path="/camera-management" render={() => (
@@ -323,6 +350,7 @@ function AppShell({
                 )} />
                 <Route path="/playback" render={() => renderProtected(currentUser, PERMISSIONS.RECORDING_VIEW, <Playback key={accessProfileKey} />, 'Playback')} />
                 <Route path="/events" render={() => renderProtected(currentUser, PERMISSIONS.EVENTS, <Events />)} />
+                <Route path="/reports" render={() => renderProtected(currentUser, PERMISSIONS.EVENTS, <Reports />)} />
                 <Route path="/alarm-rules" render={() => (
                   isOpsAdminUser(currentUser)
                     ? <AlarmRules />
@@ -333,7 +361,11 @@ function AppShell({
                     ? <CameraSequences />
                     : <Redirect to={firstAllowedPath(currentUser) || '/live'} />
                 )} />
-                <Route path="/network-settings" render={() => renderSuperAdminOnly(currentUser, <NetworkSettings />)} />
+                <Route path="/network-settings" render={() => (
+                  isOpsAdminUser(currentUser)
+                    ? <NetworkSettings />
+                    : <Redirect to={firstAllowedPath(currentUser) || '/live'} />
+                )} />
                 <Route path="/user-management" render={() => (
                   isSuperAdminUser(currentUser)
                     ? <Redirect to="/control-center?tab=users" />

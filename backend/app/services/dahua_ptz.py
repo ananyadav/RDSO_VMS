@@ -122,7 +122,14 @@ async def ptz_stop(camera: dict) -> Dict[str, Any]:
 
 
 async def list_presets(camera: dict) -> Dict[str, Any]:
-    return {"ok": True, "presets": [], "backend": "dahua"}
+    """Dahua CGI has no reliable preset inventory; fail so ONVIF can try next."""
+    return {
+        "ok": False,
+        "supported": False,
+        "presets": [],
+        "error": "Dahua CGI does not support listing presets; ONVIF may still work",
+        "backend": "dahua",
+    }
 
 
 async def goto_preset(camera: dict, preset_id: int) -> Dict[str, Any]:
@@ -155,8 +162,195 @@ async def delete_preset(camera: dict, preset_id: int) -> Dict[str, Any]:
     return {"ok": True, "backend": "dahua"}
 
 
+async def list_tours(camera: dict) -> Dict[str, Any]:
+    return {
+        "ok": False,
+        "supported": False,
+        "tours": [],
+        "error": "Dahua tour configuration via CGI is not supported in this build",
+        "backend": "dahua",
+    }
+
+
+async def set_tour(
+    camera: dict,
+    tour_id: int,
+    *,
+    name: str,
+    steps: list,
+    enabled: bool = True,
+) -> Dict[str, Any]:
+    return {
+        "ok": False,
+        "supported": False,
+        "error": "Dahua tour create/edit is not supported via CGI",
+        "backend": "dahua",
+    }
+
+
+async def delete_tour(camera: dict, tour_id: int) -> Dict[str, Any]:
+    return {
+        "ok": False,
+        "supported": False,
+        "error": "Dahua tour delete is not supported via CGI",
+        "backend": "dahua",
+    }
+
+
+async def start_tour(camera: dict, tour_id: int) -> Dict[str, Any]:
+    status, text = await _cgi(
+        camera,
+        f"action=start&channel=0&code=StartTour&arg1=0&arg2={int(tour_id)}&arg3=0",
+    )
+    if status not in (200, 204):
+        return {
+            "ok": False,
+            "status": status,
+            "error": _error_from_response(status, text),
+            "backend": "dahua",
+        }
+    return {"ok": True, "backend": "dahua"}
+
+
+async def stop_tour(camera: dict, tour_id: int) -> Dict[str, Any]:
+    status, text = await _cgi(
+        camera,
+        f"action=start&channel=0&code=StopTour&arg1=0&arg2={int(tour_id)}&arg3=0",
+    )
+    if status not in (200, 204):
+        return {
+            "ok": False,
+            "status": status,
+            "error": _error_from_response(status, text),
+            "backend": "dahua",
+        }
+    return {"ok": True, "backend": "dahua"}
+
+
+async def list_patterns(camera: dict) -> Dict[str, Any]:
+    """Dahua CGI exposes pattern start/stop/record but not a reliable inventory."""
+    del camera
+    return {
+        "ok": True,
+        "supported": True,
+        "patterns": [{"id": i, "name": f"Pattern {i}"} for i in range(1, 5)],
+        "backend": "dahua",
+        "distinct_from_tour_patrol": True,
+        "rdso_18_2_23": True,
+        "note": "Dahua CGI does not enumerate recorded patterns; slots 1–4 are standard device slots.",
+    }
+
+
+async def set_pattern(camera: dict, pattern_id: int, *, name: str) -> Dict[str, Any]:
+    del camera, pattern_id, name
+    return {
+        "ok": False,
+        "supported": False,
+        "error": "Dahua CGI does not support renaming patterns",
+        "backend": "dahua",
+    }
+
+
+async def delete_pattern(camera: dict, pattern_id: int) -> Dict[str, Any]:
+    del camera, pattern_id
+    return {
+        "ok": False,
+        "supported": False,
+        "error": "Dahua CGI does not support deleting patterns",
+        "backend": "dahua",
+    }
+
+
+async def start_pattern(camera: dict, pattern_id: int) -> Dict[str, Any]:
+    status, text = await _cgi(
+        camera,
+        f"action=start&channel=0&code=StartPattern&arg1=0&arg2={int(pattern_id)}&arg3=0",
+    )
+    if status not in (200, 204):
+        return {
+            "ok": False,
+            "status": status,
+            "error": _error_from_response(status, text),
+            "backend": "dahua",
+        }
+    return {"ok": True, "backend": "dahua"}
+
+
+async def stop_pattern(camera: dict, pattern_id: int) -> Dict[str, Any]:
+    del pattern_id
+    status, text = await _cgi(
+        camera,
+        "action=start&channel=0&code=StopPattern&arg1=0&arg2=0&arg3=0",
+    )
+    if status not in (200, 204):
+        return {
+            "ok": False,
+            "status": status,
+            "error": _error_from_response(status, text),
+            "backend": "dahua",
+        }
+    return {"ok": True, "backend": "dahua"}
+
+
+async def record_pattern_start(camera: dict, pattern_id: int) -> Dict[str, Any]:
+    status, text = await _cgi(
+        camera,
+        f"action=start&channel=0&code=SetPatternBegin&arg1=0&arg2={int(pattern_id)}&arg3=0",
+    )
+    if status not in (200, 204):
+        return {
+            "ok": False,
+            "status": status,
+            "error": _error_from_response(status, text),
+            "backend": "dahua",
+        }
+    return {"ok": True, "backend": "dahua"}
+
+
+async def record_pattern_stop(camera: dict, pattern_id: int) -> Dict[str, Any]:
+    status, text = await _cgi(
+        camera,
+        f"action=start&channel=0&code=SetPatternEnd&arg1=0&arg2={int(pattern_id)}&arg3=0",
+    )
+    if status not in (200, 204):
+        return {
+            "ok": False,
+            "status": status,
+            "error": _error_from_response(status, text),
+            "backend": "dahua",
+        }
+    return {"ok": True, "backend": "dahua"}
+
+
 async def ptz_capabilities(camera: dict) -> Dict[str, Any]:
     status, text = await _cgi(camera, "action=getStatus")
     if status in (200, 204):
-        return {"ok": True, "supported": True, "backend": "dahua"}
-    return {"ok": False, "supported": False, "error": _error_from_response(status, text)}
+        return {
+            "ok": True,
+            "supported": True,
+            "backend": "dahua",
+            "presetsSupported": True,
+            "toursSupported": False,
+            "patternsSupported": True,
+            "rdso_18_2_23": True,
+            "patternDistinctFromTourPatrol": True,
+            "presets": {"list": False, "set": True, "goto": True, "delete": True},
+            "tours": {"list": False, "set": False, "start": True, "stop": True, "delete": False},
+            "patterns": {
+                "list": True,
+                "set": False,
+                "start": True,
+                "stop": True,
+                "record": True,
+                "delete": False,
+            },
+        }
+    return {
+        "ok": False,
+        "supported": False,
+        "presetsSupported": False,
+        "toursSupported": False,
+        "patternsSupported": False,
+        "error": _error_from_response(status, text),
+        "backend": "dahua",
+    }

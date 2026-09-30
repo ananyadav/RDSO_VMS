@@ -40,7 +40,35 @@ export const AUDIT_ACTIONS = [
   'PTZ_TILT',
   'PTZ_ZOOM',
   'PTZ_STOP',
+  'PTZ_PRESET_SET',
+  'PTZ_PRESET_DELETE',
+  'PTZ_PRESET_GOTO',
+  'PTZ_TOUR_SET',
+  'PTZ_TOUR_DELETE',
+  'PTZ_TOUR_START',
+  'PTZ_TOUR_STOP',
+  'PTZ_PATTERN_SET',
+  'PTZ_PATTERN_DELETE',
+  'PTZ_PATTERN_START',
+  'PTZ_PATTERN_STOP',
+  'PTZ_PATTERN_RECORD_START',
+  'PTZ_PATTERN_RECORD_STOP',
   'SESSION_REVOKED',
+  'RECORDING_CONFIG_CHANGED',
+  'RECORDING_DELETED',
+  'RECORDING_EXPORT_CREATED',
+  'RECORDING_EVIDENCE_VERIFIED',
+  'RECORDING_EVIDENCE_MANIFEST_REGENERATED',
+  'ALARM_RULE_CREATED',
+  'ALARM_RULE_UPDATED',
+  'ALARM_RULE_DELETED',
+  'CAMERA_SEQUENCE_CREATED',
+  'CAMERA_SEQUENCE_UPDATED',
+  'CAMERA_SEQUENCE_DELETED',
+  'EVENT_ACKNOWLEDGED',
+  'EVENT_DISPLAY_RESET',
+  'SYSTEM_TIME_ACTION',
+  'EDGE_BACKFILL_STARTED',
 ] as const;
 
 const PAGE_SIZE = 50;
@@ -77,6 +105,7 @@ export default function AuditLogTable({
   const [action, setAction] = useState(locked?.action || '');
   const [resourceType, setResourceType] = useState(locked?.resource_type || '');
   const [resourceId, setResourceId] = useState(locked?.resource_id || '');
+  const [cameraId, setCameraId] = useState('');
   const [success, setSuccess] = useState<'' | 'true' | 'false'>('');
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
@@ -108,13 +137,14 @@ export default function AuditLogTable({
         return type;
       })(),
       resource_id: locked?.resource_id || resourceId || undefined,
+      camera_id: cameraId || undefined,
       success,
       start: start ? localDayStartIso(start) : undefined,
       end: end ? localDayEndIso(end) : undefined,
       limit: PAGE_SIZE,
       offset,
     }),
-    [action, end, locked, offset, resourceId, resourceType, role, start, success, user],
+    [action, cameraId, end, locked, offset, resourceId, resourceType, role, start, success, user],
   );
 
   const load = useCallback(async () => {
@@ -213,6 +243,15 @@ export default function AuditLogTable({
           disabled={Boolean(locked?.resource_id)}
           onChange={(e) => {
             setResourceId(e.target.value);
+            setOffset(0);
+          }}
+        />
+        <input
+          className="input-style py-1.5 px-2"
+          placeholder="Camera ID"
+          value={cameraId}
+          onChange={(e) => {
+            setCameraId(e.target.value);
             setOffset(0);
           }}
         />

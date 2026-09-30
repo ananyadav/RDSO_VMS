@@ -8,17 +8,48 @@ from aiohttp import web
 
 from app.core.access_control import deny_unless_camera_access, has_live_view
 from app.core.auth_context import get_effective_user
-from app.services.audit_service import ACTION_PTZ_PAN, ACTION_PTZ_STOP, ACTION_PTZ_TILT, ACTION_PTZ_ZOOM, write_audit
+from app.services.audit_service import (
+    ACTION_PTZ_PAN,
+    ACTION_PTZ_PATTERN_DELETE,
+    ACTION_PTZ_PATTERN_RECORD_START,
+    ACTION_PTZ_PATTERN_RECORD_STOP,
+    ACTION_PTZ_PATTERN_SET,
+    ACTION_PTZ_PATTERN_START,
+    ACTION_PTZ_PATTERN_STOP,
+    ACTION_PTZ_PRESET_DELETE,
+    ACTION_PTZ_PRESET_GOTO,
+    ACTION_PTZ_PRESET_SET,
+    ACTION_PTZ_STOP,
+    ACTION_PTZ_TILT,
+    ACTION_PTZ_TOUR_DELETE,
+    ACTION_PTZ_TOUR_SET,
+    ACTION_PTZ_TOUR_START,
+    ACTION_PTZ_TOUR_STOP,
+    ACTION_PTZ_ZOOM,
+    write_audit,
+)
 from app.services.camera_identity import get_camera_by_ref
 from app.services.ptz_control import (
+    delete_pattern,
     delete_preset,
+    delete_tour,
     goto_preset,
+    list_patterns,
     list_presets,
+    list_tours,
     ptz_capabilities,
     ptz_continuous,
     ptz_move_direction,
     ptz_stop,
+    record_pattern_start,
+    record_pattern_stop,
+    set_pattern,
     set_preset,
+    set_tour,
+    start_pattern,
+    start_tour,
+    stop_pattern,
+    stop_tour,
 )
 
 logger = logging.getLogger(__name__)
@@ -43,6 +74,35 @@ async def _require_live_camera(request: web.Request, camera_id: str) -> tuple[di
     if not camera.get("ptz"):
         return None, web.json_response({"error": "Camera is not marked as PTZ"}, status=400)
     return camera, None
+
+
+def _result_response(result: dict, *, ok_status: int = 200) -> web.Response:
+    if result.get("ok"):
+        return web.json_response(result, status=ok_status)
+    # Unsupported features: clear 501 so UI can disable without looking like a crash.
+    if result.get("supported") is False or result.get("unsupported"):
+        return web.json_response(result, status=501)
+    return web.json_response(result, status=502)
+
+
+async def _audit_ptz(
+    request: web.Request,
+    *,
+    action: str,
+    camera_id: str,
+    success: bool,
+    metadata: dict | None = None,
+) -> None:
+    actor = await get_effective_user(request)
+    await write_audit(
+        action=action,
+        actor=actor,
+        resource_type="camera",
+        resource_id=camera_id,
+        request=request,
+        success=success,
+        metadata={"camera_id": camera_id, **(metadata or {})},
+    )
 
 
 async def ptz_list_cameras(request: web.Request) -> web.Response:
@@ -160,8 +220,7 @@ async def ptz_presets_list(request: web.Request) -> web.Response:
     if err is not None:
         return err
     result = await list_presets(camera)
-    status = 200 if result.get("ok") else 502
-    return web.json_response(result, status=status)
+    return _result_response(result)
 
 
 async def ptz_preset_goto(request: web.Request) -> web.Response:
@@ -171,9 +230,15 @@ async def ptz_preset_goto(request: web.Request) -> web.Response:
     if err is not None:
         return err
     result = await goto_preset(camera, int(preset_id))
-    if not result.get("ok"):
-        return web.json_response(result, status=502)
-    return web.json_response({"ok": True})
+    if result.get("ok"):
+        await _audit_ptz(
+            request,
+            action=ACTION_PTZ_PRESET_GOTO,
+            camera_id=camera_id,
+            success=True,
+            metadata={"preset_id": int(preset_id)},
+        )
+    return _result_response(result)
 
 
 async def ptz_preset_set(request: web.Request) -> web.Response:
@@ -188,9 +253,15 @@ async def ptz_preset_set(request: web.Request) -> web.Response:
         body = {}
     name = str(body.get("name") or f"Preset {preset_id}")
     result = await set_preset(camera, int(preset_id), name)
-    if not result.get("ok"):
-        return web.json_response(result, status=502)
-    return web.json_response({"ok": True})
+    if result.get("ok"):
+        await _audit_ptz(
+            request,
+            action=ACTION_PTZ_PRESET_SET,
+            camera_id=camera_id,
+            success=True,
+            metadata={"preset_id": int(preset_id), "preset_name": name[:80]},
+        )
+    return _result_response(result)
 
 
 async def ptz_preset_delete(request: web.Request) -> web.Response:
@@ -200,9 +271,234 @@ async def ptz_preset_delete(request: web.Request) -> web.Response:
     if err is not None:
         return err
     result = await delete_preset(camera, int(preset_id))
-    if not result.get("ok"):
-        return web.json_response(result, status=502)
-    return web.json_response({"ok": True})
+    if result.get("ok"):
+        await _audit_ptz(
+            request,
+            action=ACTION_PTZ_PRESET_DELETE,
+            camera_id=camera_id,
+            success=True,
+            metadata={"preset_id": int(preset_id)},
+        )
+    return _result_response(result)
+
+
+async def ptz_tours_list(request: web.Request) -> web.Response:
+    camera_id = request.match_info["cameraId"]
+    camera, err = await _require_live_camera(request, camera_id)
+    if err is not None:
+        return err
+    result = await list_tours(camera)
+    return _result_response(result)
+
+
+async def ptz_tour_set(request: web.Request) -> web.Response:
+    camera_id = request.match_info["cameraId"]
+    tour_id = request.match_info["tourId"]
+    camera, err = await _require_live_camera(request, camera_id)
+    if err is not None:
+        return err
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    name = str(body.get("name") or f"Tour {tour_id}")
+    steps = body.get("steps") or []
+    if not isinstance(steps, list):
+        return web.json_response({"ok": False, "error": "steps must be a list"}, status=400)
+    if not steps:
+        return web.json_response({"ok": False, "error": "Tour requires at least one preset step"}, status=400)
+    enabled = body.get("enabled", True) is not False
+    result = await set_tour(camera, int(tour_id), name=name, steps=steps, enabled=enabled)
+    if result.get("ok"):
+        await _audit_ptz(
+            request,
+            action=ACTION_PTZ_TOUR_SET,
+            camera_id=camera_id,
+            success=True,
+            metadata={
+                "tour_id": int(tour_id),
+                "tour_name": name[:80],
+                "step_count": len(steps),
+                "enabled": enabled,
+            },
+        )
+    return _result_response(result)
+
+
+async def ptz_tour_delete(request: web.Request) -> web.Response:
+    camera_id = request.match_info["cameraId"]
+    tour_id = request.match_info["tourId"]
+    camera, err = await _require_live_camera(request, camera_id)
+    if err is not None:
+        return err
+    result = await delete_tour(camera, int(tour_id))
+    if result.get("ok"):
+        await _audit_ptz(
+            request,
+            action=ACTION_PTZ_TOUR_DELETE,
+            camera_id=camera_id,
+            success=True,
+            metadata={"tour_id": int(tour_id)},
+        )
+    return _result_response(result)
+
+
+async def ptz_tour_start(request: web.Request) -> web.Response:
+    camera_id = request.match_info["cameraId"]
+    tour_id = request.match_info["tourId"]
+    camera, err = await _require_live_camera(request, camera_id)
+    if err is not None:
+        return err
+    result = await start_tour(camera, int(tour_id))
+    if result.get("ok"):
+        await _audit_ptz(
+            request,
+            action=ACTION_PTZ_TOUR_START,
+            camera_id=camera_id,
+            success=True,
+            metadata={"tour_id": int(tour_id)},
+        )
+    return _result_response(result)
+
+
+async def ptz_tour_stop(request: web.Request) -> web.Response:
+    camera_id = request.match_info["cameraId"]
+    tour_id = request.match_info["tourId"]
+    camera, err = await _require_live_camera(request, camera_id)
+    if err is not None:
+        return err
+    result = await stop_tour(camera, int(tour_id))
+    if result.get("ok"):
+        await _audit_ptz(
+            request,
+            action=ACTION_PTZ_TOUR_STOP,
+            camera_id=camera_id,
+            success=True,
+            metadata={"tour_id": int(tour_id)},
+        )
+    return _result_response(result)
+
+
+async def ptz_patterns_list(request: web.Request) -> web.Response:
+    camera_id = request.match_info["cameraId"]
+    camera, err = await _require_live_camera(request, camera_id)
+    if err is not None:
+        return err
+    result = await list_patterns(camera)
+    return _result_response(result)
+
+
+async def ptz_pattern_set(request: web.Request) -> web.Response:
+    camera_id = request.match_info["cameraId"]
+    pattern_id = request.match_info["patternId"]
+    camera, err = await _require_live_camera(request, camera_id)
+    if err is not None:
+        return err
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    name = str(body.get("name") or f"Pattern {pattern_id}")
+    result = await set_pattern(camera, int(pattern_id), name=name)
+    if result.get("ok"):
+        await _audit_ptz(
+            request,
+            action=ACTION_PTZ_PATTERN_SET,
+            camera_id=camera_id,
+            success=True,
+            metadata={"pattern_id": int(pattern_id), "pattern_name": name[:80]},
+        )
+    return _result_response(result)
+
+
+async def ptz_pattern_delete(request: web.Request) -> web.Response:
+    camera_id = request.match_info["cameraId"]
+    pattern_id = request.match_info["patternId"]
+    camera, err = await _require_live_camera(request, camera_id)
+    if err is not None:
+        return err
+    result = await delete_pattern(camera, int(pattern_id))
+    if result.get("ok"):
+        await _audit_ptz(
+            request,
+            action=ACTION_PTZ_PATTERN_DELETE,
+            camera_id=camera_id,
+            success=True,
+            metadata={"pattern_id": int(pattern_id)},
+        )
+    return _result_response(result)
+
+
+async def ptz_pattern_start(request: web.Request) -> web.Response:
+    camera_id = request.match_info["cameraId"]
+    pattern_id = request.match_info["patternId"]
+    camera, err = await _require_live_camera(request, camera_id)
+    if err is not None:
+        return err
+    result = await start_pattern(camera, int(pattern_id))
+    if result.get("ok"):
+        await _audit_ptz(
+            request,
+            action=ACTION_PTZ_PATTERN_START,
+            camera_id=camera_id,
+            success=True,
+            metadata={"pattern_id": int(pattern_id)},
+        )
+    return _result_response(result)
+
+
+async def ptz_pattern_stop(request: web.Request) -> web.Response:
+    camera_id = request.match_info["cameraId"]
+    pattern_id = request.match_info["patternId"]
+    camera, err = await _require_live_camera(request, camera_id)
+    if err is not None:
+        return err
+    result = await stop_pattern(camera, int(pattern_id))
+    if result.get("ok"):
+        await _audit_ptz(
+            request,
+            action=ACTION_PTZ_PATTERN_STOP,
+            camera_id=camera_id,
+            success=True,
+            metadata={"pattern_id": int(pattern_id)},
+        )
+    return _result_response(result)
+
+
+async def ptz_pattern_record_start(request: web.Request) -> web.Response:
+    camera_id = request.match_info["cameraId"]
+    pattern_id = request.match_info["patternId"]
+    camera, err = await _require_live_camera(request, camera_id)
+    if err is not None:
+        return err
+    result = await record_pattern_start(camera, int(pattern_id))
+    if result.get("ok"):
+        await _audit_ptz(
+            request,
+            action=ACTION_PTZ_PATTERN_RECORD_START,
+            camera_id=camera_id,
+            success=True,
+            metadata={"pattern_id": int(pattern_id)},
+        )
+    return _result_response(result)
+
+
+async def ptz_pattern_record_stop(request: web.Request) -> web.Response:
+    camera_id = request.match_info["cameraId"]
+    pattern_id = request.match_info["patternId"]
+    camera, err = await _require_live_camera(request, camera_id)
+    if err is not None:
+        return err
+    result = await record_pattern_stop(camera, int(pattern_id))
+    if result.get("ok"):
+        await _audit_ptz(
+            request,
+            action=ACTION_PTZ_PATTERN_RECORD_STOP,
+            camera_id=camera_id,
+            success=True,
+            metadata={"pattern_id": int(pattern_id)},
+        )
+    return _result_response(result)
 
 
 async def ptz_status(request: web.Request) -> web.Response:
@@ -211,7 +507,7 @@ async def ptz_status(request: web.Request) -> web.Response:
     if err is not None:
         return err
     result = await ptz_capabilities(camera)
-    return web.json_response(result, status=200 if result.get("ok") else 502)
+    return _result_response(result)
 
 
 def setup_ptz_routes(app: web.Application) -> None:
@@ -223,3 +519,21 @@ def setup_ptz_routes(app: web.Application) -> None:
     app.router.add_post("/api/ptz/{cameraId}/presets/{presetId}/goto", ptz_preset_goto)
     app.router.add_put("/api/ptz/{cameraId}/presets/{presetId}", ptz_preset_set)
     app.router.add_delete("/api/ptz/{cameraId}/presets/{presetId}", ptz_preset_delete)
+    app.router.add_get("/api/ptz/{cameraId}/tours", ptz_tours_list)
+    app.router.add_put("/api/ptz/{cameraId}/tours/{tourId}", ptz_tour_set)
+    app.router.add_delete("/api/ptz/{cameraId}/tours/{tourId}", ptz_tour_delete)
+    app.router.add_post("/api/ptz/{cameraId}/tours/{tourId}/start", ptz_tour_start)
+    app.router.add_post("/api/ptz/{cameraId}/tours/{tourId}/stop", ptz_tour_stop)
+    app.router.add_get("/api/ptz/{cameraId}/patterns", ptz_patterns_list)
+    app.router.add_put("/api/ptz/{cameraId}/patterns/{patternId}", ptz_pattern_set)
+    app.router.add_delete("/api/ptz/{cameraId}/patterns/{patternId}", ptz_pattern_delete)
+    app.router.add_post("/api/ptz/{cameraId}/patterns/{patternId}/start", ptz_pattern_start)
+    app.router.add_post("/api/ptz/{cameraId}/patterns/{patternId}/stop", ptz_pattern_stop)
+    app.router.add_post(
+        "/api/ptz/{cameraId}/patterns/{patternId}/record-start",
+        ptz_pattern_record_start,
+    )
+    app.router.add_post(
+        "/api/ptz/{cameraId}/patterns/{patternId}/record-stop",
+        ptz_pattern_record_stop,
+    )

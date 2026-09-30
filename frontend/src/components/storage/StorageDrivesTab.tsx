@@ -24,20 +24,12 @@ export default function StorageDrivesTab({ data }: { data: StorageDashboardData 
           <HardDrive size={16} className="text-gray-400 flex-shrink-0" />
           <h3 className="text-sm font-semibold text-white">Recordings Volume</h3>
           <span className={`text-[11px] font-semibold ${colors.badge}`}>{diskStatusLabel(disk)}</span>
+          {disk.allow_recording === false && (
+            <span className="text-[10px] text-red-300">Recording blocked</span>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
-          <span className="flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-            &gt;20%
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
-            10–20%
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-            &lt;10%
-          </span>
+          <span>Online / Low Space / Critical / Unavailable</span>
         </div>
       </div>
 
@@ -73,11 +65,18 @@ export default function StorageDrivesTab({ data }: { data: StorageDashboardData 
         <div className="flex items-start gap-1.5 mt-2 text-[11px]">
           <AlertTriangle size={12} className={`${colors.text} flex-shrink-0 mt-0.5`} />
           <p className="text-gray-400">
-            {level === 'red'
-              ? `Critical: only ${freePct}% free — increase storage or reduce retention.`
-              : `Low storage: ${freePct}% free — plan for more capacity.`}
+            {disk.error
+              ? disk.error
+              : level === 'red'
+                ? `Storage issue (${diskStatusLabel(disk)}) — check mount writability and free space. Recording will not fall back to another disk.`
+                : `Low Space: ${freePct}% free — plan capacity; recordings stay on this configured path.`}
           </p>
         </div>
+      )}
+      {disk.storage_model && (
+        <p className="text-[10px] text-gray-500 mt-2">
+          Storage model: OS filesystem (local / DAS / NAS / SAN via host mount).
+        </p>
       )}
     </Card>
   );

@@ -488,10 +488,18 @@ async def set_preset(camera: dict, preset_id: int, name: str) -> Dict[str, Any]:
     token, err = await _get_profile_token(camera)
     if not token:
         return err
+    listed = await list_presets(camera)
+    match = None
+    if listed.get("ok"):
+        match = next((p for p in listed.get("presets") or [] if p.get("id") == int(preset_id)), None)
+    preset_token_xml = ""
+    if match and match.get("token"):
+        preset_token_xml = f"<tptz:PresetToken>{_xml_escape(str(match['token']))}</tptz:PresetToken>"
     body = (
         f'<tptz:SetPreset xmlns:tptz="{_TPTZ}">'
         f"<tptz:ProfileToken>{_xml_escape(token)}</tptz:ProfileToken>"
         f"<tptz:PresetName>{_xml_escape(name or f'Preset {preset_id}')}</tptz:PresetName>"
+        f"{preset_token_xml}"
         f"</tptz:SetPreset>"
     )
     status, text, _url = await _try_ptz(camera, f"{_TPTZ}/SetPreset", body)
@@ -521,8 +529,297 @@ async def delete_preset(camera: dict, preset_id: int) -> Dict[str, Any]:
     return {"ok": True, "backend": "onvif"}
 
 
+def _parse_preset_tours(text: str) -> List[Dict[str, Any]]:
+    tours: List[Dict[str, Any]] = []
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError:
+        return tours
+    for node in root.iter():
+        if _local(node.tag) != "PresetTour":
+            continue
+        tour_token = node.attrib.get("token") or ""
+        name = ""
+        steps: List[Dict[str, Any]] = []
+        for child in node:
+            lt = _local(child.tag)
+            if lt == "Name":
+                name = (child.text or "").strip()
+            elif lt == "TourSpot":
+                preset_token = ""
+                delay = 5.0
+                for spot_child in child:
+                    st = _local(spot_child.tag)
+                    if st == "PresetDetail":
+                        for detail in spot_child:
+                            if _local(detail.tag) == "PresetToken":
+                                preset_token = (detail.text or "").strip()
+                            # some devices use attribute
+                        if not preset_token:
+                            preset_token = spot_child.attrib.get("token") or ""
+                        for detail in spot_child:
+                            if _local(detail.tag) == "PresetToken" and detail.text:
+                                preset_token = detail.text.strip()
+                    elif st == "StayTime":
+                        try:
+                            delay = float((spot_child.text or "5").strip())
+                        except ValueError:
+                            delay = 5.0
+                if preset_token:
+                    try:
+                        preset_id = int(preset_token)
+                    except ValueError:
+                        preset_id = abs(hash(preset_token)) % 10000
+                    steps.append({"presetId": preset_id, "presetToken": preset_token, "delay": int(delay)})
+        if not tour_token:
+            continue
+        try:
+            tour_id = int(tour_token)
+        except ValueError:
+            tour_id = abs(hash(tour_token)) % 10000
+        tours.append(
+            {
+                "id": tour_id,
+                "token": tour_token,
+                "name": name or f"Tour {tour_token}",
+                "steps": steps,
+            }
+        )
+    tours.sort(key=lambda t: t["id"])
+    return tours
+
+
+async def list_tours(camera: dict) -> Dict[str, Any]:
+    token, err = await _get_profile_token(camera)
+    if not token:
+        err["tours"] = []
+        err["supported"] = False
+        return err
+    body = (
+        f'<tptz:GetPresetTours xmlns:tptz="{_TPTZ}">'
+        f"<tptz:ProfileToken>{_xml_escape(token)}</tptz:ProfileToken>"
+        f"</tptz:GetPresetTours>"
+    )
+    status, text, _url = await _try_ptz(camera, f"{_TPTZ}/GetPresetTours", body)
+    if status != 200 or "Fault" in text:
+        # Many cameras do not implement preset tours.
+        unsupported = "NotImplemented" in text or "ActionNotSupported" in text or status == 404
+        return {
+            "ok": False,
+            "supported": not unsupported and status == 200,
+            "status": status,
+            "error": _error_from_response(status, text),
+            "tours": [],
+            "backend": "onvif",
+        }
+    return {
+        "ok": True,
+        "supported": True,
+        "tours": _parse_preset_tours(text),
+        "backend": "onvif",
+    }
+
+
+async def set_tour(
+    camera: dict,
+    tour_id: int,
+    *,
+    name: str,
+    steps: List[Dict[str, Any]],
+    enabled: bool = True,
+) -> Dict[str, Any]:
+    del enabled  # ONVIF tour enable is via AutoStart; keep signature compatible
+    if not steps:
+        return {"ok": False, "error": "Tour requires at least one preset step", "backend": "onvif"}
+    token, err = await _get_profile_token(camera)
+    if not token:
+        return err
+    listed = await list_presets(camera)
+    preset_by_id = {p["id"]: p for p in (listed.get("presets") or [])} if listed.get("ok") else {}
+    spots = []
+    for step in steps:
+        preset_id = int(step.get("presetId") or step.get("preset_id") or 0)
+        preset = preset_by_id.get(preset_id) or {}
+        preset_token = str(step.get("presetToken") or preset.get("token") or preset_id)
+        delay = float(step.get("delay") or 5)
+        spots.append(
+            f"<tt:TourSpot>"
+            f"<tt:PresetDetail>"
+            f"<tt:PresetToken>{_xml_escape(preset_token)}</tt:PresetToken>"
+            f"</tt:PresetDetail>"
+            f"<tt:StayTime>PT{max(1, int(delay))}S</tt:StayTime>"
+            f"</tt:TourSpot>"
+        )
+    listed_tours = await list_tours(camera)
+    existing = None
+    if listed_tours.get("ok"):
+        existing = next((t for t in listed_tours.get("tours") or [] if t.get("id") == int(tour_id)), None)
+    tour_token = str((existing or {}).get("token") or tour_id)
+    if existing:
+        body = (
+            f'<tptz:ModifyPresetTour xmlns:tptz="{_TPTZ}" xmlns:tt="{_TT}">'
+            f"<tptz:ProfileToken>{_xml_escape(token)}</tptz:ProfileToken>"
+            f"<tptz:PresetTour token=\"{_xml_escape(tour_token)}\">"
+            f"<tt:Name>{_xml_escape(name or f'Tour {tour_id}')}</tt:Name>"
+            f"{''.join(spots)}"
+            f"</tptz:PresetTour>"
+            f"</tptz:ModifyPresetTour>"
+        )
+        action = f"{_TPTZ}/ModifyPresetTour"
+    else:
+        body = (
+            f'<tptz:CreatePresetTour xmlns:tptz="{_TPTZ}" xmlns:tt="{_TT}">'
+            f"<tptz:ProfileToken>{_xml_escape(token)}</tptz:ProfileToken>"
+            f"<tptz:PresetTour>"
+            f"<tt:Name>{_xml_escape(name or f'Tour {tour_id}')}</tt:Name>"
+            f"{''.join(spots)}"
+            f"</tptz:PresetTour>"
+            f"</tptz:CreatePresetTour>"
+        )
+        action = f"{_TPTZ}/CreatePresetTour"
+    status, text, _url = await _try_ptz(camera, action, body)
+    if status not in (200, 201, 204) or "Fault" in text:
+        return {"ok": False, "status": status, "error": _error_from_response(status, text), "backend": "onvif"}
+    return {"ok": True, "backend": "onvif"}
+
+
+async def delete_tour(camera: dict, tour_id: int) -> Dict[str, Any]:
+    token, err = await _get_profile_token(camera)
+    if not token:
+        return err
+    listed = await list_tours(camera)
+    match = None
+    if listed.get("ok"):
+        match = next((t for t in listed.get("tours") or [] if t.get("id") == int(tour_id)), None)
+    tour_token = str((match or {}).get("token") or tour_id)
+    body = (
+        f'<tptz:RemovePresetTour xmlns:tptz="{_TPTZ}">'
+        f"<tptz:ProfileToken>{_xml_escape(token)}</tptz:ProfileToken>"
+        f"<tptz:PresetTourToken>{_xml_escape(tour_token)}</tptz:PresetTourToken>"
+        f"</tptz:RemovePresetTour>"
+    )
+    status, text, _url = await _try_ptz(camera, f"{_TPTZ}/RemovePresetTour", body)
+    if status not in (200, 201, 204) or "Fault" in text:
+        return {"ok": False, "status": status, "error": _error_from_response(status, text), "backend": "onvif"}
+    return {"ok": True, "backend": "onvif"}
+
+
+async def start_tour(camera: dict, tour_id: int) -> Dict[str, Any]:
+    return await _operate_tour(camera, tour_id, "Start")
+
+
+async def stop_tour(camera: dict, tour_id: int) -> Dict[str, Any]:
+    return await _operate_tour(camera, tour_id, "Stop")
+
+
+async def _operate_tour(camera: dict, tour_id: int, operation: str) -> Dict[str, Any]:
+    token, err = await _get_profile_token(camera)
+    if not token:
+        return err
+    listed = await list_tours(camera)
+    match = None
+    if listed.get("ok"):
+        match = next((t for t in listed.get("tours") or [] if t.get("id") == int(tour_id)), None)
+    tour_token = str((match or {}).get("token") or tour_id)
+    body = (
+        f'<tptz:OperatePresetTour xmlns:tptz="{_TPTZ}">'
+        f"<tptz:ProfileToken>{_xml_escape(token)}</tptz:ProfileToken>"
+        f"<tptz:PresetTourToken>{_xml_escape(tour_token)}</tptz:PresetTourToken>"
+        f"<tptz:Operation>{operation}</tptz:Operation>"
+        f"</tptz:OperatePresetTour>"
+    )
+    status, text, _url = await _try_ptz(camera, f"{_TPTZ}/OperatePresetTour", body)
+    if status not in (200, 201, 204) or "Fault" in text:
+        return {"ok": False, "status": status, "error": _error_from_response(status, text), "backend": "onvif"}
+    return {"ok": True, "backend": "onvif"}
+
+
+_PATTERN_UNSUPPORTED = {
+    "ok": False,
+    "supported": False,
+    "patterns": [],
+    "error": (
+        "ONVIF has no standard PTZ Pattern API. "
+        "Patterns (recorded pan/tilt/zoom paths) are distinct from PresetTour/patrols; "
+        "use Hikvision ISAPI when the device exposes /patterns."
+    ),
+    "backend": "onvif",
+    "distinct_from_tour_patrol": True,
+}
+
+
+async def list_patterns(camera: dict) -> Dict[str, Any]:
+    del camera
+    return dict(_PATTERN_UNSUPPORTED)
+
+
+async def set_pattern(camera: dict, pattern_id: int, *, name: str) -> Dict[str, Any]:
+    del camera, pattern_id, name
+    return dict(_PATTERN_UNSUPPORTED)
+
+
+async def delete_pattern(camera: dict, pattern_id: int) -> Dict[str, Any]:
+    del camera, pattern_id
+    return dict(_PATTERN_UNSUPPORTED)
+
+
+async def start_pattern(camera: dict, pattern_id: int) -> Dict[str, Any]:
+    del camera, pattern_id
+    return dict(_PATTERN_UNSUPPORTED)
+
+
+async def stop_pattern(camera: dict, pattern_id: int) -> Dict[str, Any]:
+    del camera, pattern_id
+    return dict(_PATTERN_UNSUPPORTED)
+
+
+async def record_pattern_start(camera: dict, pattern_id: int) -> Dict[str, Any]:
+    del camera, pattern_id
+    return dict(_PATTERN_UNSUPPORTED)
+
+
+async def record_pattern_stop(camera: dict, pattern_id: int) -> Dict[str, Any]:
+    del camera, pattern_id
+    return dict(_PATTERN_UNSUPPORTED)
+
+
 async def ptz_capabilities(camera: dict) -> Dict[str, Any]:
     token, err = await _get_profile_token(camera)
-    if token:
-        return {"ok": True, "supported": True, "backend": "onvif"}
-    return {"ok": False, "supported": False, "error": err.get("error") or "ONVIF PTZ not available"}
+    if not token:
+        return {
+            "ok": False,
+            "supported": False,
+            "presetsSupported": False,
+            "toursSupported": False,
+            "patternsSupported": False,
+            "error": err.get("error") or "ONVIF PTZ not available",
+            "backend": "onvif",
+        }
+    tours = await list_tours(camera)
+    tours_supported = bool(tours.get("ok") or tours.get("supported"))
+    return {
+        "ok": True,
+        "supported": True,
+        "backend": "onvif",
+        "presetsSupported": True,
+        "toursSupported": tours_supported,
+        "patternsSupported": False,
+        "rdso_18_2_23": False,
+        "patternDistinctFromTourPatrol": True,
+        "presets": {"list": True, "set": True, "goto": True, "delete": True},
+        "tours": {
+            "list": tours_supported,
+            "set": tours_supported,
+            "start": tours_supported,
+            "stop": tours_supported,
+            "delete": tours_supported,
+        },
+        "patterns": {
+            "list": False,
+            "set": False,
+            "start": False,
+            "stop": False,
+            "record": False,
+            "delete": False,
+        },
+    }

@@ -9,9 +9,14 @@ immediately and never start a player after cancellation.
 */
 
 const MAX_CONCURRENT = Math.max(
-  1,
+  16,
   Number(import.meta.env.VITE_GO2RTC_MAX_CONCURRENT ?? 16),
 );
+
+/** Exported for RDSO 18.2.6 capability checks — connect ramp only, not FPS. */
+export function go2rtcConnectRampLimit(): number {
+  return MAX_CONCURRENT;
+}
 
 const isDev = Boolean(import.meta.env.DEV);
 

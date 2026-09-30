@@ -29,6 +29,10 @@ ENCODER_TAGS = (
     "maxFrameRate",
     "GovLength",
     "keyFrameInterval",
+    "constantBitRate",
+    "vbrUpperCap",
+    "maxBitRate",
+    "videoQualityControlType",
 )
 
 MIN_FPS = 1
@@ -228,6 +232,28 @@ async def _read_channel(camera: dict, channel: str) -> Tuple[Optional[str], str,
     return xml, cap, None
 
 
+def parse_bitrate_kbps(fields: Dict[str, Optional[str]]) -> Optional[int]:
+    """Best configured bitrate (kbps) from ISAPI encoder fields. None if unknown."""
+    qtype = (fields.get("videoQualityControlType") or "").strip().upper()
+    candidates: list[str] = []
+    if qtype == "CBR":
+        candidates = ["constantBitRate", "vbrUpperCap", "maxBitRate"]
+    else:
+        # VBR / unknown — prefer upper cap then CBR field
+        candidates = ["vbrUpperCap", "maxBitRate", "constantBitRate"]
+    for key in candidates:
+        raw = fields.get(key)
+        if raw is None or str(raw).strip() == "":
+            continue
+        try:
+            val = int(float(str(raw).strip()))
+        except (TypeError, ValueError):
+            continue
+        if val > 0:
+            return val
+    return None
+
+
 def _build_profile_block(
     profile: str,
     channel: str,
@@ -253,6 +279,7 @@ def _build_profile_block(
     height = fields.get("videoResolutionHeight")
     res_options = _resolution_options(cap_xml, width, height)
     fps_options = _fps_options(cap_xml, fps)
+    bitrate_kbps = parse_bitrate_kbps(fields)
 
     width_int = int(width) if width and str(width).isdigit() else None
     height_int = int(height) if height and str(height).isdigit() else None
@@ -271,6 +298,11 @@ def _build_profile_block(
             "height": height_int,
             "codec": fields.get("videoCodecType"),
             "resolution": f"{width_int}x{height_int}" if width_int and height_int else None,
+            "bitrate_kbps": bitrate_kbps,
+            "rate_control": fields.get("videoQualityControlType"),
+            "constantBitRate": fields.get("constantBitRate"),
+            "vbrUpperCap": fields.get("vbrUpperCap"),
+            "maxBitRate": fields.get("maxBitRate"),
         },
         "capabilities": {
             "fps": {

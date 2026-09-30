@@ -20,6 +20,8 @@ export interface User {
   permissions?: string[];
   password?: string;
   cameraAccess?: CameraAccess;
+  /** RDSO 18.1.27 operator priority 1–5 (distinct from role/permissions). */
+  priority?: number;
 }
 
 const STORAGE_KEY = 'currentUser';

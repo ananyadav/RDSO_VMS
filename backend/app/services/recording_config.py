@@ -33,6 +33,28 @@ else:
 STATUS_LOG_INTERVAL_SECONDS = int(os.getenv("RECORDING_STATUS_LOG_SECONDS", "60"))
 RETENTION_PASS_INTERVAL_SECONDS = int(os.getenv("RECORDING_RETENTION_PASS_SECONDS", "300"))
 
+# Fault-tolerant restart after unexpected FFmpeg / network failure (bounded backoff).
+RECORDING_RESTART_BASE_SECONDS = float(os.getenv("RECORDING_RESTART_BASE_SECONDS", "2"))
+RECORDING_RESTART_MAX_SECONDS = float(os.getenv("RECORDING_RESTART_MAX_SECONDS", "60"))
+# After a respawn survives this long, the failure streak resets.
+RECORDING_RESTART_STABLE_SECONDS = float(os.getenv("RECORDING_RESTART_STABLE_SECONDS", "15"))
+
+# Concurrent recording streams: 0 = unlimited (no software ceiling below RDSO capacity).
+# Set only if operators intentionally want a soft safety cap on this host.
+RECORDING_MAX_CONCURRENT = int(os.getenv("RECORDING_MAX_CONCURRENT", "0"))
+
+# RDSO 18.3.5 minimum simultaneous recording streams (software must not soft-cap below this).
+RDSO_MIN_SIMULTANEOUS_RECORDING_STREAMS = int(
+    os.getenv("RDSO_MIN_SIMULTANEOUS_RECORDING_STREAMS", "128")
+)
+
+# When true, map optional camera audio into the HLS archive (AAC). Video stays stream-copy.
+RECORDING_AUDIO_ENABLED = os.getenv("RECORDING_AUDIO_ENABLED", "true").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
+
 
 def _env_retention_days() -> float:
     if _retention_hours:
@@ -65,7 +87,35 @@ def get_retention_policy() -> dict:
 
 
 def resolve_recording_stream_choice(camera_doc: dict) -> str:
-    """Per-camera main/sub choice; RECORDING_STREAM env is fallback when unset."""
+    """Per-camera main/sub choice; RECORDING_STREAM env is fallback when unset.
+
+    RDSO 18.3.14: when motion/activity mode is enabled, an in-memory override
+    selects active (evidence) vs idle (background) stream.
+    """
+    cam_id = str(camera_doc.get("_id") or camera_doc.get("id") or "")
+    if cam_id:
+        try:
+            from app.services.motion_recording_controller import get_stream_override
+
+            override = get_stream_override(cam_id)
+            if override in ("main", "sub"):
+                return override
+        except Exception:
+            pass
+
+    # Persist desired stream from motion_recording when enabled but override not yet set
+    mr = camera_doc.get("motion_recording")
+    if isinstance(mr, dict) and mr.get("enabled"):
+        idle = str(mr.get("idle_stream") or "sub").strip().lower()
+        if idle in ("main", "sub"):
+            # Default to idle until first motion event elevates override
+            from app.services.motion_recording_controller import get_activity_state
+
+            st = get_activity_state(cam_id)
+            if st.get("enabled") and st.get("current_stream") in ("main", "sub"):
+                return st["current_stream"]
+            return idle
+
     raw = (camera_doc.get("recording_channel") or "").strip().lower()
     if raw == "main":
         return "main"
@@ -94,7 +144,7 @@ def recording_stream_profile() -> str:
 
 
 def get_recording_stream_info() -> dict:
-    """API/UI payload for current recording stream selection."""
+    """API/UI payload for current recording stream selection / codec capability."""
     is_main = RECORDING_STREAM == "main"
     return {
         "recording_stream": RECORDING_STREAM,
@@ -107,7 +157,55 @@ def get_recording_stream_info() -> dict:
         "substream_warning": not is_main,
         "stream_profile": recording_stream_profile(),
         "transcode": False,
-        "codec_mode": "copy",
+        "codec_mode": "copy_or_mjpeg_encode",
+        # RDSO 18.3.1 — H.264/H.265 remux; MJPEG encoded to H.264 for HLS/TS Playback.
+        "video_codecs_supported": ["H.264", "H.265", "MJPEG"],
+        "video_note": (
+            "H.264/H.265 from the camera RTSP source are remuxed without re-encode. "
+            "MJPEG sources are detected and encoded to H.264 so archived HLS Playback/export remains playable."
+        ),
+        "audio_enabled": RECORDING_AUDIO_ENABLED,
+        "audio_mode": "aac_when_present" if RECORDING_AUDIO_ENABLED else "disabled",
+        "audio_note": (
+            "When the camera/source provides an audio track it is recorded as AAC alongside "
+            "copied video; video-only sources remain valid."
+            if RECORDING_AUDIO_ENABLED
+            else "Audio mapping is disabled (RECORDING_AUDIO_ENABLED=false)."
+        ),
+        "max_concurrent_recordings": RECORDING_MAX_CONCURRENT,
+        "max_concurrent_unlimited": RECORDING_MAX_CONCURRENT <= 0,
+    }
+
+
+def get_recording_capacity_info() -> dict:
+    """Software concurrent-recording capacity (RDSO 18.3.5 — no artificial low ceiling)."""
+    from app.services.video_recording import ACTIVE_RECORDINGS
+
+    active = sum(
+        1
+        for entry in ACTIVE_RECORDINGS.values()
+        if entry.get("recorder") is not None and getattr(entry["recorder"], "is_recording", False)
+    )
+    limit = int(RECORDING_MAX_CONCURRENT)
+    rdso_min = max(1, int(RDSO_MIN_SIMULTANEOUS_RECORDING_STREAMS))
+    soft_cap_blocks_rdso = limit > 0 and limit < rdso_min
+    return {
+        "active_recording_streams": active,
+        "max_concurrent_recordings": limit,
+        "unlimited": limit <= 0,
+        "software_limit_enforced": limit > 0,
+        "rdso_min_simultaneous_streams": rdso_min,
+        "rdso_18_3_5_software_compliant": not soft_cap_blocks_rdso,
+        "note": (
+            "No software concurrent-recording ceiling is configured; capacity is host/RTSP/disk."
+            if limit <= 0
+            else (
+                f"Soft host safety cap RECORDING_MAX_CONCURRENT={limit} is BELOW RDSO minimum "
+                f"{rdso_min} — raise or clear the cap for 18.3.5 compliance."
+                if soft_cap_blocks_rdso
+                else f"Soft host safety cap RECORDING_MAX_CONCURRENT={limit}."
+            )
+        ),
     }
 
 

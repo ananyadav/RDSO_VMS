@@ -17,8 +17,10 @@ from app.services.stream_profile_service import (
     get_camera_stream_profile,
 )
 from app.core.database import delete_camera
-from app.core.access_control import require_admin
+from app.core.access_control import deny_unless_camera_access, require_admin
 from app.core.auth_context import get_effective_user
+from app.services.camera_identity import get_camera_by_ref
+from app.services.client_media_routing import build_client_media_routing
 from app.services.audit_service import (
     ACTION_CAMERA_CREATED,
     ACTION_CAMERA_DELETED,
@@ -52,6 +54,104 @@ async def get_camera_groups_endpoint(request):
 async def get_configured_cameras(request):
     configured = await get_configured_cameras_for_user(request)
     return web.json_response(configured)
+
+
+async def get_camera_client_media_routing_endpoint(request: web.Request):
+    """GET /api/cameras/{id}/client-media — seamless live/playback routes (18.1.19 / 18.1.20).
+
+    Authenticated + camera ACL. Returns relative VMS paths only — no recording-server hosts
+    or credentials. Camera identity remains camera_id / camera_uid across HA reassignment.
+    """
+    camera_id = request.match_info.get("id") or ""
+    denied = await deny_unless_camera_access(request, camera_id)
+    if denied is not None:
+        return denied
+    camera = await get_camera_by_ref(camera_id)
+    if not camera:
+        return web.json_response({"error": "Camera not found"}, status=404)
+    return web.json_response(build_client_media_routing(camera))
+
+
+async def get_camera_transport_endpoint(request: web.Request):
+    """GET /api/cameras/{id}/transport — unicast/multicast transport status (18.2.3 / 18.2.27)."""
+    camera_id = request.match_info.get("id") or ""
+    denied = await deny_unless_camera_access(request, camera_id)
+    if denied is not None:
+        return denied
+    camera = await get_camera_by_ref(camera_id)
+    if not camera:
+        return web.json_response({"error": "Camera not found"}, status=404)
+    from app.services.network_video_transport import transport_capability_public
+
+    return web.json_response(transport_capability_public(camera=camera))
+
+
+async def update_camera_transport_endpoint(request: web.Request):
+    """PUT /api/cameras/{id}/transport — set multicast source config (admin + ACL)."""
+    try:
+        await require_admin(request)
+    except web.HTTPUnauthorized:
+        return web.json_response({"error": "Authentication required"}, status=401)
+    except web.HTTPForbidden:
+        return web.json_response({"error": "Admin only"}, status=403)
+    camera_id = request.match_info.get("id") or ""
+    denied = await deny_unless_camera_access(request, camera_id)
+    if denied is not None:
+        return denied
+    camera = await get_camera_by_ref(camera_id)
+    if not camera:
+        return web.json_response({"error": "Camera not found"}, status=404)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    from bson import ObjectId
+
+    from app.core.database import camera_collection
+    from app.services.network_video_transport import (
+        MulticastConfigError,
+        normalize_multicast_config,
+        transport_capability_public,
+    )
+
+    try:
+        mcast_raw = body.get("multicast") if "multicast" in body else body
+        cfg = normalize_multicast_config(mcast_raw)
+    except MulticastConfigError as exc:
+        return web.json_response({"error": str(exc), "ok": False}, status=400)
+
+    await camera_collection.update_one(
+        {"_id": ObjectId(str(camera["_id"]))},
+        {"$set": {"multicast": cfg}},
+    )
+    # Refresh go2rtc sources so multicast ingest takes effect
+    try:
+        schedule_camera_side_effects(
+            str(camera["_id"]),
+            existing=camera,
+            updated_fields={"multicast": cfg},
+            reason="transport_update",
+        )
+    except Exception as exc:
+        logger.warning("[cameras] go2rtc sync after transport update failed: %s", exc)
+        _schedule_go2rtc_reload()
+
+    updated = await get_camera_by_ref(camera_id)
+    return web.json_response(
+        {"ok": True, "multicast": cfg, "transport": transport_capability_public(camera=updated or camera)}
+    )
+
+
+async def system_transport_endpoint(request: web.Request):
+    """GET /api/system/transport — fleet transport capability (18.2.2 / 18.2.3 / 18.2.27)."""
+    user = await get_effective_user(request)
+    if user is None:
+        return web.json_response({"error": "Authentication required"}, status=401)
+    from app.services.network_video_transport import system_transport_status
+
+    return web.json_response(system_transport_status())
 
 
 async def get_discovery_subnets_endpoint(request):
@@ -222,6 +322,16 @@ async def delete_camera_endpoint(request):
         set_camera_recording(camera_id, False)
     except Exception as exc:
         logger.warning("[cameras] Recording cleanup before delete failed for %s: %s", camera_id, exc)
+
+    try:
+        from app.services.camera_identity import resolve_camera_uid
+        from app.services.instant_replay_buffer import cleanup_camera_instant_replay_buffer
+
+        uid = await resolve_camera_uid(camera_id) or (existing.get("camera_uid") or "")
+        if uid:
+            await cleanup_camera_instant_replay_buffer(str(uid))
+    except Exception as exc:
+        logger.warning("[cameras] Instant Replay cleanup before delete failed for %s: %s", camera_id, exc)
 
     deleted = await delete_camera(camera_id)
     if not deleted:

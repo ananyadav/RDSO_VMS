@@ -420,6 +420,14 @@ class TestStreamIssueClassify(unittest.TestCase):
             "missing_url",
         )
 
+    def test_wrong_response_on_setup_is_path_not_auth(self):
+        from app.services.stream_issues import classify_stream_error
+
+        self.assertEqual(
+            classify_stream_error("mse: streams: wrong response on SETUP"),
+            "missing_url",
+        )
+
     def test_453_bandwidth_is_other_not_path(self):
         from app.services.stream_issues import classify_stream_error
 

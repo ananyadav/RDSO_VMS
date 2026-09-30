@@ -124,7 +124,8 @@ export default function StorageSettingsEditor({
             />
           </div>
           <p className="text-xs text-gray-500 mt-1">
-            Absolute path on the NVR server where camera recordings are stored.
+            Absolute path on the NVR server (local disk or OS-mounted DAS/NAS/SAN). Changing the
+            folder stops active recordings; there is no silent fallback to another disk.
           </p>
         </div>
       </div>

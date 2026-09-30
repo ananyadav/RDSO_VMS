@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ZoomIn, ZoomOut, Home } from 'lucide-react';
 import Card from './Card';
 
@@ -16,6 +16,15 @@ export default function PTZControls({
   onMoveStop,
 }: PTZControlsProps) {
   const activeRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      if (activeRef.current) {
+        activeRef.current = false;
+        onMoveStop();
+      }
+    };
+  }, [onMoveStop]);
 
   const bindPress = useCallback(
     (direction: string) => ({

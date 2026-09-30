@@ -98,13 +98,74 @@ def build_signal_loss_signal(camera: dict, result: dict) -> dict:
     }
 
 
+async def handle_stream_health_recovery(
+    camera: dict,
+    *,
+    previous_alarm: bool,
+    current_result: dict,
+) -> Optional[dict]:
+    """When signal returns after confirmed loss, reflect recovery on open events (no auto-ack)."""
+    if previous_alarm and bool(current_result.get("ok")):
+        return await mark_signal_loss_events_recovered(camera)
+    return None
+
+
+async def mark_signal_loss_events_recovered(camera: dict) -> dict:
+    """Stamp recovered_at on open signal_loss events for this camera — state reflection only."""
+    from app.core.database import database
+    from bson import ObjectId
+
+    cid = str(camera.get("_id") or "")
+    uid = str(camera.get("camera_uid") or "")
+    now = datetime.now(timezone.utc).isoformat()
+    events = database.get_collection("events")
+    filt: dict[str, Any] = {
+        "source_type": SIGNAL_LOSS_SOURCE,
+        "status": "open",
+    }
+    or_clauses = []
+    if cid:
+        or_clauses.append({"camera_id": cid})
+        if ObjectId.is_valid(cid):
+            or_clauses.append({"camera_id": ObjectId(cid)})
+    if uid:
+        or_clauses.append({"camera_uid": uid})
+    if or_clauses:
+        filt["$or"] = or_clauses
+    res = await events.update_many(
+        filt,
+        {
+            "$set": {
+                "metadata.recovered_at": now,
+                "metadata.signal_restored": True,
+                "updated_at": now,
+            }
+        },
+    )
+    return {
+        "recovered": True,
+        "matched": int(getattr(res, "matched_count", 0) or 0),
+        "modified": int(getattr(res, "modified_count", 0) or 0),
+        "recovered_at": now,
+    }
+
+
 async def handle_stream_health_transition(
     camera: dict,
     *,
     previous_alarm: bool,
     current_result: dict,
 ) -> Optional[dict]:
-    """On confirmed offline transition, forward a normalized signal to the evaluator."""
+    """On confirmed offline transition, forward a normalized signal to the evaluator.
+
+    Recovery (true→healthy) clears/reflects state without creating a new alert.
+    """
+    recovery = await handle_stream_health_recovery(
+        camera, previous_alarm=previous_alarm, current_result=current_result
+    )
+    if recovery:
+        return {"recovery": recovery}
+
     if not is_signal_loss_transition(previous_alarm, current_result):
         return None
 

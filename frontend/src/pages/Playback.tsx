@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import PlaybackTimeline, { blockStyle, recordingSeekOffset } from '../components/playback/PlaybackTimeline';
+import MultiCameraPlaybackTile from '../components/playback/MultiCameraPlaybackTile';
 import {
   Play, Pause, ChevronsLeft, ChevronsRight, Calendar, Video,
   Search, Clock, Loader2, Maximize, Minimize, Camera, Download, Trash2,
@@ -28,6 +29,28 @@ import {
   initialStringParam,
 } from '../hooks/useUrlSearchState';
 import { resolvePlaybackFromUrl } from '../lib/urlViewState';
+import {
+  calendarDateKey,
+  ensureAppTimezone,
+  formatPlaybackClock,
+  formatPlaybackDate,
+  formatPlaybackDateLong,
+  getCachedAppTimezone,
+  siteDayBoundsMs,
+  zonedWallTimeToUtcMs,
+} from '../lib/appTimezone';
+import {
+  MAX_MULTI_PLAYBACK_CAMERAS,
+  NO_RECORDING_AT_TIME,
+  buildMultiSearchQuery,
+  multiGridCols,
+  parseTimeOfDay,
+  resolveRecordingAtTime,
+  wallClockAfterDelta,
+  type MultiPlaybackCameraResult,
+  type MultiPlaybackSearchResponse,
+} from '../lib/multiPlayback';
+import { buildExportBody, exportFilenameFromDisposition } from '../lib/playbackExport';
 import { authService } from '../services/authService';
 import { isOpsAdminUser, isSuperAdminUser } from '../lib/permissions';
 
@@ -71,41 +94,32 @@ function formatClock(seconds: number): string {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
-function formatTimeLabel(iso: string): string {
-  try {
-    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  } catch {
-    return iso;
-  }
-}
-
 function toApiDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return calendarDateKey(d);
 }
 
-function dayPercent(iso: string): number {
-  const d = new Date(iso);
-  const secs = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
-  return (secs / 86400) * 100;
+function dayPercent(iso: string, selectedDate: Date, timeZone: string): number {
+  const { startMs, endMs } = siteDayBoundsMs(calendarDateKey(selectedDate), timeZone);
+  const dayMs = Math.max(1, endMs - startMs);
+  const t = new Date(iso).getTime();
+  return ((t - startMs) / dayMs) * 100;
 }
 
 function findRecordingAtDayPercent(
   recordings: PlaybackRecording[],
   selectedDate: Date,
   dayPct: number,
+  timeZone: string,
 ): { rec: PlaybackRecording; offsetSeconds: number } | null {
-  const dayStart = new Date(selectedDate);
-  dayStart.setHours(0, 0, 0, 0);
-  const clickMs = dayStart.getTime() + (dayPct / 100) * 86400 * 1000;
+  const { startMs, endMs } = siteDayBoundsMs(calendarDateKey(selectedDate), timeZone);
+  const dayMs = Math.max(1, endMs - startMs);
+  const clickMs = startMs + (dayPct / 100) * dayMs;
 
   for (const rec of recordings) {
-    const startMs = new Date(rec.startTime).getTime();
-    const endMs = new Date(rec.endTime).getTime();
-    if (clickMs >= startMs && clickMs <= endMs) {
-      return { rec, offsetSeconds: Math.max(0, (clickMs - startMs) / 1000) };
+    const recStart = new Date(rec.startTime).getTime();
+    const recEnd = new Date(rec.endTime).getTime();
+    if (clickMs >= recStart && clickMs <= recEnd) {
+      return { rec, offsetSeconds: Math.max(0, (clickMs - recStart) / 1000) };
     }
   }
   return null;
@@ -145,8 +159,13 @@ export default function Playback(): React.ReactElement {
   const [cameraFilter, setCameraFilter] = useState(() =>
     initialStringParam(initialParams, 'q'),
   );
-  const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
+  const [selectedCameras, setSelectedCameras] = useState<Camera[]>([]);
+  const selectedCamera = selectedCameras[0] ?? null;
+  const isMultiMode = selectedCameras.length > 1;
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [searchTime, setSearchTime] = useState('00:00:00');
+  const [exportEndTime, setExportEndTime] = useState('00:05:00');
+  const [isExporting, setIsExporting] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [recordings, setRecordings] = useState<PlaybackRecording[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -158,11 +177,20 @@ export default function Playback(): React.ReactElement {
   });
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [gapNotice, setGapNotice] = useState<string | null>(null);
+  const [appTimezone, setAppTimezone] = useState(() => getCachedAppTimezone());
+  const [multiResults, setMultiResults] = useState<MultiPlaybackCameraResult[]>([]);
+  const [masterAtIso, setMasterAtIso] = useState<string | null>(null);
+  const [masterPlaying, setMasterPlaying] = useState(false);
+  const [multiSeekToken, setMultiSeekToken] = useState(0);
   const videoContainerRef = useRef<HTMLDivElement>(null);
 
   const GAP_MESSAGE = 'No recording available for this time.';
   const canManageRecordings = isSuperAdminUser(authService.getCurrentUser());
   const canCaptureSnapshot = isOpsAdminUser(authService.getCurrentUser());
+
+  useEffect(() => {
+    void ensureAppTimezone().then(setAppTimezone);
+  }, []);
 
   const calYear = selectedDate.getFullYear();
   const calMonth = selectedDate.getMonth() + 1;
@@ -193,7 +221,10 @@ export default function Playback(): React.ReactElement {
     togglePlayPause,
     seek,
     setPlaybackRate,
-  } = usePlaybackHLS(activeRecording?.playlistUrl ?? null, seekOnLoad);
+  } = usePlaybackHLS(
+    isMultiMode ? null : (activeRecording?.playlistUrl ?? null),
+    isMultiMode ? null : seekOnLoad,
+  );
 
   const effectiveDuration = useMemo(() => {
     if (duration > 0 && Number.isFinite(duration)) return duration;
@@ -202,21 +233,34 @@ export default function Playback(): React.ReactElement {
 
   const playheadPercent = useMemo(() => {
     if (!activeRecording) return null;
-    const block = blockStyle(activeRecording, selectedDate);
+    const block = blockStyle(activeRecording, selectedDate, appTimezone);
     const blockLeft = parseFloat(block.left);
     const blockWidth = parseFloat(block.width);
     if (effectiveDuration > 0) {
       return blockLeft + (currentTime / effectiveDuration) * blockWidth;
     }
-    return dayPercent(activeRecording.startTime);
-  }, [activeRecording, currentTime, effectiveDuration, selectedDate]);
+    return dayPercent(activeRecording.startTime, selectedDate, appTimezone);
+  }, [activeRecording, currentTime, effectiveDuration, selectedDate, appTimezone]);
 
   const absoluteTimeLabel = useMemo(() => {
+    if (isMultiMode && masterAtIso) {
+      return formatPlaybackClock(masterAtIso, appTimezone);
+    }
     if (!activeRecording) return '00:00:00';
-    const start = new Date(activeRecording.startTime);
-    start.setSeconds(start.getSeconds() + Math.floor(currentTime));
-    return start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  }, [activeRecording, currentTime]);
+    const startMs = new Date(activeRecording.startTime).getTime();
+    const abs = new Date(startMs + Math.floor(currentTime) * 1000);
+    return formatPlaybackClock(abs, appTimezone);
+  }, [isMultiMode, masterAtIso, activeRecording, currentTime, appTimezone]);
+
+  const multiPlayheadPercent = useMemo(() => {
+    if (!isMultiMode || !masterAtIso) return null;
+    return dayPercent(masterAtIso, selectedDate, appTimezone);
+  }, [isMultiMode, masterAtIso, selectedDate, appTimezone]);
+
+  const multiHasAnyFootage = useMemo(
+    () => multiResults.some((c) => c.resolved?.ok && c.resolved.playlistUrl),
+    [multiResults],
+  );
 
   useEffect(() => {
     setPlaybackRate(playbackSpeed);
@@ -287,8 +331,13 @@ export default function Playback(): React.ReactElement {
       building: selectedBuilding,
       group: selectedGroup,
       camera: selectedCamera?.id ?? null,
+      cameras:
+        selectedCameras.length > 1
+          ? selectedCameras.map((c) => c.id).join(',')
+          : null,
       date: selectedCamera ? formatUrlDate(selectedDate) : null,
-      session: activeSessionId,
+      session: isMultiMode ? null : activeSessionId,
+      time: searchTime !== '00:00:00' ? searchTime : null,
       q: cameraFilter.trim() || null,
       speed: playbackSpeed !== 1 ? String(playbackSpeed) : null,
     }),
@@ -296,8 +345,11 @@ export default function Playback(): React.ReactElement {
       selectedBuilding,
       selectedGroup,
       selectedCamera?.id,
+      selectedCameras,
       selectedDate,
       activeSessionId,
+      isMultiMode,
+      searchTime,
       cameraFilter,
       playbackSpeed,
     ],
@@ -307,11 +359,27 @@ export default function Playback(): React.ReactElement {
 
   useEffect(() => {
     if (!cameras.length) return;
+    const multiParam = params.get('cameras');
+    if (multiParam) {
+      const ids = multiParam.split(',').map((s) => s.trim()).filter(Boolean);
+      const matched = ids
+        .map((id) => cameras.find((c) => c.id === id))
+        .filter((c): c is Camera => Boolean(c));
+      if (matched.length) {
+        setSelectedCameras(matched.slice(0, MAX_MULTI_PLAYBACK_CAMERAS));
+        return;
+      }
+    }
     const cameraId = params.get('camera');
     if (!cameraId) return;
     const cam = cameras.find((c) => c.id === cameraId);
-    if (cam) setSelectedCamera(cam);
+    if (cam) setSelectedCameras([cam]);
   }, [cameras, params]);
+
+  useEffect(() => {
+    const t = initialParams.current?.get('time');
+    if (t && parseTimeOfDay(t)) setSearchTime(t);
+  }, []);
 
   const loadCameras = useCallback(async (group: string | null) => {
     if (!group && hasUnrestrictedCameraAccess(cameraAccess)) {
@@ -373,15 +441,50 @@ export default function Playback(): React.ReactElement {
   };
 
   useEffect(() => {
-    if (!selectedCamera) return;
-    if (!cameras.some((c) => c.id === selectedCamera.id)) {
-      setSelectedCamera(null);
+    if (!selectedCameras.length) return;
+    const still = selectedCameras.filter((c) => cameras.some((x) => x.id === c.id));
+    if (still.length === selectedCameras.length) return;
+    setSelectedCameras(still);
+    if (still.length <= 1) {
+      setMultiResults([]);
+      setMasterAtIso(null);
+    }
+    if (still.length === 0) {
       setRecordings([]);
       setActiveSessionId(null);
       setSeekOnLoad(null);
       setGapNotice(null);
     }
-  }, [cameras, selectedCamera]);
+  }, [cameras]); // eslint-disable-line react-hooks/exhaustive-deps -- prune when floor camera list changes
+
+  const toggleCameraSelection = (camera: Camera) => {
+    setSelectedCameras((prev) => {
+      const exists = prev.some((c) => c.id === camera.id);
+      if (exists) {
+        const next = prev.filter((c) => c.id !== camera.id);
+        if (next.length <= 1) {
+          setMultiResults([]);
+          setMasterAtIso(null);
+          setMasterPlaying(false);
+        }
+        return next;
+      }
+      if (prev.length >= MAX_MULTI_PLAYBACK_CAMERAS) {
+        toast.error(`Select at most ${MAX_MULTI_PLAYBACK_CAMERAS} cameras`);
+        return prev;
+      }
+      return [...prev, camera];
+    });
+    setGapNotice(null);
+  };
+
+  const selectSingleCamera = (camera: Camera) => {
+    setSelectedCameras([camera]);
+    setMultiResults([]);
+    setMasterAtIso(null);
+    setMasterPlaying(false);
+    setGapNotice(null);
+  };
 
   const selectedFloor = buildings
     .find((b) => b.building === selectedBuilding)
@@ -392,49 +495,124 @@ export default function Playback(): React.ReactElement {
     return label.includes(cameraFilter.toLowerCase());
   });
 
+  const applyMasterClockToResults = useCallback(
+    (results: MultiPlaybackCameraResult[], atIso: string): MultiPlaybackCameraResult[] => {
+      const atMs = new Date(atIso).getTime();
+      return results.map((cam) => ({
+        ...cam,
+        resolved: resolveRecordingAtTime(cam.recordings || [], atMs),
+      }));
+    },
+    [],
+  );
+
   const handleSearch = async () => {
-    if (!selectedCamera) {
-      toast.error('Select a camera first');
+    if (!selectedCameras.length) {
+      toast.error('Select at least one camera');
       return;
     }
+    const tod = parseTimeOfDay(searchTime);
+    if (!tod) {
+      toast.error('Enter a valid time (HH:MM or HH:MM:SS)');
+      return;
+    }
+
     setIsSearching(true);
     setActiveSessionId(null);
     setSeekOnLoad(null);
     setGapNotice(null);
     setRecordings([]);
+    setMultiResults([]);
+    setMasterPlaying(false);
+
+    const date = toApiDate(selectedDate);
+    const atMs = zonedWallTimeToUtcMs(date, appTimezone, tod.hour, tod.minute, tod.second);
+    const atIso = new Date(atMs).toISOString();
+
     try {
-      const date = toApiDate(selectedDate);
-      const ref = selectedCamera.cameraUid || selectedCamera.id;
-      const url = `/api/playback/search?cameraUid=${encodeURIComponent(ref)}&date=${date}`;
-      const res = await apiFetch(url);
-      if (res.status === 404) {
-        const err = await res.json().catch(() => ({}));
-        const msg = err.error as string | undefined;
-        if (!msg || msg === 'Not Found') {
-          throw new Error('Playback search API not available — restart the backend server');
+      if (selectedCameras.length === 1) {
+        const cam = selectedCameras[0];
+        const ref = cam.cameraUid || cam.id;
+        const url = `/api/playback/search?cameraUid=${encodeURIComponent(ref)}&date=${date}`;
+        const res = await apiFetch(url);
+        if (res.status === 404) {
+          const err = await res.json().catch(() => ({}));
+          const msg = err.error as string | undefined;
+          if (!msg || msg === 'Not Found') {
+            throw new Error('Playback search API not available — restart the backend server');
+          }
+          throw new Error(msg);
         }
-        throw new Error(msg);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error((err.error as string) || `Search failed (${res.status})`);
+        }
+        const data = await res.json();
+        const list: PlaybackRecording[] = data.recordings || [];
+        const playable = list.filter(isPlayableRecording);
+        setRecordings(playable);
+        setMasterAtIso(atIso);
+
+        const hit = findRecordingAtDayPercent(
+          playable,
+          selectedDate,
+          ((atMs - siteDayBoundsMs(date, appTimezone).startMs) /
+            Math.max(1, siteDayBoundsMs(date, appTimezone).endMs - siteDayBoundsMs(date, appTimezone).startMs)) *
+            100,
+          appTimezone,
+        );
+        const sessionFromUrl = initialParams.current?.get('session');
+        if (sessionFromUrl && playable.some((r) => r.sessionId === sessionFromUrl)) {
+          setActiveSessionId(sessionFromUrl);
+        } else if (hit) {
+          const maxOffset = hit.rec.duration > 0 ? hit.rec.duration : hit.offsetSeconds;
+          const clampedOffset = Math.max(0, Math.min(maxOffset, hit.offsetSeconds));
+          setSeekOnLoad(clampedOffset);
+          setActiveSessionId(hit.rec.sessionId);
+        } else if (playable.length === 0) {
+          setGapNotice(NO_RECORDING_AT_TIME);
+        }
+
+        if (playable.length > 0) {
+          if (!autoSearchRef.current) {
+            toast.success(`Found ${playable.length} recording session(s)`);
+          }
+        } else if (list.length > 0) {
+          toast('Sessions exist but files are missing on disk', { icon: '⚠️' });
+        } else if (!autoSearchRef.current) {
+          toast('No recordings for this date', { icon: '📭' });
+        }
+        return;
       }
+
+      const refs = selectedCameras.map((c) => c.cameraUid || c.id);
+      const qs = buildMultiSearchQuery({ date, cameraRefs: refs, atIso });
+      const res = await apiFetch(`/api/playback/multi-search?${qs}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error((err.error as string) || `Search failed (${res.status})`);
+        throw new Error((err.error as string) || `Multi-search failed (${res.status})`);
       }
-      const data = await res.json();
-      const list: PlaybackRecording[] = data.recordings || [];
-      const playable = list.filter(isPlayableRecording);
-      setRecordings(playable);
-      const sessionFromUrl = initialParams.current?.get('session');
-      if (sessionFromUrl && playable.some((r) => r.sessionId === sessionFromUrl)) {
-        setActiveSessionId(sessionFromUrl);
-      }
-      if (playable.length > 0) {
-        if (!autoSearchRef.current) {
-          toast.success(`Found ${playable.length} recording session(s)`);
+      const data = (await res.json()) as MultiPlaybackSearchResponse;
+      const cams = data.cameras || [];
+      setMultiResults(cams);
+      setMasterAtIso(data.at || atIso);
+      setMasterPlaying(true);
+      setMultiSeekToken((n) => n + 1);
+
+      const withFootage = cams.filter((c) => c.resolved?.ok).length;
+      const missing = cams.length - withFootage;
+      if (!autoSearchRef.current) {
+        if (cams.length === 0) {
+          toast.error('No authorized cameras in selection');
+        } else if (withFootage === 0) {
+          toast(NO_RECORDING_AT_TIME, { icon: '📭' });
+        } else if (missing > 0) {
+          toast.success(
+            `Playing ${withFootage} camera(s); ${missing} with no recording at this time`,
+          );
+        } else {
+          toast.success(`Playing ${withFootage} cameras simultaneously`);
         }
-      } else if (list.length > 0) {
-        toast('Sessions exist but files are missing on disk', { icon: '⚠️' });
-      } else if (!autoSearchRef.current) {
-        toast('No recordings for this date', { icon: '📭' });
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Search failed');
@@ -451,7 +629,7 @@ export default function Playback(): React.ReactElement {
   }, [selectedCamera]);
 
   const handleGapSelection = (dayPct: number) => {
-    const hit = findRecordingAtDayPercent(recordings, selectedDate, dayPct);
+    const hit = findRecordingAtDayPercent(recordings, selectedDate, dayPct, appTimezone);
     if (hit) return;
     setGapNotice(GAP_MESSAGE);
     toast(GAP_MESSAGE, { icon: 'ℹ️' });
@@ -474,6 +652,98 @@ export default function Playback(): React.ReactElement {
     }
     setSeekOnLoad(clampedOffset);
     setActiveSessionId(rec.sessionId);
+  };
+
+  const syncMultiToWallClock = (atIso: string) => {
+    setMasterAtIso(atIso);
+    setMultiResults((prev) => applyMasterClockToResults(prev, atIso));
+    setMultiSeekToken((n) => n + 1);
+  };
+
+  const handleMultiSeekDelta = (deltaSeconds: number) => {
+    if (!masterAtIso) return;
+    syncMultiToWallClock(wallClockAfterDelta(masterAtIso, deltaSeconds));
+  };
+
+  const handleMultiTimelineClick = (dayPct: number) => {
+    const { startMs, endMs } = siteDayBoundsMs(calendarDateKey(selectedDate), appTimezone);
+    const clickMs = startMs + (dayPct / 100) * Math.max(1, endMs - startMs);
+    syncMultiToWallClock(new Date(clickMs).toISOString());
+  };
+
+  const toggleMultiPlayPause = () => {
+    setMasterPlaying((p) => !p);
+  };
+
+  const handleExportClip = async () => {
+    if (!selectedCameras.length) {
+      toast.error('Select at least one camera to export');
+      return;
+    }
+    const startTod = parseTimeOfDay(searchTime);
+    const endTod = parseTimeOfDay(exportEndTime);
+    if (!startTod || !endTod) {
+      toast.error('Enter valid start/end times (HH:MM or HH:MM:SS)');
+      return;
+    }
+    const date = toApiDate(selectedDate);
+    const startMs = zonedWallTimeToUtcMs(
+      date,
+      appTimezone,
+      startTod.hour,
+      startTod.minute,
+      startTod.second,
+    );
+    const endMs = zonedWallTimeToUtcMs(
+      date,
+      appTimezone,
+      endTod.hour,
+      endTod.minute,
+      endTod.second,
+    );
+    if (endMs <= startMs) {
+      toast.error('Export end time must be after start time');
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const refs = selectedCameras.map((c) => c.cameraUid || c.id);
+      const body = buildExportBody({
+        cameraRefs: refs,
+        startIso: new Date(startMs).toISOString(),
+        endIso: new Date(endMs).toISOString(),
+      });
+      const res = await apiFetch('/api/playback/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err.error as string) || `Export failed (${res.status})`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = exportFilenameFromDisposition(res.headers.get('Content-Disposition'));
+      link.click();
+      URL.revokeObjectURL(url);
+      const okCount = res.headers.get('X-Export-Success-Count');
+      const reqCount = res.headers.get('X-Export-Requested-Count');
+      if (okCount != null && reqCount != null && Number(okCount) < Number(reqCount)) {
+        toast.success(
+          `Export ready (${okCount}/${reqCount} cameras with footage). See report.json for gaps.`,
+        );
+      } else {
+        toast.success('Export downloaded (MP4 in ZIP)');
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Export failed');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const toggleFullscreen = async () => {
@@ -589,9 +859,9 @@ export default function Playback(): React.ReactElement {
               >
                 <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5">
                   <span className="text-gray-500">Start</span>
-                  <span className="text-gray-200 font-medium">{formatTimeLabel(rec.startTime)}</span>
+                  <span className="text-gray-200 font-medium">{formatPlaybackClock(rec.startTime, appTimezone)}</span>
                   <span className="text-gray-500">End</span>
-                  <span className="text-gray-200 font-medium">{formatTimeLabel(rec.endTime)}</span>
+                  <span className="text-gray-200 font-medium">{formatPlaybackClock(rec.endTime, appTimezone)}</span>
                   <span className="text-gray-500">Duration</span>
                   <span className="text-gray-300">{formatClock(rec.duration)}</span>
                 </div>
@@ -705,21 +975,37 @@ export default function Playback(): React.ReactElement {
                   {selectedGroup ? 'No cameras in this floor' : 'Select a floor'}
                 </p>
               ) : (
-                filteredCameras.map((camera) => (
-                    <button
-                  key={camera.id}
-                  type="button"
-                  onClick={() => setSelectedCamera(camera)}
-                  className={`flex items-center w-full text-left px-2 py-1.5 text-xs rounded-md mb-0.5 transition-all ${
-                    selectedCamera?.id === camera.id
+                filteredCameras.map((camera) => {
+                  const selected = selectedCameras.some((c) => c.id === camera.id);
+                  return (
+                    <div
+                      key={camera.id}
+                      className={`flex items-center w-full px-2 py-1.5 text-xs rounded-md mb-0.5 transition-all ${
+                        selected
                           ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
-                  }`}
-                >
-                  <Video size={12} className="mr-1.5 text-blue-400 flex-shrink-0" />
-                  <span className="truncate flex-grow">{camera.displayName || camera.name}</span>
-                    </button>
-                ))
+                          : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="mr-1.5 accent-blue-500"
+                        checked={selected}
+                        onChange={() => toggleCameraSelection(camera)}
+                        aria-label={`Select ${camera.displayName || camera.name}`}
+                        data-testid="playback-camera-check"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => selectSingleCamera(camera)}
+                        className="flex items-center min-w-0 flex-grow text-left"
+                        title="Select as primary (single-camera mode)"
+                      >
+                        <Video size={12} className="mr-1.5 text-blue-400 flex-shrink-0" />
+                        <span className="truncate flex-grow">{camera.displayName || camera.name}</span>
+                      </button>
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
@@ -755,10 +1041,40 @@ export default function Playback(): React.ReactElement {
                 ))}
               </div>
               <div className="grid grid-cols-7 gap-1">{renderCalendar()}</div>
+            <label className="mt-2 flex items-center gap-2 text-[10px] text-gray-400">
+              <Clock size={12} />
+              <span>Start</span>
+              <input
+                type="text"
+                value={searchTime}
+                onChange={(e) => setSearchTime(e.target.value)}
+                placeholder="HH:MM:SS"
+                className="flex-1 bg-gray-800 border border-gray-600 rounded px-1.5 py-1 text-xs text-gray-200 font-mono"
+                data-testid="playback-search-time"
+              />
+            </label>
+            <label className="mt-1 flex items-center gap-2 text-[10px] text-gray-400">
+              <Clock size={12} />
+              <span>End</span>
+              <input
+                type="text"
+                value={exportEndTime}
+                onChange={(e) => setExportEndTime(e.target.value)}
+                placeholder="HH:MM:SS"
+                className="flex-1 bg-gray-800 border border-gray-600 rounded px-1.5 py-1 text-xs text-gray-200 font-mono"
+                data-testid="playback-export-end-time"
+              />
+            </label>
+            {selectedCameras.length > 0 && (
+              <p className="mt-1 text-[10px] text-gray-500">
+                {selectedCameras.length} camera{selectedCameras.length === 1 ? '' : 's'} selected
+                {isMultiMode ? ' · multi playback' : ''}
+              </p>
+            )}
             <button
                 type="button"
-              onClick={handleSearch}
-                disabled={isSearching || !selectedCamera}
+              onClick={() => void handleSearch()}
+                disabled={isSearching || selectedCameras.length === 0}
                 className="mt-2 w-full flex items-center justify-center py-2 text-xs font-semibold rounded-md bg-red-600 hover:bg-red-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isSearching ? (
@@ -773,10 +1089,36 @@ export default function Playback(): React.ReactElement {
                 </>
               )}
             </button>
+            <button
+              type="button"
+              onClick={() => void handleExportClip()}
+              disabled={isExporting || selectedCameras.length === 0}
+              className="mt-1.5 w-full flex items-center justify-center py-2 text-xs font-semibold rounded-md bg-gray-600 hover:bg-gray-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              data-testid="playback-export-clip"
+              title="Export selected cameras for Start–End as offline MP4 (ZIP)"
+            >
+              {isExporting ? (
+                <>
+                  <Loader2 size={14} className="mr-2 animate-spin" />
+                  Exporting…
+                </>
+              ) : (
+                <>
+                  <Download size={14} className="mr-2" />
+                  Export clip (MP4)
+                </>
+              )}
+            </button>
           </div>
         </div>
 
-          {renderSessionsList()}
+          {isMultiMode ? (
+            <div className="flex-shrink-0 px-2 py-1.5 border-t border-gray-700 text-[10px] text-gray-400">
+              Multi-camera sessions resolved at shared clock · per-camera gaps shown in tiles
+            </div>
+          ) : (
+            renderSessionsList()
+          )}
         </div>
 
         {/* Player (top) + timeline & controls (pinned bottom) */}
@@ -785,7 +1127,45 @@ export default function Playback(): React.ReactElement {
             ref={videoContainerRef}
             className="flex-1 min-h-0 relative w-full bg-black overflow-hidden"
           >
-                  {selectedCamera ? (
+                  {isMultiMode ? (
+                    multiResults.length > 0 ? (
+                      <div
+                        className="absolute inset-0 grid gap-px bg-gray-800 p-px"
+                        style={{
+                          gridTemplateColumns: `repeat(${multiGridCols(multiResults.length)}, minmax(0, 1fr))`,
+                        }}
+                        data-testid="multi-playback-grid"
+                      >
+                        {multiResults.map((cam) => {
+                          const resolved = cam.resolved;
+                          const noFootage = !resolved?.ok || !resolved.playlistUrl;
+                          return (
+                            <MultiCameraPlaybackTile
+                              key={`${cam.cameraUid || cam.cameraId}-${resolved?.sessionId || 'none'}`}
+                              cameraLabel={cam.cameraName}
+                              playlistUrl={resolved?.playlistUrl ?? null}
+                              initialSeek={resolved?.offsetSeconds ?? 0}
+                              noFootage={noFootage}
+                              noFootageMessage={resolved?.error || NO_RECORDING_AT_TIME}
+                              masterPlaying={masterPlaying}
+                              playbackSpeed={playbackSpeed}
+                              seekToken={multiSeekToken}
+                              seekTargetOffset={
+                                noFootage ? null : (resolved?.offsetSeconds ?? 0)
+                              }
+                            />
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 bg-gray-900">
+                        <Video size={48} className="mb-4 opacity-40" />
+                        <p className="text-sm px-4 text-center">
+                          Search recordings to play {selectedCameras.length} cameras together
+                        </p>
+                      </div>
+                    )
+                  ) : selectedCamera ? (
                     <>
                           <video
                             ref={videoRef}
@@ -824,7 +1204,11 @@ export default function Playback(): React.ReactElement {
 
                   <div className="absolute top-0 left-0 right-0 z-20 flex justify-between items-start p-2 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
                     <span className="bg-black/50 text-white text-xs px-2 py-0.5 rounded font-mono">
-                      {selectedDate.toLocaleDateString()} {absoluteTimeLabel}
+                      {formatPlaybackDate(
+                        siteDayBoundsMs(calendarDateKey(selectedDate), appTimezone).startMs,
+                        appTimezone,
+                      )}{' '}
+                      {absoluteTimeLabel}
                     </span>
                     <span className="bg-black/50 text-white text-xs px-2 py-0.5 rounded">
                       {selectedCamera.displayName || selectedCamera.name}
@@ -849,24 +1233,38 @@ export default function Playback(): React.ReactElement {
             <div className="flex flex-col w-full">
             <div className="w-full shrink-0 border-x border-gray-700 bg-gray-800">
           <PlaybackTimeline
-            dateLabel={selectedDate.toLocaleDateString(undefined, {
-              weekday: 'short',
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-            })}
+            dateLabel={formatPlaybackDateLong(calendarDateKey(selectedDate), appTimezone)}
             selectedDate={selectedDate}
-            recordings={playableRecordings}
-            activeSessionId={activeSessionId}
-            playheadPercent={playheadPercent}
+            recordings={
+              isMultiMode
+                ? multiResults.flatMap((c) =>
+                    (c.recordings || []).filter(
+                      (r) => r.playable !== false && !r.error,
+                    ) as PlaybackRecording[],
+                  )
+                : playableRecordings
+            }
+            activeSessionId={isMultiMode ? null : activeSessionId}
+            playheadPercent={isMultiMode ? multiPlayheadPercent : playheadPercent}
             currentTimeLabel={absoluteTimeLabel}
+            timeZone={appTimezone}
             onBlockClick={(rec, dayPct) => {
+              if (isMultiMode) {
+                handleMultiTimelineClick(dayPct);
+                return;
+              }
               const full = recordings.find((r) => r.sessionId === rec.sessionId);
               if (!full) return;
-              const offset = recordingSeekOffset(full, selectedDate, dayPct);
+              const offset = recordingSeekOffset(full, selectedDate, dayPct, appTimezone);
               playAt(full, offset);
             }}
-            onGapClick={handleGapSelection}
+            onGapClick={(dayPct) => {
+              if (isMultiMode) {
+                handleMultiTimelineClick(dayPct);
+                return;
+              }
+              handleGapSelection(dayPct);
+            }}
           />
               </div>
 
@@ -874,27 +1272,46 @@ export default function Playback(): React.ReactElement {
             <div className="flex items-center gap-1 bg-gray-700/50 rounded-lg p-1">
                   <button
                 type="button"
-                onClick={() => seek(Math.max(0, currentTime - 10))}
-                disabled={!activeRecording}
+                onClick={() =>
+                  isMultiMode
+                    ? handleMultiSeekDelta(-10)
+                    : seek(Math.max(0, currentTime - 10))
+                }
+                disabled={isMultiMode ? !multiHasAnyFootage : !activeRecording}
                 className="p-1.5 text-gray-400 hover:text-white disabled:opacity-40"
                 title="Back 10s"
+                data-testid="playback-seek-back"
                   >
                     <ChevronsLeft size={16} />
                   </button>
                   <button
                 type="button"
-                onClick={togglePlayPause}
-                disabled={!activeRecording || videoLoading}
+                onClick={() => (isMultiMode ? toggleMultiPlayPause() : togglePlayPause())}
+                disabled={
+                  isMultiMode
+                    ? !multiHasAnyFootage || isSearching
+                    : !activeRecording || videoLoading
+                }
                 className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-full disabled:opacity-40"
+                data-testid="playback-play-pause"
                   >
-                    {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+                    {(isMultiMode ? masterPlaying : isPlaying) ? (
+                      <Pause size={16} />
+                    ) : (
+                      <Play size={16} />
+                    )}
                   </button>
                   <button
                 type="button"
-                onClick={() => seek(Math.min(effectiveDuration, currentTime + 10))}
-                disabled={!activeRecording}
+                onClick={() =>
+                  isMultiMode
+                    ? handleMultiSeekDelta(10)
+                    : seek(Math.min(effectiveDuration, currentTime + 10))
+                }
+                disabled={isMultiMode ? !multiHasAnyFootage : !activeRecording}
                 className="p-1.5 text-gray-400 hover:text-white disabled:opacity-40"
                 title="Forward 10s"
+                data-testid="playback-seek-forward"
                   >
                     <ChevronsRight size={16} />
                   </button>
@@ -903,10 +1320,17 @@ export default function Playback(): React.ReactElement {
             <div className="flex items-center gap-2 text-sm font-mono bg-gray-900/80 px-2 py-1 rounded border border-gray-700">
               <Clock size={14} className="text-gray-500" />
               <span className="text-red-400">{absoluteTimeLabel}</span>
-              <span className="text-gray-600">|</span>
-              <span className="text-gray-300">{formatClock(currentTime)}</span>
-              <span className="text-gray-600">/</span>
-              <span className="text-gray-400">{formatClock(effectiveDuration)}</span>
+              {!isMultiMode && (
+                <>
+                  <span className="text-gray-600">|</span>
+                  <span className="text-gray-300">{formatClock(currentTime)}</span>
+                  <span className="text-gray-600">/</span>
+                  <span className="text-gray-400">{formatClock(effectiveDuration)}</span>
+                </>
+              )}
+              {isMultiMode && (
+                <span className="text-gray-500 text-xs">shared clock</span>
+              )}
               </div>
 
             <div className="flex items-center gap-1">
@@ -914,20 +1338,21 @@ export default function Playback(): React.ReactElement {
                 <button
                   key={speed}
                   type="button"
-                  disabled={!activeRecording}
+                  disabled={isMultiMode ? !multiHasAnyFootage : !activeRecording}
                   onClick={() => setPlaybackSpeed(speed)}
                   className={`px-2.5 py-1 rounded text-xs font-medium disabled:opacity-40 ${
                     playbackSpeed === speed
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-700 text-gray-400 hover:text-white'
                   }`}
+                  data-testid={`playback-speed-${speed}`}
                 >
                   {speed}x
                 </button>
               ))}
               </div>
 
-            {canCaptureSnapshot && (
+            {canCaptureSnapshot && !isMultiMode && (
             <button
               type="button"
               onClick={captureSnapshot}
@@ -943,7 +1368,7 @@ export default function Playback(): React.ReactElement {
             <button
               type="button"
               onClick={toggleFullscreen}
-              disabled={!selectedCamera}
+              disabled={!selectedCamera && !isMultiMode}
               className="p-2 text-gray-400 hover:text-white disabled:opacity-40"
               title="Fullscreen"
             >

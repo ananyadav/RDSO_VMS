@@ -8,6 +8,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 
 from app.core.access_control import (
+    deny_unless_admin,
     deny_unless_camera_access,
     deny_unless_playback_permission,
     deny_unless_super_admin,
@@ -30,6 +31,7 @@ from app.services.video_recording import (
     is_camera_recording,
     get_camera_hls_info,
     finalize_orphaned_recording_sessions,
+    ensure_recording_process_alive,
 )
 from app.services.recording_metrics import (
     log_active_recording_stats,
@@ -66,6 +68,7 @@ from app.services.audit_service import (
     ACTION_RECORDING_CONFIG_CHANGED,
     ACTION_RECORDING_DELETED,
     ACTION_RECORDING_EXPORT_CREATED,
+    ACTION_SYSTEM_TIME_ACTION,
     AUDIT_INCOMPLETE_ERROR,
     commit_critical_audit,
     write_audit,
@@ -174,10 +177,14 @@ async def monitor_recording_schedule():
                         logging.info(f"[RECORDING] Starting recording for camera {camera_id}")
                         await start_camera_recording(camera_id)
 
-                    elif not should_record and is_currently_recording:
-                        from app.services.alarm_recording_service import is_alarm_owned_recording
+                    elif should_record and is_currently_recording:
+                        # Fault-tolerance safety net: dead monitor while still "owned"
+                        await ensure_recording_process_alive(camera_id)
 
-                        if is_alarm_owned_recording(camera_id):
+                    elif not should_record and is_currently_recording:
+                        from app.services.operator_recording_service import is_temporary_owned_recording
+
+                        if is_temporary_owned_recording(camera_id):
                             continue
                         logging.info(f"[RECORDING] Stopping recording for camera {camera_id}")
                         await stop_camera_recording(camera_id)
@@ -215,7 +222,7 @@ async def get_recording_schedule_endpoint(request: web.Request):
 
 async def update_recording_schedule_endpoint(request: web.Request):
     """Update recording schedule."""
-    denied = await deny_unless_super_admin(request)
+    denied = await deny_unless_admin(request)
     if denied is not None:
         return denied
     data = await request.json()
@@ -233,9 +240,14 @@ async def update_recording_schedule_endpoint(request: web.Request):
 
 
 async def toggle_recording_endpoint(request: web.Request):
-    """Toggle recording for a specific camera. SUPER_ADMIN only (configuration)."""
+    """Toggle continuous (schedule) recording for a camera. Admin / SuperAdmin.
+
+    When the recording engine is enabled, also start/stop FFmpeg immediately so
+    operator action does not wait for the 5s schedule monitor.
+    Temporary alarm/duration-owned sessions are not stopped by toggle-off.
+    """
     camera_id = request.match_info.get("cameraId")
-    denied = await deny_unless_super_admin(request)
+    denied = await deny_unless_admin(request)
     if denied is not None:
         return denied
     current = recording_sched.recording_schedule.get(camera_id, False)
@@ -246,11 +258,69 @@ async def toggle_recording_endpoint(request: web.Request):
         f"[RECORDING] Toggled recording for camera {camera_id}: {next_state} "
         f"(master_enabled={recording_sched.master_enabled})"
     )
+
+    active = False
+    if is_recording_engine_enabled():
+        from app.services.operator_recording_service import (
+            is_temporary_owned_recording,
+            release_operator_duration_ownership,
+        )
+
+        try:
+            if next_state:
+                await start_camera_recording(camera_id)
+            elif await is_camera_recording(camera_id):
+                if is_temporary_owned_recording(camera_id):
+                    logging.info(
+                        "[RECORDING] Toggle off left temporary recording running for %s",
+                        camera_id,
+                    )
+                else:
+                    release_operator_duration_ownership(camera_id or "")
+                    await stop_camera_recording(camera_id)
+        except RecordingEngineDisabled:
+            pass
+        except Exception as e:
+            from app.services.storage_volume import StorageVolumeError
+
+            if isinstance(e, StorageVolumeError) and next_state:
+                # Do not leave schedule enabled when configured storage cannot accept writes.
+                recording_sched.set_camera_recording(camera_id, False)
+                await recording_sched.save_recording_settings()
+                next_state = False
+                logging.error(
+                    "[RECORDING] Storage not ready for %s (%s): %s",
+                    camera_id,
+                    e.status,
+                    e,
+                )
+            else:
+                logging.error(
+                    "[RECORDING] Immediate toggle apply failed for %s: %s",
+                    camera_id,
+                    e,
+                    exc_info=True,
+                )
+        active = await is_camera_recording(camera_id or "")
+
     await _audit_recording_config(
         request,
-        {"operation": "camera_toggle", "camera_id": camera_id, "recording": next_state},
+        {
+            "operation": "camera_toggle",
+            "camera_id": camera_id,
+            "recording": next_state,
+            "active": active,
+        },
     )
-    return web.json_response({"id": camera_id, "recording": next_state})
+    return web.json_response(
+        {
+            "id": camera_id,
+            "recording": next_state,
+            "scheduled": next_state,
+            "active": active,
+            "mode": "continuous" if next_state else "off",
+        }
+    )
 
 
 async def recording_metrics_endpoint(request: web.Request):
@@ -273,7 +343,7 @@ async def backfill_recording_stats_endpoint(request: web.Request):
 
 async def storage_dashboard_endpoint(request: web.Request):
     """GET /api/storage/dashboard — recordings usage, disk free space, per-camera breakdown."""
-    denied = await deny_unless_super_admin(request)
+    denied = await deny_unless_admin(request)
     if denied is not None:
         return denied
     summary_only = request.rel_url.query.get("summary") == "1"
@@ -285,7 +355,7 @@ async def storage_dashboard_endpoint(request: web.Request):
 
 async def retention_policy_endpoint(request: web.Request):
     """GET /api/storage/retention — configured retention window."""
-    denied = await deny_unless_super_admin(request)
+    denied = await deny_unless_admin(request)
     if denied is not None:
         return denied
     return web.json_response(
@@ -297,14 +367,14 @@ async def retention_policy_endpoint(request: web.Request):
 
 
 async def storage_settings_get_endpoint(request: web.Request):
-    denied = await deny_unless_super_admin(request)
+    denied = await deny_unless_admin(request)
     if denied is not None:
         return denied
     return web.json_response(get_storage_settings_public())
 
 
 async def storage_settings_update_endpoint(request: web.Request):
-    denied = await deny_unless_super_admin(request)
+    denied = await deny_unless_admin(request)
     if denied is not None:
         return denied
     try:
@@ -357,7 +427,7 @@ async def storage_settings_update_endpoint(request: web.Request):
 
 async def retention_run_endpoint(request: web.Request):
     """POST /api/storage/retention/run — manually trigger retention cleanup."""
-    denied = await deny_unless_super_admin(request)
+    denied = await deny_unless_admin(request)
     if denied is not None:
         return denied
     if not is_recording_engine_enabled():
@@ -374,6 +444,8 @@ async def recording_health_endpoint(request: web.Request):
         return denied
     enabled = is_recording_engine_enabled()
     if not enabled:
+        from app.services.recording_config import get_recording_capacity_info, get_recording_stream_info
+
         return web.json_response(
             {
                 "enabled": False,
@@ -390,18 +462,142 @@ async def recording_health_endpoint(request: web.Request):
                     "idle": 0,
                 },
                 "cameras": [],
+                "capacity": get_recording_capacity_info(),
+                "stream": get_recording_stream_info(),
             }
         )
     scheduled = {cid for cid, on in recording_sched.recording_schedule.items() if on}
     payload = await get_recording_health(scheduled)
     payload["enabled"] = True
     payload["recordingActive"] = int((payload.get("summary") or {}).get("recording") or 0) > 0
+    try:
+        from app.services.recording_config import get_recording_stream_info
+
+        payload["stream"] = get_recording_stream_info()
+    except Exception:
+        pass
     return web.json_response(payload)
+
+
+async def recording_capability_endpoint(request: web.Request):
+    """GET /api/recordings/capability — codecs/capacity + platform (RDSO 18.3.1/4/5/7/10)."""
+    try:
+        await require_user(request)
+    except web.HTTPUnauthorized:
+        return web.json_response({"error": "Authentication required"}, status=401)
+    from app.services.recording_config import get_recording_capacity_info, get_recording_stream_info
+    from app.services.recording_platform import get_recording_platform_status
+    from app.services.rdso_18_1_27_capacity import get_rdso_18_1_27_capacity
+    from app.services.storage_volume import disk_payload_from_probe, probe_recordings_storage
+
+    platform = get_recording_platform_status()
+    try:
+        storage_probe = disk_payload_from_probe(probe_recordings_storage(create_if_missing=False))
+    except Exception as exc:
+        storage_probe = {
+            "status": "unavailable",
+            "status_label": "Unavailable",
+            "error": str(exc),
+            "rdso_18_3_10": True,
+        }
+
+    return web.json_response(
+        {
+            "stream": get_recording_stream_info(),
+            "capacity": get_recording_capacity_info(),
+            "simultaneous": {
+                "recording_while_playback": True,
+                "recording_while_export": True,
+                "note": (
+                    "Playback and export read session files without stopping the active recorder; "
+                    "per-camera locks prevent duplicate FFmpeg sessions."
+                ),
+            },
+            "platform": platform,
+            "recording_capacity_status": storage_probe,
+            "rdso": {
+                "18.3.4_open_architecture": True,
+                "18.3.7_network_access": True,
+                "18.3.10_capacity_status": True,
+            },
+            "rdso_18_1_27": get_rdso_18_1_27_capacity(),
+        }
+    )
+
+
+async def system_capacity_endpoint(request: web.Request):
+    """GET /api/system/capacity — RDSO 18.1.27 software capacity evidence."""
+    try:
+        await require_user(request)
+    except web.HTTPUnauthorized:
+        return web.json_response({"error": "Authentication required"}, status=401)
+    from app.services.rdso_18_1_27_capacity import get_rdso_18_1_27_capacity
+
+    return web.json_response(get_rdso_18_1_27_capacity())
+
+
+async def system_time_endpoint(request: web.Request):
+    """GET /api/system/time — OS clock + OS NTP sync status (RDSO 18.3.6)."""
+    denied = await deny_unless_admin(request)
+    if denied is not None:
+        return denied
+    from app.services.app_timezone import get_system_time_status
+
+    return web.json_response(get_system_time_status())
+
+
+async def system_time_action_endpoint(request: web.Request):
+    """POST /api/system/time/actions — explicit admin OS time actions (confirm required).
+
+    Body: {"action": "resync"|"enable_site_ntp_server", "confirm": true, "ntp_peers": "..."}
+    Never silently modifies host NTP settings.
+    """
+    denied = await deny_unless_admin(request)
+    if denied is not None:
+        return denied
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    action = str(body.get("action") or "").strip()
+    confirm = bool(body.get("confirm") is True)
+    peers = body.get("ntp_peers")
+    from app.services.os_time_sync import apply_os_time_action
+
+    result = apply_os_time_action(
+        action,
+        confirm=confirm,
+        ntp_peers=str(peers).strip() if peers else None,
+    )
+    status = 200 if result.get("ok") else 400
+    # Refresh status after action
+    from app.services.app_timezone import get_system_time_status
+    from app.core.auth_context import get_effective_user
+
+    actor = await get_effective_user(request)
+    await write_audit(
+        action=ACTION_SYSTEM_TIME_ACTION,
+        actor=actor,
+        resource_type="system",
+        resource_id="os_time",
+        resource_label="OS time / NTP",
+        request=request,
+        success=bool(result.get("ok")),
+        metadata={
+            "operation": action,
+            "confirm": confirm,
+            "error": result.get("error"),
+        },
+    )
+
+    return web.json_response({"result": result, "status": get_system_time_status()}, status=status)
 
 
 async def set_master_recording_endpoint(request: web.Request):
     """Enable/disable master recording switch (stops FFmpeg when off; keeps schedule)."""
-    denied = await deny_unless_super_admin(request)
+    denied = await deny_unless_admin(request)
     if denied is not None:
         return denied
     data = await request.json()
@@ -434,7 +630,7 @@ async def set_master_recording_endpoint(request: web.Request):
 
 async def stop_all_recording_endpoint(request: web.Request):
     """POST /api/recordings/stop-all — stop every camera immediately."""
-    denied = await deny_unless_super_admin(request)
+    denied = await deny_unless_admin(request)
     if denied is not None:
         return denied
     result = await recording_sched.stop_all_scheduled_recording(persist=True)
@@ -446,20 +642,89 @@ async def stop_all_recording_endpoint(request: web.Request):
 # Explicit start / stop + session metadata
 # ----------------------------
 async def start_recording_endpoint(request: web.Request):
-    """POST /api/recordings/{cameraId}/start — begin RTSP recording session."""
+    """POST /api/recordings/{cameraId}/start — begin RTSP recording session.
+
+    Optional JSON body: ``{"duration_seconds": N}`` for operator duration mode
+    (auto-stop; does not leave continuous schedule enabled).
+    Without duration: continuous/scheduled operator recording (schedule ON + immediate start).
+    """
     camera_id = request.match_info.get("cameraId")
     denied = await deny_unless_super_admin(request)
     if denied is not None:
         return denied
     if not is_recording_engine_enabled():
         return _engine_disabled_response()
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    duration_raw = body.get("duration_seconds") if isinstance(body, dict) else None
+
+    if duration_raw is not None:
+        from app.services.alarm_constants import (
+            RECORDING_DURATION_MAX_SECONDS,
+            RECORDING_DURATION_MIN_SECONDS,
+        )
+        from app.services.operator_recording_service import start_operator_duration_recording
+
+        try:
+            duration = int(duration_raw)
+        except (TypeError, ValueError):
+            return web.json_response({"error": "duration_seconds must be an integer"}, status=400)
+        if duration < RECORDING_DURATION_MIN_SECONDS or duration > RECORDING_DURATION_MAX_SECONDS:
+            return web.json_response(
+                {
+                    "error": (
+                        f"duration_seconds must be between "
+                        f"{RECORDING_DURATION_MIN_SECONDS} and {RECORDING_DURATION_MAX_SECONDS}"
+                    )
+                },
+                status=400,
+            )
+        result = await start_operator_duration_recording(camera_id or "", duration_seconds=duration)
+        if not result.get("ok") and result.get("status") == "engine_disabled":
+            return _engine_disabled_response()
+        if not result.get("ok"):
+            return web.json_response(result, status=500 if result.get("status") == "failed" else 409)
+        await _audit_recording_config(
+            request,
+            {
+                "operation": "start_duration",
+                "camera_id": camera_id,
+                "duration_seconds": duration,
+                "status": result.get("status"),
+            },
+        )
+        return web.json_response(
+            {
+                "status": result.get("status") or "recording",
+                "mode": "duration",
+                "camera_id": camera_id,
+                "session_id": result.get("session_id"),
+                "session": result.get("session"),
+                "auto_stop_at": result.get("auto_stop_at"),
+                "duration_seconds": result.get("duration_seconds"),
+                "active": True,
+                "scheduled": bool(recording_sched.recording_schedule.get(camera_id, False)),
+            },
+            status=200,
+        )
+
     try:
         session = await start_camera_recording(camera_id)
         recording_sched.set_camera_recording(camera_id, True)
         await recording_sched.save_recording_settings()
         await _audit_recording_config(request, {"operation": "start", "camera_id": camera_id})
         return web.json_response(
-            {"status": "recording", "camera_id": camera_id, "session": session},
+            {
+                "status": "recording",
+                "mode": "continuous",
+                "camera_id": camera_id,
+                "session": session,
+                "active": True,
+                "scheduled": True,
+            },
             status=200,
         )
     except RecordingEngineDisabled:
@@ -467,6 +732,17 @@ async def start_recording_endpoint(request: web.Request):
     except ValueError as e:
         return web.json_response({"error": str(e)}, status=404)
     except Exception as e:
+        from app.services.storage_volume import StorageVolumeError
+
+        if isinstance(e, StorageVolumeError):
+            return web.json_response(
+                {
+                    "error": str(e),
+                    "storage_status": e.status,
+                    "storage": e.probe,
+                },
+                status=503,
+            )
         logging.error(f"[RECORDING] Start failed for {camera_id}: {e}", exc_info=True)
         return web.json_response({"error": str(e)}, status=500)
 
@@ -478,12 +754,21 @@ async def stop_recording_endpoint(request: web.Request):
     if denied is not None:
         return denied
     try:
+        from app.services.operator_recording_service import release_operator_duration_ownership
+
+        release_operator_duration_ownership(camera_id or "")
         session = await stop_camera_recording(camera_id)
         recording_sched.set_camera_recording(camera_id, False)
         await recording_sched.save_recording_settings()
         await _audit_recording_config(request, {"operation": "stop", "camera_id": camera_id})
         return web.json_response(
-            {"status": "stopped", "camera_id": camera_id, "session": session},
+            {
+                "status": "stopped",
+                "camera_id": camera_id,
+                "session": session,
+                "active": False,
+                "scheduled": False,
+            },
             status=200,
         )
     except Exception as e:
@@ -530,6 +815,166 @@ async def get_session_endpoint(request: web.Request):
     if denied is not None:
         return denied
     return web.json_response(session)
+
+
+async def session_evidence_get_endpoint(request: web.Request):
+    """GET /api/recordings/sessions/{sessionId}/evidence — sealed manifest (if any)."""
+    denied = await deny_unless_playback_permission(request)
+    if denied is not None:
+        return denied
+    session_id = request.match_info.get("sessionId")
+    session = await get_recording_session(session_id)
+    if not session:
+        return web.json_response({"error": "Session not found"}, status=404)
+    denied = await deny_unless_camera_access(request, session.get("camera_id") or "")
+    if denied is not None:
+        return denied
+    from app.services.evidence_integrity import load_manifest, MANIFEST_FILENAME
+    from app.services.recording_media import RecordingMediaError, resolve_session_dir
+
+    try:
+        session_dir = await resolve_session_dir(
+            str(session.get("camera_id") or ""), session_id or ""
+        )
+    except RecordingMediaError as e:
+        return web.json_response({"error": e.message}, status=e.status)
+    manifest = load_manifest(session_dir)
+    return web.json_response(
+        {
+            "session_id": session_id,
+            "evidence_integrity": session.get("evidence_integrity"),
+            "manifest_file": MANIFEST_FILENAME,
+            "manifest": manifest,
+            "has_manifest": manifest is not None,
+        }
+    )
+
+
+async def session_evidence_verify_endpoint(request: web.Request):
+    """POST /api/recordings/sessions/{sessionId}/evidence/verify"""
+    denied = await deny_unless_playback_permission(request)
+    if denied is not None:
+        return denied
+    session_id = request.match_info.get("sessionId")
+    session = await get_recording_session(session_id)
+    if not session:
+        return web.json_response({"error": "Session not found"}, status=404)
+    denied = await deny_unless_camera_access(request, session.get("camera_id") or "")
+    if denied is not None:
+        return denied
+    from app.services.audit_service import (
+        ACTION_RECORDING_EVIDENCE_VERIFIED,
+        write_audit,
+    )
+    from app.services.evidence_integrity import verify_evidence_manifest
+    from app.services.recording_media import RecordingMediaError, resolve_session_dir
+
+    try:
+        session_dir = await resolve_session_dir(
+            str(session.get("camera_id") or ""), session_id or ""
+        )
+    except RecordingMediaError as e:
+        return web.json_response({"error": e.message}, status=e.status)
+
+    result = verify_evidence_manifest(session_dir)
+    actor = await get_effective_user(request)
+    await write_audit(
+        action=ACTION_RECORDING_EVIDENCE_VERIFIED,
+        actor=actor,
+        resource_type="recording",
+        resource_id=session_id,
+        resource_label=_sanitized_session_path(session),
+        request=request,
+        success=bool(result.get("valid")),
+        metadata={
+            "status": result.get("status"),
+            "valid_count": result.get("valid_count"),
+            "modified_count": result.get("modified_count"),
+            "missing_count": result.get("missing_count"),
+            "camera_id": session.get("camera_id"),
+        },
+    )
+    return web.json_response(result)
+
+
+async def session_evidence_seal_endpoint(request: web.Request):
+    """POST /api/recordings/sessions/{sessionId}/evidence/seal
+
+    Creates a manifest if missing. Does not overwrite an existing sealed manifest
+    unless confirm+force with SUPER_ADMIN (explicit regenerate).
+    """
+    session_id = request.match_info.get("sessionId")
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    force = body.get("force") is True and body.get("confirm") is True
+
+    if force:
+        denied = await deny_unless_super_admin(request)
+    else:
+        denied = await deny_unless_playback_permission(request)
+    if denied is not None:
+        return denied
+
+    session = await get_recording_session(session_id)
+    if not session:
+        return web.json_response({"error": "Session not found"}, status=404)
+    denied = await deny_unless_camera_access(request, session.get("camera_id") or "")
+    if denied is not None:
+        return denied
+
+    if (session.get("status") or "") == "recording":
+        return web.json_response(
+            {"error": "Cannot seal evidence while session is still recording"},
+            status=409,
+        )
+
+    from app.services.audit_service import (
+        ACTION_RECORDING_EVIDENCE_MANIFEST_REGENERATED,
+        write_audit,
+    )
+    from app.services.evidence_integrity import attach_evidence_to_session, load_manifest
+    from app.services.recording_media import RecordingMediaError, resolve_session_dir
+
+    try:
+        session_dir = await resolve_session_dir(
+            str(session.get("camera_id") or ""), session_id or ""
+        )
+    except RecordingMediaError as e:
+        return web.json_response({"error": e.message}, status=e.status)
+
+    existing = load_manifest(session_dir)
+    if existing is not None and not force:
+        return web.json_response(
+            {
+                "ok": True,
+                "created": False,
+                "reason": "manifest_already_exists",
+                "message": "Evidence manifest already sealed; hashes were not regenerated",
+                "manifest": existing,
+            }
+        )
+
+    result = await attach_evidence_to_session(
+        session_id or "", session_dir, session, force=force
+    )
+    if force:
+        actor = await get_effective_user(request)
+        await write_audit(
+            action=ACTION_RECORDING_EVIDENCE_MANIFEST_REGENERATED,
+            actor=actor,
+            resource_type="recording",
+            resource_id=session_id,
+            resource_label=_sanitized_session_path(session),
+            request=request,
+            success=bool(result.get("ok")),
+            metadata={"force": True, "reason": result.get("reason")},
+        )
+    status = 200 if result.get("ok") else 400
+    return web.json_response(result, status=status)
 
 
 async def delete_session_endpoint(request: web.Request):
@@ -720,16 +1165,58 @@ async def play_recording_file_endpoint(request: web.Request):
 
 
 async def get_recording_status_endpoint(request: web.Request):
-    """Returns HLS playlist info, active session, and recording status."""
+    """Returns HLS playlist info, active session, schedule flag, and recording mode."""
     camera_id = request.match_info.get("cameraId")
     denied = await deny_unless_super_admin(request)
     if denied is not None:
         return denied
     info = await get_camera_hls_info(camera_id)
-    info["is_recording"] = await is_camera_recording(camera_id)
+    is_recording = await is_camera_recording(camera_id)
+    scheduled = bool(recording_sched.recording_schedule.get(camera_id, False))
+    info["is_recording"] = is_recording
+    info["active"] = is_recording
+    info["scheduled"] = scheduled
+    info["master_enabled"] = bool(recording_sched.master_enabled)
+    info["engine_enabled"] = is_recording_engine_enabled()
+
+    from app.services.alarm_recording_service import (
+        get_alarm_owned_session_id,
+        is_alarm_owned_recording,
+    )
+    from app.services.operator_recording_service import (
+        get_operator_auto_stop_at,
+        get_operator_duration_session_id,
+        is_operator_duration_owned,
+    )
+
+    mode = "off"
+    if is_alarm_owned_recording(camera_id or ""):
+        mode = "event"
+    elif is_operator_duration_owned(camera_id or ""):
+        mode = "duration"
+    elif is_recording and scheduled:
+        mode = "continuous"
+    elif is_recording:
+        mode = "active"
+    elif scheduled:
+        mode = "scheduled"
+    info["mode"] = mode
+
+    if is_operator_duration_owned(camera_id or ""):
+        stop_at = get_operator_auto_stop_at(camera_id or "")
+        if stop_at:
+            info["auto_stop_at"] = stop_at.astimezone(timezone.utc).isoformat()
+        info["owned_session_id"] = get_operator_duration_session_id(camera_id or "")
+    elif is_alarm_owned_recording(camera_id or ""):
+        info["owned_session_id"] = get_alarm_owned_session_id(camera_id or "")
+
     active = await get_active_recording_session(camera_id)
     if active:
         info["active_session"] = active
+        if active.get("auto_stop_at") and "auto_stop_at" not in info:
+            info["auto_stop_at"] = active.get("auto_stop_at")
+        if active.get("start_reason"):
+            info["start_reason"] = active.get("start_reason")
     return web.json_response(info)
 
 
@@ -761,6 +1248,12 @@ async def serve_hls_file_endpoint(request: web.Request):
 async def maybe_start_recording_engine() -> bool:
     """Start recording-engine background jobs only when RECORDING_ENABLED=true.
 
+    Startup recovery (18.3.11.1):
+      1) Finalize orphaned Mongo sessions from the previous process (segments kept).
+      2) Schedule monitor reloads persisted master/schedule and starts continuous
+         cameras only — temporary alarm/duration ownership is memory-only and is
+         NOT restored after restart.
+
     Returns True when the monitor loop was scheduled. Playback APIs stay available either way.
     """
     global monitoring_task
@@ -783,7 +1276,7 @@ async def maybe_start_recording_engine() -> bool:
         logging.error(f"[RECORDING] Startup retention failed: {e}", exc_info=True)
     if monitoring_task is None or monitoring_task.done():
         monitoring_task = asyncio.create_task(monitor_recording_schedule())
-        logging.info("[RECORDING] Monitor task scheduled")
+        logging.info("[RECORDING] Monitor task scheduled (schedule-based recovery active)")
     return True
 
 
@@ -813,10 +1306,23 @@ def setup_recording_routes(app: web.Application):
     app.router.add_get("/api/storage/retention", retention_policy_endpoint)
     app.router.add_post("/api/storage/retention/run", retention_run_endpoint)
     app.router.add_get("/api/recordings/health", recording_health_endpoint)
+    app.router.add_get("/api/recordings/capability", recording_capability_endpoint)
+    app.router.add_get("/api/system/capacity", system_capacity_endpoint)
+    app.router.add_get("/api/system/time", system_time_endpoint)
+    app.router.add_post("/api/system/time/actions", system_time_action_endpoint)
 
     app.router.add_get("/api/recordings/sessions", list_all_sessions_endpoint)
     app.router.add_get("/api/recordings/sessions/{sessionId}/download", download_session_endpoint)
     app.router.add_get("/api/recordings/sessions/{sessionId}/export", export_session_endpoint)
+    app.router.add_get("/api/recordings/sessions/{sessionId}/evidence", session_evidence_get_endpoint)
+    app.router.add_post(
+        "/api/recordings/sessions/{sessionId}/evidence/verify",
+        session_evidence_verify_endpoint,
+    )
+    app.router.add_post(
+        "/api/recordings/sessions/{sessionId}/evidence/seal",
+        session_evidence_seal_endpoint,
+    )
     app.router.add_delete("/api/recordings/sessions/{sessionId}", delete_session_endpoint)
     app.router.add_get("/api/recordings/sessions/{sessionId}", get_session_endpoint)
     app.router.add_get("/api/recordings/{cameraId}/sessions", list_camera_sessions_endpoint)
@@ -833,10 +1339,75 @@ def setup_recording_routes(app: web.Application):
         from app.core.database import cleanup_legacy_pilot_recording
 
         await cleanup_legacy_pilot_recording()
-        await maybe_start_recording_engine()
+        # NVR / recording-server HA (18.3.3) — independent of VMS management HA (18.1.29)
+        try:
+            from app.services.recording_ha_coordinator import start_recording_ha_loops
+
+            await start_recording_ha_loops()
+        except Exception as exc:
+            logging.warning("[HA] Recording HA loops not started: %s", exc)
+
+        async def _start_vms_singletons() -> None:
+            await maybe_start_recording_engine()
+            try:
+                from app.services.motion_poller import start_motion_recording_poller
+
+                start_motion_recording_poller()
+            except Exception as exc:
+                logging.warning("[MOTION] Poller not started: %s", exc)
+
+        async def _stop_vms_singletons() -> None:
+            global monitoring_task
+            try:
+                from app.services.motion_poller import stop_motion_recording_poller
+
+                await stop_motion_recording_poller()
+            except Exception:
+                pass
+            if monitoring_task:
+                monitoring_task.cancel()
+                try:
+                    await monitoring_task
+                except asyncio.CancelledError:
+                    pass
+                monitoring_task = None
+                logging.info("[RECORDING] Monitor task stopped (VMS singleton)")
+
+        try:
+            from app.services.vms_ha_coordinator import start_vms_ha_loops
+
+            await start_vms_ha_loops(
+                start_singletons=_start_vms_singletons,
+                stop_singletons=_stop_vms_singletons,
+            )
+        except Exception as exc:
+            logging.warning(
+                "[VMS-HA] Coordinator not started (%s) — falling back to local singletons",
+                exc,
+            )
+            await _start_vms_singletons()
 
     async def on_cleanup(app: web.Application):
         global monitoring_task
+        try:
+            from app.services.vms_ha_coordinator import stop_vms_ha_loops
+
+            await stop_vms_ha_loops()
+        except Exception:
+            pass
+        try:
+            from app.services.recording_ha_coordinator import stop_recording_ha_loops
+
+            await stop_recording_ha_loops()
+        except Exception:
+            pass
+        # Defensive: if VMS HA never owned singletons, still stop local tasks
+        try:
+            from app.services.motion_poller import stop_motion_recording_poller
+
+            await stop_motion_recording_poller()
+        except Exception:
+            pass
         if monitoring_task:
             monitoring_task.cancel()
             try:

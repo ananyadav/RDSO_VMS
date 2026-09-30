@@ -14,6 +14,8 @@ from app.routes.cameras import (
     add_camera_endpoint, update_camera_endpoint, delete_camera_endpoint, import_cameras_endpoint,
     test_camera_stream_endpoint, reload_group_go2rtc_endpoint,
     get_camera_stream_profile_endpoint, update_camera_stream_profile_endpoint,
+    get_camera_client_media_routing_endpoint,
+    get_camera_transport_endpoint, update_camera_transport_endpoint, system_transport_endpoint,
 )
 from app.routes.users import (
     get_users_list, add_user_endpoint, update_user_endpoint,
@@ -23,6 +25,11 @@ from app.routes.auth import login_endpoint, logout_endpoint, session_endpoint
 
 from app.routes.recording import setup_recording_routes
 from app.routes.playback import setup_playback_routes
+from app.routes.edge_backfill import setup_edge_backfill_routes
+from app.routes.motion_recording import setup_motion_recording_routes
+from app.routes.onvif_interop import setup_onvif_interop_routes
+from app.routes.recording_ha import setup_recording_ha_routes
+from app.routes.vms_ha import setup_vms_ha_routes
 from app.routes.locations import setup_location_routes
 from app.routes.go2rtc import setup_go2rtc_routes
 from app.routes.ptz import setup_ptz_routes
@@ -31,10 +38,24 @@ from app.routes.sessions import setup_session_routes
 from app.routes.alarm_rules import setup_alarm_rule_routes
 from app.routes.camera_sequences import setup_camera_sequence_routes
 from app.routes.events import setup_event_routes
+from app.routes.reports import setup_report_routes
+from app.routes.settings_catalog import setup_settings_catalog_routes
+from app.routes.remote_web import setup_remote_web_routes
+from app.routes.ccc import setup_ccc_routes
 
 from app.core.auth_context import session_middleware
 from app.core.http_utils import json_error_middleware
-from app.core.startup_state import STARTUP_KEY, health_handler, new_startup_state, startup_middleware
+from app.core.startup_state import (
+    STARTUP_KEY,
+    health_handler,
+    mark_listen,
+    mark_ready,
+    mark_startup_begin,
+    new_startup_state,
+    ready_handler,
+    startup_middleware,
+)
+from app.services.ccc_transport_security import https_enforce_middleware
 from app.services.video_streaming import performance_monitor, get_video_decode_mode
 
 # --- Log configuration ---
@@ -49,11 +70,24 @@ logging.getLogger("aiortc").setLevel(logging.WARNING)
 
 async def create_app():
     """Application factory function."""
-    app = web.Application(middlewares=[json_error_middleware, startup_middleware, session_middleware])
+    app = web.Application(
+        middlewares=[
+            json_error_middleware,
+            https_enforce_middleware,
+            startup_middleware,
+            session_middleware,
+        ]
+    )
     app[STARTUP_KEY] = new_startup_state()
+    mark_startup_begin(app[STARTUP_KEY])
 
     setup_recording_routes(app)
     setup_playback_routes(app)
+    setup_edge_backfill_routes(app)
+    setup_motion_recording_routes(app)
+    setup_onvif_interop_routes(app)
+    setup_recording_ha_routes(app)
+    setup_vms_ha_routes(app)
 
     # Site / building / floor configuration
     setup_location_routes(app)
@@ -65,6 +99,10 @@ async def create_app():
     setup_alarm_rule_routes(app)
     setup_camera_sequence_routes(app)
     setup_event_routes(app)
+    setup_report_routes(app)
+    setup_settings_catalog_routes(app)
+    setup_remote_web_routes(app)
+    setup_ccc_routes(app)
 
     # --- Register routes ---
     app.router.add_get("/api/cameras", get_camera_list)
@@ -79,6 +117,10 @@ async def create_app():
     app.router.add_post("/api/cameras/{id}/test-stream", test_camera_stream_endpoint)
     app.router.add_get("/api/cameras/{id}/stream-profile", get_camera_stream_profile_endpoint)
     app.router.add_put("/api/cameras/{id}/stream-profile", update_camera_stream_profile_endpoint)
+    app.router.add_get("/api/cameras/{id}/client-media", get_camera_client_media_routing_endpoint)
+    app.router.add_get("/api/cameras/{id}/transport", get_camera_transport_endpoint)
+    app.router.add_put("/api/cameras/{id}/transport", update_camera_transport_endpoint)
+    app.router.add_get("/api/system/transport", system_transport_endpoint)
     app.router.add_post(
         "/api/cameras/groups/{camera_group}/reload-go2rtc",
         reload_group_go2rtc_endpoint,
@@ -93,6 +135,10 @@ async def create_app():
     app.router.add_post("/api/logout", logout_endpoint)
     app.router.add_get("/api/auth/session", session_endpoint)
     app.router.add_get("/api/health", health_handler)
+    app.router.add_get("/api/ready", ready_handler)
+    from app.services.ccc_transport_security import ccc_security_endpoint
+
+    app.router.add_get("/api/ccc/security", ccc_security_endpoint)
 
     async def status_handler(_request):
         """Return server status including real system metrics."""
@@ -222,6 +268,7 @@ async def run_startup_tasks(app: web.Application) -> None:
 
         state["phase"] = "migrations"
         await ensure_database_indexes()
+        state.setdefault("critical_services", {})["indexes"] = True
         skip_migrations = os.getenv("SKIP_STARTUP_MIGRATIONS", "").strip().lower() in (
             "1",
             "true",
@@ -275,15 +322,34 @@ async def run_startup_tasks(app: web.Application) -> None:
         else:
             print("[OK] Orphan FFmpeg cleanup: none found")
 
+        try:
+            from app.services.instant_replay_buffer import cleanup_all_instant_replay_buffers
+
+            await cleanup_all_instant_replay_buffers(reason="startup")
+            print("[OK] Instant Replay: cleared orphan buffer dirs")
+        except Exception as ir_exc:
+            print(f"[WARN] Instant Replay startup cleanup: {ir_exc}")
+
         state["phase"] = "go2rtc"
         from app.services.go2rtc_service import start_go2rtc_on_startup
 
         await start_go2rtc_on_startup()
 
         state["camera_count"] = await camera_collection.count_documents({})
-        state["phase"] = "ready"
-        state["ready"] = True
-        print(f"[OK] Startup complete — {state['camera_count']} camera(s) in database")
+        try:
+            from app.services.ccc_vms_source import reload_external_vms_sources
+
+            vms_reload = await reload_external_vms_sources()
+            if vms_reload.get("count"):
+                print(f"[OK] CCC external VMS sources loaded: {vms_reload.get('loaded')}")
+        except Exception as vms_exc:
+            print(f"[WARN] CCC external VMS source load: {vms_exc}")
+        mark_ready(state)
+        duration = state.get("startup_duration_seconds")
+        print(
+            f"[OK] Startup complete — {state['camera_count']} camera(s) in database"
+            + (f" in {duration}s" if duration is not None else "")
+        )
     except Exception as e:
         state["error"] = str(e)
         state["phase"] = "failed"
@@ -333,8 +399,10 @@ async def main():
 
     print(f"[OK] Server: Listening on http://{api_host}:{args.api_port} (startup continues in background)")
     print(f"    Health: http://127.0.0.1:{args.api_port}/api/health")
+    print(f"    Ready:  http://127.0.0.1:{args.api_port}/api/ready")
     print("=" * 60 + "\n")
     logging.info("Server listening on http://%s:%s", api_host, args.api_port)
+    mark_listen(app[STARTUP_KEY])
 
     asyncio.create_task(run_startup_tasks(app))
 
@@ -366,6 +434,13 @@ async def main():
             await cleanup_all_recordings()
         except Exception as e:
             logging.debug(f"Error during recording cleanup (expected): {e}")
+
+        try:
+            from app.services.instant_replay_buffer import cleanup_all_instant_replay_buffers
+
+            await cleanup_all_instant_replay_buffers(reason="shutdown")
+        except Exception as e:
+            logging.debug(f"Error during Instant Replay cleanup (expected): {e}")
 
         try:
             from app.services.ffmpeg_orphan_cleanup import shutdown_all_nvr_ffmpeg

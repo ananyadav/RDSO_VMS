@@ -50,6 +50,7 @@ export default function AddUserModal({ isOpen, onClose, onSave, user }: UserModa
           lastLogin: 'Never',
           permissions: [PERMISSIONS.LIVE_VIEW],
           cameraAccess: defaultAccess,
+          priority: 1,
         });
       }
     }
@@ -167,6 +168,29 @@ export default function AddUserModal({ isOpen, onClose, onSave, user }: UserModa
                     <option>Operator</option>
                     <option>Viewer</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Operator priority (1–5)
+                  </label>
+                  <select
+                    name="priority"
+                    value={String(formData.priority ?? 1)}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, priority: Number(e.target.value) }))
+                    }
+                    className="select-style"
+                    title="Distinct from role/permissions. Higher = less interruption by lower-priority alarms."
+                  >
+                    <option value="1">1 — lowest (see all auto-alarms)</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5 — highest</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Not a permission. Auto-display only when alarm priority ≥ this value.
+                  </p>
                 </div>
               </div>
             )}

@@ -260,17 +260,17 @@ export default function Events(): React.ReactElement {
         )}
 
         {!showInitialLoading && (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            <div className="lg:col-span-1">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="lg:col-span-1">
               <AlarmEventFilter
-                filters={filters}
+            filters={filters}
                 cameras={cameraOptions}
                 camerasLoading={camerasLoading}
                 onChange={patchFilters}
                 onApply={() => void fetchEvents()}
-              />
-            </div>
-            <div className="lg:col-span-3">
+          />
+        </div>
+        <div className="lg:col-span-3">
               <AlarmEventList
                 events={events}
                 total={total}
@@ -281,9 +281,9 @@ export default function Events(): React.ReactElement {
                 onSelect={setSelectedEvent}
                 onPrev={() => patchFilters({ offset: Math.max(0, filters.offset - filters.limit) })}
                 onNext={() => patchFilters({ offset: filters.offset + filters.limit })}
-              />
-            </div>
-          </div>
+          />
+        </div>
+      </div>
         )}
       </div>
 

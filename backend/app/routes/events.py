@@ -6,10 +6,17 @@ from app.core.access_control import deny_unless_events_permission
 from app.core.auth_context import get_effective_user
 from app.services.audit_service import (
     ACTION_EVENT_ACKNOWLEDGED,
+    ACTION_EVENT_DISPLAY_RESET,
     AUDIT_INCOMPLETE_ERROR,
     commit_critical_audit,
+    write_audit,
 )
-from app.services.event_service import acknowledge_event, get_event, list_events
+from app.services.event_service import (
+    acknowledge_event,
+    display_reset_event,
+    get_event,
+    list_events,
+)
 
 
 def _bool_query(raw: str | None) -> bool | None:
@@ -117,7 +124,36 @@ async def acknowledge_event_endpoint(request: web.Request) -> web.Response:
     return web.json_response(updated)
 
 
+async def display_reset_event_endpoint(request: web.Request) -> web.Response:
+    """Manual reset of alarmed video display — does not acknowledge the event."""
+    denied = await deny_unless_events_permission(request)
+    if denied is not None:
+        return denied
+    user = await get_effective_user(request)
+    event_id = request.match_info.get("id") or ""
+    updated = await display_reset_event(event_id, user)
+    if not updated:
+        return web.json_response({"error": "Event not found"}, status=404)
+    await write_audit(
+        action=ACTION_EVENT_DISPLAY_RESET,
+        actor=user,
+        resource_type="event",
+        resource_id=event_id,
+        resource_label=updated.get("title"),
+        request=request,
+        success=True,
+        metadata={
+            "camera_id": updated.get("camera_id"),
+            "source_type": updated.get("source_type"),
+            "severity": updated.get("severity"),
+            "acknowledged": updated.get("acknowledged"),
+        },
+    )
+    return web.json_response(updated)
+
+
 def setup_event_routes(app: web.Application) -> None:
     app.router.add_get("/api/events", list_events_endpoint)
     app.router.add_get("/api/events/{id}", get_event_endpoint)
     app.router.add_post("/api/events/{id}/acknowledge", acknowledge_event_endpoint)
+    app.router.add_post("/api/events/{id}/display-reset", display_reset_event_endpoint)

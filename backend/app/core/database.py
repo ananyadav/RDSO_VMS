@@ -40,6 +40,12 @@ def user_helper(user) -> dict:
     """Converts a user document from MongoDB into a JSON-serializable dict."""
     if not user:
         return None
+    from app.services.priority_levels import DEFAULT_USER_PRIORITY, normalize_priority
+
+    try:
+        priority = normalize_priority(user.get("priority"), default=DEFAULT_USER_PRIORITY)
+    except Exception:
+        priority = DEFAULT_USER_PRIORITY
     return {
         "id": str(user["_id"]),
         "name": user.get("name") or user.get("username") or "",
@@ -50,6 +56,7 @@ def user_helper(user) -> dict:
         "email": user.get("email", ""),
         "permissions": user.get("permissions", []),
         "cameraAccess": camera_access_public(user),
+        "priority": priority,
     }
 
 # --- User Database Functions ---
@@ -120,6 +127,12 @@ async def add_user(user_data: dict) -> dict:
         raise ValueError(f"User '{name}' already exists")
 
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+    from app.services.priority_levels import DEFAULT_USER_PRIORITY, normalize_priority
+
+    try:
+        priority = normalize_priority(user_data.get("priority"), default=DEFAULT_USER_PRIORITY)
+    except Exception:
+        priority = DEFAULT_USER_PRIORITY
     new_user_doc = {
         "name": name,
         "username": name,
@@ -131,6 +144,7 @@ async def add_user(user_data: dict) -> dict:
             "allowedCameraGroups": [],
             "allowedCameraUids": [],
         },
+        "priority": priority,
         "status": "Active",
         "lastLogin": "Never"
     }
@@ -154,6 +168,19 @@ async def update_user(id: str, user_data: dict):
         if 'password' in update_doc and update_doc['password']:
             hashed_password = bcrypt.hashpw(update_doc['password'].encode('utf-8'), bcrypt.gensalt())
             update_doc['password'] = hashed_password
+        if "priority" in update_doc:
+            from app.services.priority_levels import (
+                DEFAULT_USER_PRIORITY,
+                PriorityValidationError,
+                normalize_priority,
+            )
+
+            try:
+                update_doc["priority"] = normalize_priority(
+                    update_doc.get("priority"), default=DEFAULT_USER_PRIORITY
+                )
+            except PriorityValidationError:
+                update_doc.pop("priority", None)
         await user_collection.update_one({"_id": ObjectId(id)}, {"$set": update_doc})
         user = await user_collection.find_one({"_id": ObjectId(id)})
         return user_helper(user)
@@ -237,6 +264,28 @@ def recording_session_helper(doc) -> dict:
         "bytes_per_hour": doc.get("bytes_per_hour"),
         "gb_per_day_estimate": doc.get("gb_per_day_estimate"),
         "ffmpeg_alive": doc.get("ffmpeg_alive"),
+        "recovery_state": doc.get("recovery_state"),
+        "restart_count": doc.get("restart_count"),
+        "last_failure_at": doc.get("last_failure_at"),
+        "last_failure_reason": doc.get("last_failure_reason"),
+        "last_recovered_at": doc.get("last_recovered_at"),
+        "recovery_updated_at": doc.get("recovery_updated_at"),
+        "source_video_codec": doc.get("source_video_codec"),
+        "recording_video_mode": doc.get("recording_video_mode"),
+        "recording_video_transcoded": doc.get("recording_video_transcoded"),
+        "file_path": doc.get("file_path"),
+        "camera_uid": doc.get("camera_uid"),
+        "camera_name": doc.get("camera_name"),
+        "ip_address": doc.get("ip_address"),
+        "source": doc.get("source"),
+        "edge_backfill_job_id": doc.get("edge_backfill_job_id"),
+        "edge_protocol": doc.get("edge_protocol"),
+        "recordings_root": doc.get("recordings_root"),
+        "storage_absolute_path": doc.get("storage_absolute_path"),
+        "stop_reason": doc.get("stop_reason"),
+        "evidence_integrity": doc.get("evidence_integrity"),
+        "recording_server_id": doc.get("recording_server_id"),
+        "recording_server_role": doc.get("recording_server_role"),
     }
 
 
@@ -254,6 +303,8 @@ async def create_recording_session(
     ip_address: str = "",
     stream_profile: str = "main/101 copy",
     segment_seconds: str = "2",
+    recording_server_id: str = "",
+    recording_server_role: str = "",
 ) -> dict:
     doc = {
         "camera_id": camera_id,
@@ -274,6 +325,24 @@ async def create_recording_session(
         "stream_profile": stream_profile,
         "segment_seconds": segment_seconds,
     }
+    if recording_server_id:
+        doc["recording_server_id"] = recording_server_id
+    else:
+        try:
+            from app.services.recording_server_config import local_recording_server_id
+
+            doc["recording_server_id"] = local_recording_server_id()
+        except Exception:
+            pass
+    if recording_server_role:
+        doc["recording_server_role"] = recording_server_role
+    else:
+        try:
+            from app.services.recording_server_config import local_server_role
+
+            doc["recording_server_role"] = local_server_role()
+        except Exception:
+            pass
     result = await recording_sessions_collection.insert_one(doc)
     created = await recording_sessions_collection.find_one({"_id": result.inserted_id})
     return recording_session_helper(created)
@@ -540,12 +609,57 @@ async def ensure_database_indexes() -> None:
         await ensure_camera_sequence_indexes()
         await ensure_event_indexes()
         try:
+            from app.services.ccc_incident_service import ensure_incident_indexes
+            from app.services.ccc_sop_service import ensure_sop_indexes
+
+            await ensure_incident_indexes()
+            await ensure_sop_indexes()
+            from app.services.ccc_dashboard_prefs import ensure_dashboard_prefs_indexes
+            from app.services.ccc_groups_service import ensure_ccc_group_indexes
+            from app.services.ccc_comms_service import ensure_ccc_comms_indexes
+
+            await ensure_dashboard_prefs_indexes()
+            await ensure_ccc_group_indexes()
+            await ensure_ccc_comms_indexes()
+            from app.services.ccc_device_service import ensure_ccc_device_indexes
+
+            await ensure_ccc_device_indexes()
+            from app.services.ccc_vms_integration_store import ensure_vms_integration_indexes
+
+            await ensure_vms_integration_indexes()
+            from app.services.ccc_integration_idempotency import ensure_idempotency_indexes
+
+            await ensure_idempotency_indexes()
+        except Exception as ccc_exc:
+            logging.debug("[DB] CCC incident/SOP indexes skipped: %s", ccc_exc)
+        try:
             await camera_collection.drop_index("idx_camera_online")
         except Exception:
             pass
         await recording_sessions_collection.create_index("camera_uid", name="idx_session_camera_uid")
         await recording_sessions_collection.create_index("ip_address", name="idx_session_ip_address")
         await recording_sessions_collection.create_index("started_at", name="idx_session_started_at")
+        await recording_sessions_collection.create_index(
+            "recording_server_id", name="idx_session_recording_server_id"
+        )
+        try:
+            from app.services.recording_ha_store import get_ha_store
+
+            store = get_ha_store()
+            ensure = getattr(store, "ensure_indexes", None)
+            if callable(ensure):
+                await ensure()
+        except Exception as ha_exc:
+            logging.debug("[DB] Recording HA indexes skipped: %s", ha_exc)
+        try:
+            from app.services.vms_ha_store import get_vms_ha_store
+
+            vms_store = get_vms_ha_store()
+            ensure_vms = getattr(vms_store, "ensure_indexes", None)
+            if callable(ensure_vms):
+                await ensure_vms()
+        except Exception as vms_exc:
+            logging.debug("[DB] VMS HA indexes skipped: %s", vms_exc)
         await locations_collection.create_index(
             [("slug", 1), ("type", 1)],
             unique=True,

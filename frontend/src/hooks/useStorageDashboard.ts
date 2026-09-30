@@ -10,8 +10,21 @@ export interface DiskInfo {
   disk_free_gb: number;
   disk_free_percent?: number;
   disk_percent: number;
+  /** RDSO 18.3.10: online | low_space | critical | unavailable | read_only */
+  status?: string;
   status_level?: 'green' | 'yellow' | 'red';
   status_label?: string;
+  total_gb?: number;
+  used_gb?: number;
+  free_gb?: number;
+  percent_used?: number;
+  percent_free?: number;
+  writable?: boolean;
+  read_only?: boolean;
+  available?: boolean;
+  allow_recording?: boolean;
+  storage_model?: string;
+  error?: string | null;
 }
 
 export interface DashboardSummary {
@@ -92,6 +105,14 @@ export interface StorageDashboardData {
   recording?: RecordingStreamInfo;
   retention: RetentionPolicy;
   storage_settings?: StorageSettings;
+  storage_health?: {
+    status?: string;
+    status_label?: string;
+    writable?: boolean;
+    allow_recording?: boolean;
+    storage_model?: string;
+    error?: string | null;
+  };
   last_retention_pass?: LastRetentionPass | null;
   disk: DiskInfo;
   summary: DashboardSummary;
@@ -127,8 +148,13 @@ export function diskStatusLevel(disk: DiskInfo): 'green' | 'yellow' | 'red' {
 
 export function diskStatusLabel(disk: DiskInfo): string {
   if (disk.status_label) return disk.status_label;
+  if (disk.status === 'critical') return 'Critical';
+  if (disk.status === 'low_space') return 'Low Space';
+  if (disk.status === 'unavailable') return 'Unavailable';
+  if (disk.status === 'online') return 'Online';
+  if (disk.status === 'read_only') return 'Read Only';
   const level = diskStatusLevel(disk);
-  return level === 'green' ? 'Healthy' : level === 'yellow' ? 'Low' : 'Critical';
+  return level === 'green' ? 'Online' : level === 'yellow' ? 'Low Space' : 'Critical';
 }
 
 export const DISK_LEVEL_STYLES = {

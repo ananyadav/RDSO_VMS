@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
+import calendar
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from bson import ObjectId
-from bson.errors import InvalidId
-
-from app.core.database import camera_collection, recording_sessions_collection
+from app.core.database import recording_sessions_collection
+from app.services.app_timezone import local_day_bounds_utc, local_month_bounds_utc
 from app.services.recording_config import RECORDING_SEGMENT_SECONDS
 from app.services.camera_identity import (
     camera_display_name,
@@ -32,9 +31,8 @@ RECORDING_FILE_NOT_FOUND = "Recording file not found"
 
 
 def _parse_date(date_str: str) -> tuple[datetime, datetime]:
-    """UTC bounds [start, end) for a calendar date YYYY-MM-DD."""
-    day_start = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-    return day_start, day_start + timedelta(days=1)
+    """UTC bounds [start, end) for a calendar date YYYY-MM-DD in APP_TIMEZONE."""
+    return local_day_bounds_utc(date_str)
 
 
 def _parse_iso(iso: str | None) -> Optional[datetime]:
@@ -360,13 +358,146 @@ async def search_recordings_by_date(camera_ref: str, date_str: str) -> dict:
     }
 
 
-def _month_bounds(year: int, month: int) -> tuple[datetime, datetime]:
-    start = datetime(year, month, 1, tzinfo=timezone.utc)
-    if month == 12:
-        end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+# RDSO 18.1.27 — minimum 16 simultaneous replay cameras (was 9 for 18.1.26).
+MAX_MULTI_PLAYBACK_CAMERAS = 16
+
+NO_FOOTAGE_AT_TIME = "No recording available for this time."
+
+
+def resolve_recording_at_time(
+    recordings: list[dict],
+    at: datetime,
+) -> dict:
+    """
+    Pick the playable recording covering wall-clock `at` and compute playlist offset.
+
+    Returns { ok, sessionId?, playlistUrl?, offsetSeconds?, startTime?, endTime?,
+              code?, error? }.
+    """
+    if at.tzinfo is None:
+        at = at.replace(tzinfo=timezone.utc)
     else:
-        end = datetime(year, month + 1, 1, tzinfo=timezone.utc)
-    return start, end
+        at = at.astimezone(timezone.utc)
+
+    for rec in recordings:
+        if rec.get("playable") is False or rec.get("error"):
+            continue
+        start = _parse_iso(rec.get("startTime"))
+        end = _parse_iso(rec.get("endTime"))
+        if start is None or end is None:
+            continue
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+        if start <= at <= end:
+            offset = max(0.0, (at - start).total_seconds())
+            duration = float(rec.get("duration") or 0)
+            if duration > 0:
+                offset = min(offset, duration)
+            return {
+                "ok": True,
+                "sessionId": rec.get("sessionId"),
+                "playlistUrl": rec.get("playlistUrl"),
+                "offsetSeconds": offset,
+                "startTime": rec.get("startTime"),
+                "endTime": rec.get("endTime"),
+                "code": None,
+                "error": None,
+            }
+
+    return {
+        "ok": False,
+        "sessionId": None,
+        "playlistUrl": None,
+        "offsetSeconds": None,
+        "startTime": None,
+        "endTime": None,
+        "code": "no_footage",
+        "error": NO_FOOTAGE_AT_TIME,
+    }
+
+
+def parse_multi_at_iso(at_str: str | None) -> datetime | None:
+    """Parse optional ISO-8601 instant for multi-camera resolve."""
+    if not at_str or not str(at_str).strip():
+        return None
+    parsed = _parse_iso(str(at_str).strip())
+    if parsed is None:
+        raise ValueError("at must be an ISO-8601 datetime")
+    return parsed
+
+
+async def search_recordings_multi(
+    camera_refs: list[str],
+    date_str: str,
+    *,
+    at: datetime | None = None,
+) -> dict:
+    """
+    Search recordings for multiple cameras on one calendar date.
+
+    Caller must enforce recording.view and per-camera ACL before invoking.
+    """
+    from app.services.app_timezone import get_effective_app_timezone_name
+
+    cameras_out: list[dict] = []
+    for ref in camera_refs:
+        result = await search_recordings_by_date(ref, date_str)
+        if result.get("status") == 404:
+            cameras_out.append(
+                {
+                    "cameraId": ref,
+                    "cameraUid": ref,
+                    "cameraName": ref,
+                    "ok": False,
+                    "recordings": [],
+                    "total": 0,
+                    "resolved": {
+                        "ok": False,
+                        "code": "camera_not_found",
+                        "error": result.get("error") or "Camera not found",
+                    }
+                    if at is not None
+                    else None,
+                }
+            )
+            continue
+
+        recordings = list(result.get("recordings") or [])
+        entry = {
+            "cameraId": result.get("cameraId") or ref,
+            "cameraUid": result.get("cameraUid") or ref,
+            "cameraName": result.get("cameraName") or ref,
+            "ok": True,
+            "recordings": recordings,
+            "total": len(recordings),
+            "resolved": None,
+        }
+        if at is not None:
+            entry["resolved"] = resolve_recording_at_time(recordings, at)
+        cameras_out.append(entry)
+
+    return {
+        "date": date_str,
+        "timezone": get_effective_app_timezone_name(),
+        "at": at.isoformat() if at is not None else None,
+        "cameras": cameras_out,
+        "totalCameras": len(cameras_out),
+    }
+
+
+def _month_bounds(year: int, month: int) -> tuple[datetime, datetime]:
+    """UTC bounds [start, end) for a local calendar month in APP_TIMEZONE."""
+    return local_month_bounds_utc(year, month)
+
+
+def _local_dates_in_month(year: int, month: int) -> list[str]:
+    """YYYY-MM-DD strings for each calendar day of the month (site timezone)."""
+    return [
+        f"{year:04d}-{month:02d}-{day:02d}"
+        for day in range(1, calendar.monthrange(year, month)[1] + 1)
+    ]
 
 
 def _session_interval(
@@ -392,9 +523,10 @@ def _session_interval(
 def _dates_for_interval(
     start: Optional[datetime],
     end: Optional[datetime],
-    month_start: datetime,
-    month_end: datetime,
+    year: int,
+    month: int,
 ) -> set[str]:
+    """Local calendar dates in (year, month) that overlap [start, end]."""
     if start is None and end is None:
         return set()
     if start is None:
@@ -405,12 +537,20 @@ def _dates_for_interval(
         return set()
 
     out: set[str] = set()
-    day = month_start
-    while day < month_end:
-        day_end = day + timedelta(days=1)
-        if _interval_overlaps_day(start, end, day, day_end):
-            out.add(day.strftime("%Y-%m-%d"))
-        day = day_end
+    for date_str in _local_dates_in_month(year, month):
+        day_start, day_end = _parse_date(date_str)
+        if _interval_overlaps_day(start, end, day_start, day_end):
+            out.add(date_str)
+    return out
+
+
+def _segment_dates_in_month(session_dir: Path, year: int, month: int) -> set[str]:
+    """Local calendar dates in (year, month) that have a segment mtime."""
+    out: set[str] = set()
+    for date_str in _local_dates_in_month(year, month):
+        day_start, day_end = _parse_date(date_str)
+        if _has_segment_on_day(session_dir, day_start, day_end):
+            out.add(date_str)
     return out
 
 
@@ -426,7 +566,6 @@ async def get_recording_dates_for_month(camera_ref: str, year: int, month: int) 
     if camera_name is None and not has_disk:
         return {"error": "Camera not found", "status": 404}
 
-    month_start, month_end = _month_bounds(year, month)
     dates: set[str] = set()
     seen_ids: set[str] = set()
 
@@ -451,12 +590,8 @@ async def get_recording_dates_for_month(camera_ref: str, year: int, month: int) 
             continue
         folder_id = session_dir.parent.parent.name
         started, stopped = _session_interval(folder_id, session_id, doc)
-        dates |= _dates_for_interval(started, stopped, month_start, month_end)
-        day = month_start
-        while day < month_end:
-            if _has_segment_on_day(session_dir, day, day + timedelta(days=1)):
-                dates.add(day.strftime("%Y-%m-%d"))
-            day += timedelta(days=1)
+        dates |= _dates_for_interval(started, stopped, year, month)
+        dates |= _segment_dates_in_month(session_dir, year, month)
 
     for folder_id in storage_folders:
         camera_dir = get_effective_recordings_dir() / folder_id
@@ -471,12 +606,8 @@ async def get_recording_dates_for_month(camera_ref: str, year: int, month: int) 
                 continue
             if _has_playable_media(session_dir):
                 started, stopped = _session_interval(folder_id, session_id, None)
-                dates |= _dates_for_interval(started, stopped, month_start, month_end)
-            day = month_start
-            while day < month_end:
-                if _has_segment_on_day(session_dir, day, day + timedelta(days=1)):
-                    dates.add(day.strftime("%Y-%m-%d"))
-                day += timedelta(days=1)
+                dates |= _dates_for_interval(started, stopped, year, month)
+            dates |= _segment_dates_in_month(session_dir, year, month)
 
     return {
         "cameraId": camera_ref,

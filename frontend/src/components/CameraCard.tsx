@@ -1,8 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { VideoOff, Circle, Maximize, Loader2 } from 'lucide-react';
+import { VideoOff, Circle, Maximize, Loader2, History } from 'lucide-react';
 import { useGo2RtcLive } from '../hooks/useGo2RtcLive';
+import { useInstantReplayLiveLease } from '../hooks/useInstantReplayLiveLease';
+import LivePtzPad from './LivePtzPad';
+import VideoTitleTimeOverlay from './VideoTitleTimeOverlay';
 import { cameraTileLabel } from '../lib/cameraLabel';
-import { isSuperAdminUser } from '../lib/permissions';
+import { canUseInstantReplay } from '../lib/instantReplay';
+import { hasPermission, isSuperAdminUser, PERMISSIONS } from '../lib/permissions';
 import { authService } from '../services/authService';
 
 /** Shared so virtualized tiles do not stampede /api/health. */
@@ -56,6 +60,8 @@ interface Camera {
   ip_address?: string;
   cameraUid?: string;
   online: boolean;
+  ptz?: boolean;
+  workerId?: number | string | null;
 }
 
 interface CameraCardProps {
@@ -69,6 +75,10 @@ interface CameraCardProps {
   isRecording: boolean;
   onToggleRecording: (cameraId: string) => void;
   onFullscreen?: (camera: Camera) => void;
+  onInstantReplay?: (camera: Camera) => void;
+  /** Show PTZ pad for the selected Live View camera. */
+  showPtzControls?: boolean;
+  onSelect?: (camera: Camera) => void;
   controlRoom?: boolean;
 }
 
@@ -81,11 +91,29 @@ function CameraCard({
   isRecording,
   onToggleRecording,
   onFullscreen,
+  onInstantReplay,
+  showPtzControls = false,
+  onSelect,
   controlRoom = false,
 }: CameraCardProps) {
   const tileRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<HTMLDivElement>(null);
   const showManualRecordingControls = useShowManualRecordingControls();
+  const canLivePtz =
+    !controlRoom &&
+    Boolean(camera.ptz) &&
+    hasPermission(authService.getCurrentUser(), PERMISSIONS.LIVE_VIEW);
+  const showLivePtzPad = canLivePtz && showPtzControls && liveActive;
+  const showInstantReplay =
+    Boolean(onInstantReplay) &&
+    !controlRoom &&
+    camera.online &&
+    canUseInstantReplay(authService.getCurrentUser());
+
+  useInstantReplayLiveLease(camera.online ? camera : null, {
+    enabled: showInstantReplay,
+    liveActive: liveActive && camera.online && eagerLive,
+  });
 
   const { isConnecting, isQueued, streamStatus, inView } = useGo2RtcLive(
     camera.online ? camera : null,
@@ -110,6 +138,10 @@ function CameraCard({
     if (onFullscreen) onFullscreen(camera);
   };
 
+  const handleSelectClick = () => {
+    if (onSelect && !controlRoom) onSelect(camera);
+  };
+
   return (
     <div
       className={`w-full h-full overflow-hidden flex flex-col relative group ${
@@ -120,10 +152,12 @@ function CameraCard({
       data-live-stream-eligible={eagerLive ? 'true' : 'false'}
       data-live-stream-status={streamStatus}
       data-live-stream-queued={isQueued ? 'true' : 'false'}
+      data-ptz={camera.ptz ? 'true' : 'false'}
     >
       <div
         ref={tileRef}
         className="relative flex-1 min-h-0 bg-black cursor-pointer"
+        onClick={handleSelectClick}
         onDoubleClick={handleDoubleClick}
       >
         <div className="absolute inset-0">
@@ -154,9 +188,17 @@ function CameraCard({
           )}
         </div>
 
+        {/* RDSO 18.2.29 — title + date/time on video (outside player; pointer-events none). */}
+        <VideoTitleTimeOverlay
+          camera={camera}
+          size="sm"
+          showTitle
+          position={showLivePtzPad ? 'bottom-right' : 'bottom-left'}
+        />
+
         {!controlRoom && (
           <>
-        <div className="absolute top-0 left-0 right-0 p-1.5 sm:p-2 flex justify-between items-start bg-gradient-to-b from-black/60 to-transparent z-10">
+        <div className="absolute top-0 left-0 right-0 p-1.5 sm:p-2 flex justify-between items-start bg-gradient-to-b from-black/60 to-transparent z-10 pointer-events-none">
           <div className="flex items-center space-x-1.5 sm:space-x-2 min-w-0 flex-wrap gap-1">
             {isRecording && (
               <div className="flex-shrink-0 flex items-center bg-red-600 text-white text-[10px] sm:text-xs font-bold pl-1 sm:pl-1.5 pr-1.5 sm:pr-2 py-0.5 rounded-full">
@@ -164,17 +206,27 @@ function CameraCard({
                 <span>REC</span>
               </div>
             )}
-            <h3 className="font-bold text-white text-xs sm:text-sm truncate">{cameraTileLabel(camera)}</h3>
+            {canLivePtz && (
+              <span className="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-semibold rounded bg-sky-900/80 text-sky-100 border border-sky-500/40">
+                PTZ
+              </span>
+            )}
           </div>
 
           <span
-            className={`flex-shrink-0 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-semibold rounded-full ${
+            className={`flex-shrink-0 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-semibold rounded-full pointer-events-none ${
               camera.online ? 'text-green-800 bg-green-200' : 'text-red-800 bg-red-200'
             }`}
           >
             {camera.online ? 'Online' : 'Offline'}
           </span>
         </div>
+
+        {showLivePtzPad && (
+          <div className="absolute bottom-10 left-1.5 z-30 opacity-90 group-hover:opacity-100">
+            <LivePtzPad cameraId={camera.id} online={camera.online} size="sm" />
+          </div>
+        )}
 
         <div
           className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
@@ -187,7 +239,9 @@ function CameraCard({
           </>
         )}
 
-        {(onFullscreen || (!controlRoom && showManualRecordingControls)) && (
+        {(onFullscreen ||
+          showInstantReplay ||
+          (!controlRoom && showManualRecordingControls)) && (
           <div
             className={`absolute z-20 ${
               controlRoom
@@ -196,6 +250,23 @@ function CameraCard({
             }`}
           >
             <div className="flex items-center space-x-2">
+              {showInstantReplay && onInstantReplay && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onInstantReplay(camera);
+                  }}
+                  className="flex items-center space-x-1 py-1 px-2 rounded text-amber-100 hover:bg-white/20 bg-black/50 backdrop-blur-sm transition-colors text-xs"
+                  title="Instant Replay"
+                  aria-label={`Instant Replay ${cameraTileLabel(camera)}`}
+                  data-testid="instant-replay-action"
+                >
+                  <History size={14} />
+                  <span className="hidden sm:inline">Instant Replay</span>
+                </button>
+              )}
+
               {onFullscreen && (
                 <button
                   type="button"

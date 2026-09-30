@@ -23,6 +23,7 @@ interface SequenceTilePlayerProps {
   controlRoom?: boolean;
   onToggleRecording: (cameraId: string) => void;
   onFullscreen?: (camera: LiveGridCamera) => void;
+  onInstantReplay?: (camera: LiveGridCamera) => void;
 }
 
 export default function SequenceTilePlayer({
@@ -36,6 +37,7 @@ export default function SequenceTilePlayer({
   recordingSchedule = {},
   onToggleRecording,
   onFullscreen,
+  onInstantReplay,
 }: SequenceTilePlayerProps): React.ReactElement {
   const orderedIds = useMemo(
     () => sequenceCameraOrder(sequence.camera_ids),
@@ -122,6 +124,7 @@ export default function SequenceTilePlayer({
           isRecording={Boolean(currentCamera && recordingSchedule[currentCamera.id])}
           onToggleRecording={onToggleRecording}
           onFullscreen={onFullscreen}
+          onInstantReplay={onInstantReplay}
           controlRoom={controlRoom}
         />
       </div>

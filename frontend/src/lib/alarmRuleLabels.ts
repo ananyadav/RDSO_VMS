@@ -9,6 +9,16 @@ export const RECORDING_DURATION_MIN = 5;
 export const RECORDING_DURATION_MAX = 3600;
 export const RECORDING_DURATION_DEFAULT = 60;
 
+/** Pre-alarm lookback (real buffer footage before trigger). */
+export const PRE_ALARM_MIN = 0;
+export const PRE_ALARM_MAX = 300;
+export const PRE_ALARM_DEFAULT = 10;
+
+/** Post-alarm continue window after trigger (= legacy duration). */
+export const POST_ALARM_MIN = RECORDING_DURATION_MIN;
+export const POST_ALARM_MAX = RECORDING_DURATION_MAX;
+export const POST_ALARM_DEFAULT = RECORDING_DURATION_DEFAULT;
+
 export const SEVERITY_OPTIONS: { value: AlarmSeverity; label: string }[] = [
   { value: 'info', label: 'Info' },
   { value: 'warning', label: 'Warning' },
@@ -21,10 +31,12 @@ export const ACTION_OPTIONS: { value: AlarmAction; label: string }[] = [
   { value: 'start_recording', label: 'Start Recording' },
 ];
 
+export const CONFIGURABLE_TRIGGERS = new Set(['signal_loss', 'motion', 'digital_input']);
+
 export const TRIGGER_OPTIONS = [
   { value: ACTIVE_TRIGGER, label: 'Signal Loss', available: true },
-  { value: 'motion', label: 'Motion', available: false },
-  { value: 'digital_input', label: 'Digital Input', available: false },
+  { value: 'motion', label: 'Motion', available: true },
+  { value: 'digital_input', label: 'Digital Input / Relay', available: true },
   { value: 'recording_failure', label: 'Recording Failure', available: false },
 ] as const;
 

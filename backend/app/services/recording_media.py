@@ -5,13 +5,15 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
+from typing import Optional, Set
 
 from aiohttp import web
 from bson import ObjectId
 from bson.errors import InvalidId
 
-from app.core.database import camera_collection, get_recording_session
-from app.services.camera_uid import make_camera_uid
+from app.core.database import camera_collection, recording_sessions_collection
+from app.services.camera_identity import resolve_camera_uid, storage_folder_keys_for_uid
+from app.services.camera_uid import ip_from_camera_uid, make_camera_uid
 from app.services.video_recording import (
     ACTIVE_RECORDINGS,
     session_storage_dir,
@@ -21,6 +23,7 @@ from app.services.video_recording import (
 logger = logging.getLogger(__name__)
 
 RECORDING_FILE_NOT_FOUND = "Recording file not found"
+RECORDING_SESSION_NOT_FOUND = "Recording session not found"
 
 _ALLOWED_PLAYLISTS = frozenset({"index.m3u8"})
 _SEGMENT_NAME = re.compile(r"^seg_\d+\.ts$", re.IGNORECASE)
@@ -51,7 +54,7 @@ def _path_inside(base: Path, target: Path) -> bool:
 
 
 def validate_filename(filename: str) -> None:
-    """Allow only index.m3u8 and .ts segment files — block traversal."""
+    """Allow playlist, segments, and sealed evidence manifests — block traversal."""
     if not filename or filename in (".", ".."):
         raise RecordingMediaError("Invalid filename", 400)
     if "/" in filename or "\\" in filename:
@@ -59,6 +62,8 @@ def validate_filename(filename: str) -> None:
 
     lower = filename.lower()
     if lower in _ALLOWED_PLAYLISTS:
+        return
+    if lower in ("evidence_manifest.json", "evidence_integrity.json"):
         return
     if _SEGMENT_NAME.match(filename) or _TS_NAME.match(filename):
         return
@@ -80,11 +85,90 @@ async def validate_camera_media_ref(camera_ref: str) -> None:
     raise RecordingMediaError("Invalid cameraId", 400)
 
 
+async def _load_session_identity(session_id: str) -> Optional[dict]:
+    """Raw session identity fields for ownership checks (includes legacy keys)."""
+    if not session_id or not _is_object_id(session_id):
+        return None
+    return await recording_sessions_collection.find_one(
+        {"_id": ObjectId(session_id)},
+        {"camera_id": 1, "camera_uid": 1, "ip_address": 1, "storage_path": 1},
+    )
+
+
+def _session_identity_keys(session: dict) -> Set[str]:
+    keys: Set[str] = set()
+    for field in ("camera_uid", "camera_id", "ip_address"):
+        value = str(session.get(field) or "").strip()
+        if value:
+            keys.add(value)
+    folder = storage_folder_from_path(session.get("storage_path"), "")
+    if folder:
+        keys.add(folder)
+    return keys
+
+
+async def _allowed_camera_identity_keys(camera_ref: str) -> Set[str]:
+    """All camera identifiers that may own recordings for the URL cameraId."""
+    ref = (camera_ref or "").strip()
+    keys: Set[str] = set()
+    if not ref:
+        return keys
+    keys.add(ref)
+
+    uid = await resolve_camera_uid(ref)
+    if uid:
+        keys.add(uid)
+        ip = ip_from_camera_uid(uid)
+        if ip:
+            keys.add(ip)
+        for folder in await storage_folder_keys_for_uid(uid):
+            if folder:
+                keys.add(str(folder).strip())
+    elif _is_object_id(ref):
+        doc = await camera_collection.find_one({"_id": ObjectId(ref)})
+        if doc:
+            mongo_id = str(doc["_id"])
+            keys.add(mongo_id)
+            cam_uid = (doc.get("camera_uid") or make_camera_uid(doc.get("ip_address") or "") or "").strip()
+            if cam_uid:
+                keys.add(cam_uid)
+                ip = ip_from_camera_uid(cam_uid)
+                if ip:
+                    keys.add(ip)
+            stored = doc.get("recording_storage_id")
+            if stored:
+                keys.add(str(stored).strip())
+
+    return {k for k in keys if k}
+
+
+async def assert_session_belongs_to_camera(camera_id: str, session: dict) -> None:
+    """
+    Require Mongo session identity to match the URL cameraId.
+
+    Mismatch returns 404 (not 403) so foreign session existence is not disclosed.
+    """
+    allowed = await _allowed_camera_identity_keys(camera_id)
+    session_keys = _session_identity_keys(session)
+    if not allowed or not session_keys or session_keys.isdisjoint(allowed):
+        logger.warning(
+            "[PLAYBACK] Session ownership mismatch: camera=%s session=%s",
+            camera_id,
+            session.get("_id"),
+        )
+        raise RecordingMediaError(RECORDING_SESSION_NOT_FOUND, 404)
+
+
 async def resolve_session_dir(camera_id: str, session_id: str) -> Path:
     if not session_id or not _is_object_id(session_id):
         raise RecordingMediaError("Invalid sessionId", 400)
 
-    session = await get_recording_session(session_id)
+    session = await _load_session_identity(session_id)
+    if session is not None:
+        await assert_session_belongs_to_camera(camera_id, session)
+
+    # Only search folders owned by the requested camera — never foreign session paths.
+    allowed_folders = await _allowed_camera_identity_keys(camera_id)
     candidates: list[Path] = []
     seen: set[str] = set()
 
@@ -95,25 +179,14 @@ async def resolve_session_dir(camera_id: str, session_id: str) -> Path:
         seen.add(folder)
         candidates.append(session_storage_dir(folder, session_id))
 
-    ref = (camera_id or "").strip()
-    if ref:
-        add_folder(ref)
-    if session:
-        add_folder(storage_folder_from_path(session.get("storage_path"), ""))
-        mongo_cam = (session.get("camera_id") or "").strip()
-        if mongo_cam:
-            add_folder(mongo_cam)
-    if ref and _is_object_id(ref):
-        doc = await camera_collection.find_one({"_id": ObjectId(ref)})
-        if doc:
-            uid = (doc.get("camera_uid") or make_camera_uid(doc.get("ip_address") or "")).strip()
-            add_folder(uid)
+    for folder in allowed_folders:
+        add_folder(folder)
 
     for session_dir in candidates:
         if session_dir.is_dir():
             return session_dir
 
-    if session:
+    if session is not None:
         logger.warning(
             "[PLAYBACK] Recording file not found: camera=%s session=%s "
             "(MongoDB metadata exists, session folder missing)",
@@ -127,7 +200,7 @@ async def resolve_session_dir(camera_id: str, session_id: str) -> Path:
         camera_id,
         session_id,
     )
-    raise RecordingMediaError("Recording session not found", 404)
+    raise RecordingMediaError(RECORDING_SESSION_NOT_FOUND, 404)
 
 
 async def resolve_recording_file(camera_id: str, session_id: str, filename: str) -> Path:

@@ -60,9 +60,17 @@ def classify_stream_error(message: Optional[str]) -> str:
     if not message or not str(message).strip():
         return "offline"
     m = str(message).lower()
+    # RTSP DESCRIBE ok but SETUP fails — wrong brand path (common on Sparsh/HSD).
+    # Must run BEFORE auth matching: go2rtc says "streams: wrong response on SETUP".
+    if re.search(r"eof.*setup|setup.*eof|response on setup|rtsp.*setup", m):
+        if re.search(r"\b453\b|not enough bandwidth", m):
+            return "other"
+        return "missing_url"
     # go2rtc often truncates auth failures to "streams: wrong" (wrong user/pass).
+    # Do not treat "wrong response on SETUP" as auth (handled above).
     if re.search(
-        r"401|unauthorized|wrong user|password|auth|access denied|login|streams:\s*wrong\b",
+        r"401|unauthorized|wrong user(?:/pass)?|password|auth|access denied|login|"
+        r"streams:\s*wrong(?:\s|$|/|,)",
         m,
     ):
         return "wrong_password"
@@ -74,9 +82,6 @@ def classify_stream_error(message: Optional[str]) -> str:
     # Hikvision concurrent session limit — not a wrong path; free other RTSP clients.
     if re.search(r"\b453\b|not enough bandwidth", m):
         return "other"
-    # RTSP DESCRIBE ok but SETUP fails — wrong brand path (common on Sparsh/HSD).
-    if re.search(r"eof.*setup|setup.*eof|response on setup|rtsp.*setup", m):
-        return "missing_url"
     if re.search(r"codec|hevc|h265|h264|unsupported|decoder|invalid data", m):
         return "codec"
     if re.search(r"missing.*url|no rtsp|not configured|not registered", m):

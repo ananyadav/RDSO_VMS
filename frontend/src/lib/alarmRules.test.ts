@@ -26,14 +26,33 @@ describe('alarmRuleForm validation', () => {
     expect(hasFormErrors(errors)).toBe(true);
   });
 
+  it('accepts motion and digital_input triggers', () => {
+    for (const source of ['motion', 'digital_input'] as const) {
+      const errors = validateAlarmRuleForm({
+        ...defaultAlarmRuleFormValues(),
+        name: `${source} rule`,
+        camera_id: '507f1f77bcf86cd799439011',
+        source_type: source,
+      });
+      expect(errors.source_type).toBeUndefined();
+      const payload = formValuesToPayload({
+        ...defaultAlarmRuleFormValues(),
+        name: `${source} rule`,
+        camera_id: '507f1f77bcf86cd799439011',
+        source_type: source,
+      });
+      expect(payload.trigger.source_type).toBe(source);
+    }
+  });
+
   it('rejects unsupported trigger types', () => {
     const errors = validateAlarmRuleForm({
       ...defaultAlarmRuleFormValues(),
-      name: 'Motion rule',
+      name: 'Bad rule',
       camera_id: '507f1f77bcf86cd799439011',
-      source_type: 'motion',
+      source_type: 'recording_failure',
     });
-    expect(errors.source_type).toContain('Signal Loss');
+    expect(errors.source_type).toBeTruthy();
   });
 
   it('rejects invalid cooldown', () => {
@@ -46,7 +65,7 @@ describe('alarmRuleForm validation', () => {
     expect(errors.cooldown_seconds).toBeTruthy();
   });
 
-  it('builds signal_loss payload only', () => {
+  it('builds signal_loss payload by default', () => {
     const payload = formValuesToPayload({
       ...defaultAlarmRuleFormValues(),
       name: 'RDSO Signal Loss Test',
@@ -61,6 +80,28 @@ describe('alarmRuleForm validation', () => {
     expect(payload.trigger.source_type).toBe('signal_loss');
     expect(payload.actions).toEqual(['create_event', 'ui_notification']);
     expect(payload.cooldown_seconds).toBe(60);
+    expect(payload.display).toBeNull();
+  });
+
+  it('includes display switch when enabled with ui_notification', () => {
+    const payload = formValuesToPayload({
+      ...defaultAlarmRuleFormValues(),
+      name: 'Layout switch rule',
+      camera_id: '507f1f77bcf86cd799439011',
+      actions: ['create_event', 'ui_notification'],
+      display_enabled: true,
+      display_monitor_id: 2,
+      display_layout: '4x4',
+      display_slot: 3,
+      display_restore_on_reset: true,
+    });
+    expect(payload.display).toEqual({
+      mode: 'layout_switch',
+      monitor_id: 2,
+      layout: '4x4',
+      slot: 3,
+      restore_on_reset: true,
+    });
   });
 
   it('includes recording config when start_recording selected', () => {
@@ -70,8 +111,14 @@ describe('alarmRuleForm validation', () => {
       camera_id: '507f1f77bcf86cd799439011',
       actions: ['create_event', 'start_recording'],
       recording_duration_seconds: 45,
+      pre_alarm_seconds: 10,
+      post_alarm_seconds: 45,
     });
-    expect(payload.recording).toEqual({ duration_seconds: 45 });
+    expect(payload.recording).toEqual({
+      pre_alarm_seconds: 10,
+      post_alarm_seconds: 45,
+      duration_seconds: 45,
+    });
   });
 
   it('requires valid recording duration when start_recording selected', () => {
@@ -81,8 +128,21 @@ describe('alarmRuleForm validation', () => {
       camera_id: '507f1f77bcf86cd799439011',
       actions: ['start_recording'],
       recording_duration_seconds: 2,
+      post_alarm_seconds: 2,
     });
-    expect(errors.recording_duration_seconds).toBeTruthy();
+    expect(errors.recording_duration_seconds || errors.post_alarm_seconds).toBeTruthy();
+  });
+
+  it('rejects invalid pre-alarm seconds', () => {
+    const errors = validateAlarmRuleForm({
+      ...defaultAlarmRuleFormValues(),
+      name: 'Rec',
+      camera_id: '507f1f77bcf86cd799439011',
+      actions: ['start_recording'],
+      pre_alarm_seconds: 9999,
+      post_alarm_seconds: 30,
+    });
+    expect(errors.pre_alarm_seconds).toBeTruthy();
   });
 });
 

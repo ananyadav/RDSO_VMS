@@ -71,12 +71,15 @@ export function hasRecordingView(
 /** Route path → required permission (exact or prefix match in canAccessPath). */
 export const ROUTE_PERMISSIONS: Record<string, Permission> = {
   '/live': PERMISSIONS.LIVE_VIEW,
+  '/ccc': PERMISSIONS.LIVE_VIEW,
   '/playback': PERMISSIONS.RECORDING_VIEW,
   '/events': PERMISSIONS.EVENTS,
+  '/reports': PERMISSIONS.EVENTS,
   '/alarm-rules': PERMISSIONS.EVENTS,
   '/camera-sequences': PERMISSIONS.CAMERAS,
   '/ptz': PERMISSIONS.LIVE_VIEW,
   '/camera-management': PERMISSIONS.CAMERAS,
+  '/system-settings': PERMISSIONS.SYSTEM,
   '/storage': PERMISSIONS.SYSTEM,
   '/network-settings': PERMISSIONS.SYSTEM,
   '/user-management': PERMISSIONS.USERS,
@@ -88,12 +91,15 @@ export const ROUTE_PERMISSIONS: Record<string, Permission> = {
 
 const ORDERED_PATHS = [
   '/live',
+  '/ccc',
   '/playback',
   '/events',
+  '/reports',
   '/alarm-rules',
   '/camera-sequences',
   '/ptz',
   '/camera-management',
+  '/system-settings',
   '/storage',
   '/network-settings',
   '/user-management',
@@ -105,8 +111,6 @@ const ORDERED_PATHS = [
 
 /** Platform / infrastructure pages — SUPER_ADMIN only. Never advertise these to ADMIN/OPERATOR. */
 const SUPER_ADMIN_ONLY_PATHS = [
-  '/storage',
-  '/network-settings',
   '/system-status',
   '/go2rtc-diagnostics',
   '/maintenance',
@@ -157,6 +161,13 @@ export function canAccessPath(
     return isOpsAdminUser(user);
   }
   if (pathMatches(pathname, '/camera-sequences')) {
+    return isOpsAdminUser(user);
+  }
+  if (
+    pathMatches(pathname, '/system-settings') ||
+    pathMatches(pathname, '/storage') ||
+    pathMatches(pathname, '/network-settings')
+  ) {
     return isOpsAdminUser(user);
   }
   const required = permissionForPath(pathname);

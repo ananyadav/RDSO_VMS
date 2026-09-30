@@ -23,6 +23,10 @@ from app.services.audit_service import redact_value
 from app.services.camera_access import build_access_filter, is_admin, merge_query, user_can_access_camera
 from app.services.camera_identity import get_camera_by_ref
 from app.services.camera_uid import make_camera_uid
+from app.services.priority_levels import (
+    PriorityValidationError,
+    resolve_alarm_priority,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +78,11 @@ def event_to_public(doc: dict) -> dict:
         "rule_id": doc.get("rule_id"),
         "source_type": doc.get("source_type") or "",
         "severity": doc.get("severity") or "info",
+        "priority": int(
+            doc["priority"]
+            if doc.get("priority") is not None
+            else resolve_alarm_priority(severity=doc.get("severity"))
+        ),
         "title": doc.get("title") or "",
         "message": doc.get("message") or "",
         "occurred_at": doc.get("occurred_at"),
@@ -86,6 +95,9 @@ def event_to_public(doc: dict) -> dict:
         "metadata": doc.get("metadata") or {},
         "recording_session_id": doc.get("recording_session_id"),
         "recording_status": doc.get("recording_status"),
+        "pre_alarm_status": doc.get("pre_alarm_status"),
+        "pre_alarm_seconds_captured": doc.get("pre_alarm_seconds_captured"),
+        "pre_alarm_path": doc.get("pre_alarm_path"),
     }
 
 
@@ -133,6 +145,13 @@ async def build_event_access_filter(user: Optional[dict]) -> dict[str, Any]:
         clauses.append({"camera_id": {"$in": list(allowed_ids)}})
     if allowed_uids:
         clauses.append({"camera_uid": {"$in": list(allowed_uids)}})
+    # CCC external sensor events without a camera remain visible to Events users.
+    clauses.append(
+        {
+            "source_type": "external_sensor",
+            "$or": [{"camera_id": ""}, {"camera_id": {"$exists": False}}],
+        }
+    )
     if not clauses:
         return {"_id": {"$exists": False}}
     if len(clauses) == 1:
@@ -169,6 +188,7 @@ async def create_event(
     occurred_at: Optional[datetime] = None,
     actions_triggered: Optional[list[str]] = None,
     ui_notification: bool = False,
+    priority: Optional[int] = None,
 ) -> dict:
     """Internal API for rule evaluator and future adapters — not exposed via HTTP."""
     st = str(source_type or "").strip().lower()
@@ -177,18 +197,31 @@ async def create_event(
     sev = str(severity or "").strip().lower()
     if sev not in SEVERITIES:
         raise EventValidationError(f"Unsupported severity: {severity}")
+    try:
+        pri = resolve_alarm_priority(priority=priority, severity=sev)
+    except PriorityValidationError as exc:
+        raise EventValidationError(str(exc)) from exc
 
     cid = str(camera_id or "").strip()
-    try:
-        ObjectId(cid)
-    except (InvalidId, TypeError) as exc:
-        raise EventValidationError("camera_id must be a valid MongoDB id") from exc
-
-    cam = await get_camera_by_ref(cid)
-    if not cam:
-        raise EventValidationError("Camera not found")
-
-    uid = (camera_uid or cam.get("camera_uid") or make_camera_uid(cam.get("ip_address") or "") or cid).strip()
+    cam = None
+    uid = (camera_uid or "").strip()
+    if st == "external_sensor" and not cid:
+        # Non-camera CCC sensor events — visible to Events operators; no stream opened.
+        uid = uid or "ccc_external_sensor"
+    else:
+        try:
+            ObjectId(cid)
+        except (InvalidId, TypeError) as exc:
+            raise EventValidationError("camera_id must be a valid MongoDB id") from exc
+        cam = await get_camera_by_ref(cid)
+        if not cam:
+            raise EventValidationError("Camera not found")
+        uid = (
+            camera_uid
+            or cam.get("camera_uid")
+            or make_camera_uid(cam.get("ip_address") or "")
+            or cid
+        ).strip()
     when = occurred_at or _utcnow()
     rid = None
     if rule_id:
@@ -203,6 +236,7 @@ async def create_event(
         "rule_id": rid,
         "source_type": st,
         "severity": sev,
+        "priority": pri,
         "title": str(title or "").strip()[:200],
         "message": str(message or "").strip()[:2000],
         "occurred_at": _iso(when),
@@ -224,6 +258,7 @@ async def update_event_recording_result(
     *,
     recording_status: str,
     recording_session_id: Optional[str] = None,
+    pre_alarm: Optional[dict] = None,
 ) -> Optional[dict]:
     """Attach alarm recording action outcome to a persisted event."""
     eid = (event_id or "").strip()
@@ -239,6 +274,13 @@ async def update_event_recording_result(
     updates: dict[str, Any] = {"recording_status": status}
     if recording_session_id:
         updates["recording_session_id"] = str(recording_session_id)
+    if isinstance(pre_alarm, dict):
+        if pre_alarm.get("status") is not None:
+            updates["pre_alarm_status"] = pre_alarm.get("status")
+        if pre_alarm.get("seconds_captured") is not None:
+            updates["pre_alarm_seconds_captured"] = pre_alarm.get("seconds_captured")
+        if pre_alarm.get("path"):
+            updates["pre_alarm_path"] = str(pre_alarm.get("path"))
 
     await events_collection.update_one({"_id": oid}, {"$set": updates})
     doc = await events_collection.find_one({"_id": oid})
@@ -307,6 +349,16 @@ async def list_events(
     return {"items": items, "total": total, "limit": limit, "offset": offset}
 
 
+async def _user_can_access_event_doc(user: dict, doc: dict) -> bool:
+    if is_admin(user):
+        return True
+    cid = str(doc.get("camera_id") or "").strip()
+    if not cid and str(doc.get("source_type") or "") == "external_sensor":
+        return True
+    cam = await get_camera_by_ref(cid) if cid else None
+    return user_can_access_camera(user, cid, cam)
+
+
 async def get_event(event_id: str, user: dict) -> Optional[dict]:
     eid = (event_id or "").strip()
     try:
@@ -315,8 +367,7 @@ async def get_event(event_id: str, user: dict) -> Optional[dict]:
         return None
     if not doc:
         return None
-    cam = await get_camera_by_ref(doc.get("camera_id") or "")
-    if not user_can_access_camera(user, doc.get("camera_id") or "", cam):
+    if not await _user_can_access_event_doc(user, doc):
         return None
     return event_to_public(doc)
 
@@ -332,8 +383,7 @@ async def acknowledge_event(event_id: str, user: dict) -> Optional[dict]:
     if not doc:
         return None
 
-    cam = await get_camera_by_ref(doc.get("camera_id") or "")
-    if not user_can_access_camera(user, doc.get("camera_id") or "", cam):
+    if not await _user_can_access_event_doc(user, doc):
         return None
 
     now = _utcnow()
@@ -346,6 +396,37 @@ async def acknowledge_event(event_id: str, user: dict) -> Optional[dict]:
                 "acknowledged_by": actor_id,
                 "acknowledged_at": _iso(now),
                 "status": "acknowledged",
+            }
+        },
+    )
+    updated = await events_collection.find_one({"_id": oid})
+    return event_to_public(updated)
+
+
+async def display_reset_event(event_id: str, user: dict) -> Optional[dict]:
+    """Clear alarmed-video display without acknowledging the event (RDSO 18.1.25.2)."""
+    eid = (event_id or "").strip()
+    try:
+        oid = ObjectId(eid)
+    except (InvalidId, TypeError):
+        return None
+
+    doc = await events_collection.find_one({"_id": oid})
+    if not doc:
+        return None
+
+    if not await _user_can_access_event_doc(user, doc):
+        return None
+
+    now = _utcnow()
+    actor_id = str(user.get("_id") or user.get("id") or "")
+    await events_collection.update_one(
+        {"_id": oid},
+        {
+            "$set": {
+                "metadata.display_reset_at": _iso(now),
+                "metadata.display_reset": True,
+                "metadata.display_reset_by": actor_id,
             }
         },
     )

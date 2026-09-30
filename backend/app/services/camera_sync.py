@@ -25,6 +25,7 @@ STREAM_AFFECTING_FIELDS: frozenset[str] = frozenset(
         "main_rtsp_url",
         "sub_rtsp_url",
         "is_active",
+        "multicast",
     }
 )
 

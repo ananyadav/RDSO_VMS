@@ -239,6 +239,20 @@ def prepare_camera_fields(
     elif existing.get("ptz_channel") is not None:
         merged["ptz_channel"] = existing.get("ptz_channel")
 
+    # RDSO 18.2.27 — optional multicast source ingest config
+    if "multicast" in camera_data:
+        from app.services.network_video_transport import (
+            MulticastConfigError,
+            normalize_multicast_config,
+        )
+
+        try:
+            merged["multicast"] = normalize_multicast_config(camera_data.get("multicast"))
+        except MulticastConfigError as exc:
+            raise ValueError(str(exc)) from exc
+    elif existing.get("multicast") is not None:
+        merged["multicast"] = existing.get("multicast")
+
     merged["camera_uid"] = make_camera_uid(ip_address) or ""
 
     manual_rtsp = protocol in ("ONVIF", "CUSTOM")

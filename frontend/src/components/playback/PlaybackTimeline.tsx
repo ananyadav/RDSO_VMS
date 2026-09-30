@@ -1,4 +1,10 @@
 import React, { useMemo, useRef, useState } from 'react';
+import {
+  calendarDateKey,
+  formatPlaybackClock,
+  getCachedAppTimezone,
+  siteDayBoundsMs,
+} from '../../lib/appTimezone';
 
 export interface TimelineRecording {
   sessionId: string;
@@ -8,7 +14,6 @@ export interface TimelineRecording {
   segmentCount: number;
 }
 
-const DAY_MS = 86_400_000;
 const HOUR_MARKS = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24] as const;
 const MIN_BLOCK_PCT = 0.2;
 
@@ -29,28 +34,27 @@ type RecordingSegment = {
 
 type DaySegment = GapSegment | RecordingSegment;
 
-function dayBounds(day: Date): { startMs: number; endMs: number } {
-  const start = new Date(day);
-  start.setHours(0, 0, 0, 0);
-  return { startMs: start.getTime(), endMs: start.getTime() + DAY_MS - 1 };
+function dayBounds(
+  day: Date,
+  timeZone: string = getCachedAppTimezone(),
+): { startMs: number; endInclusiveMs: number; dayMs: number } {
+  const { startMs, endMs } = siteDayBoundsMs(calendarDateKey(day), timeZone);
+  return {
+    startMs,
+    endInclusiveMs: endMs - 1,
+    dayMs: Math.max(1, endMs - startMs),
+  };
 }
 
-function msToDayPercent(ms: number, dayStartMs: number): number {
-  return ((ms - dayStartMs) / DAY_MS) * 100;
+function msToDayPercent(ms: number, dayStartMs: number, dayMs: number): number {
+  return ((ms - dayStartMs) / dayMs) * 100;
 }
 
-function formatTimeLabel(isoOrMs: string | number): string {
-  try {
-    const d = typeof isoOrMs === 'number' ? new Date(isoOrMs) : new Date(isoOrMs);
-    return d.toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    });
-  } catch {
-    return String(isoOrMs);
-  }
+function formatTimeLabel(
+  isoOrMs: string | number,
+  timeZone: string = getCachedAppTimezone(),
+): string {
+  return formatPlaybackClock(isoOrMs, timeZone);
 }
 
 function formatHour(h: number): string {
@@ -60,8 +64,12 @@ function formatHour(h: number): string {
 export function buildDaySegments(
   recordings: TimelineRecording[],
   selectedDate: Date,
+  timeZone: string = getCachedAppTimezone(),
 ): DaySegment[] {
-  const { startMs: dayStartMs, endMs: dayEndMs } = dayBounds(selectedDate);
+  const { startMs: dayStartMs, endInclusiveMs: dayEndMs, dayMs } = dayBounds(
+    selectedDate,
+    timeZone,
+  );
 
   const sorted = [...recordings].sort(
     (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
@@ -78,15 +86,17 @@ export function buildDaySegments(
     if (recStart > cursor) {
       segments.push({
         type: 'gap',
-        left: msToDayPercent(cursor, dayStartMs),
-        width: msToDayPercent(recStart, dayStartMs) - msToDayPercent(cursor, dayStartMs),
+        left: msToDayPercent(cursor, dayStartMs, dayMs),
+        width:
+          msToDayPercent(recStart, dayStartMs, dayMs) -
+          msToDayPercent(cursor, dayStartMs, dayMs),
         startMs: cursor,
         endMs: recStart - 1,
       });
     }
 
-    const left = msToDayPercent(recStart, dayStartMs);
-    const width = msToDayPercent(recEnd, dayStartMs) - left;
+    const left = msToDayPercent(recStart, dayStartMs, dayMs);
+    const width = msToDayPercent(recEnd, dayStartMs, dayMs) - left;
     segments.push({
       type: 'recording',
       rec,
@@ -100,8 +110,10 @@ export function buildDaySegments(
   if (cursor <= dayEndMs) {
     segments.push({
       type: 'gap',
-      left: msToDayPercent(cursor, dayStartMs),
-      width: msToDayPercent(dayEndMs, dayStartMs) - msToDayPercent(cursor, dayStartMs),
+      left: msToDayPercent(cursor, dayStartMs, dayMs),
+      width:
+        msToDayPercent(dayEndMs, dayStartMs, dayMs) -
+        msToDayPercent(cursor, dayStartMs, dayMs),
       startMs: cursor,
       endMs: dayEndMs,
     });
@@ -113,13 +125,14 @@ export function buildDaySegments(
 export function blockStyle(
   rec: TimelineRecording,
   selectedDate?: Date,
+  timeZone: string = getCachedAppTimezone(),
 ): { left: string; width: string } {
   const day = selectedDate ?? new Date(rec.startTime);
-  const { startMs: dayStartMs, endMs: dayEndMs } = dayBounds(day);
+  const { startMs: dayStartMs, endInclusiveMs: dayEndMs, dayMs } = dayBounds(day, timeZone);
   const recStart = Math.max(dayStartMs, new Date(rec.startTime).getTime());
   const recEnd = Math.min(dayEndMs, new Date(rec.endTime).getTime());
-  const left = msToDayPercent(recStart, dayStartMs);
-  const width = msToDayPercent(recEnd, dayStartMs) - left;
+  const left = msToDayPercent(recStart, dayStartMs, dayMs);
+  const width = msToDayPercent(recEnd, dayStartMs, dayMs) - left;
   return { left: `${left}%`, width: `${Math.max(width, MIN_BLOCK_PCT)}%` };
 }
 
@@ -127,13 +140,17 @@ export function recordingSeekOffset(
   rec: TimelineRecording,
   selectedDate: Date,
   dayPct: number,
+  timeZone: string = getCachedAppTimezone(),
 ): number {
-  const { startMs: dayStartMs, endMs: dayEndMs } = dayBounds(selectedDate);
+  const { startMs: dayStartMs, endInclusiveMs: dayEndMs, dayMs } = dayBounds(
+    selectedDate,
+    timeZone,
+  );
   const recStart = Math.max(dayStartMs, new Date(rec.startTime).getTime());
   const recEnd = Math.min(dayEndMs, new Date(rec.endTime).getTime());
   if (recEnd <= recStart) return 0;
 
-  const clickMs = dayStartMs + (dayPct / 100) * DAY_MS;
+  const clickMs = dayStartMs + (dayPct / 100) * dayMs;
   const clampedMs = Math.max(recStart, Math.min(recEnd, clickMs));
   const offset = (clampedMs - recStart) / 1000;
 
@@ -150,6 +167,7 @@ interface PlaybackTimelineProps {
   activeSessionId: string | null;
   playheadPercent: number | null;
   currentTimeLabel: string;
+  timeZone?: string;
   onBlockClick: (rec: TimelineRecording, dayPercent: number) => void;
   onGapClick: (dayPercent: number) => void;
 }
@@ -161,6 +179,7 @@ export default function PlaybackTimeline({
   activeSessionId,
   playheadPercent,
   currentTimeLabel,
+  timeZone = getCachedAppTimezone(),
   onBlockClick,
   onGapClick,
 }: PlaybackTimelineProps): React.ReactElement {
@@ -172,8 +191,8 @@ export default function PlaybackTimeline({
   } | null>(null);
 
   const segments = useMemo(
-    () => buildDaySegments(recordings, selectedDate),
-    [recordings, selectedDate],
+    () => buildDaySegments(recordings, selectedDate, timeZone),
+    [recordings, selectedDate, timeZone],
   );
 
   const clickPercent = (clientX: number): number => {
@@ -186,8 +205,8 @@ export default function PlaybackTimeline({
     if (!trackRef.current) return;
     const pct = clickPercent(e.clientX);
     const x = e.clientX - trackRef.current.getBoundingClientRect().left;
-    const { startMs: dayStartMs } = dayBounds(selectedDate);
-    const hoverMs = dayStartMs + (pct / 100) * DAY_MS;
+    const { startMs: dayStartMs, dayMs } = dayBounds(selectedDate, timeZone);
+    const hoverMs = dayStartMs + (pct / 100) * dayMs;
 
     const hit = segments.find(
       (seg) =>
@@ -199,7 +218,7 @@ export default function PlaybackTimeline({
     if (hit?.type === 'recording') {
       setHover({
         kind: 'recording',
-        label: `${formatTimeLabel(hit.rec.startTime)} – ${formatTimeLabel(hit.rec.endTime)}`,
+        label: `${formatTimeLabel(hit.rec.startTime, timeZone)} – ${formatTimeLabel(hit.rec.endTime, timeZone)}`,
         x,
       });
       return;
@@ -215,7 +234,7 @@ export default function PlaybackTimeline({
     if (gap?.type === 'gap') {
       setHover({
         kind: 'gap',
-        label: `No recording · ${formatTimeLabel(gap.startMs)} – ${formatTimeLabel(gap.endMs)}`,
+        label: `No recording · ${formatTimeLabel(gap.startMs, timeZone)} – ${formatTimeLabel(gap.endMs, timeZone)}`,
         x,
       });
       return;
@@ -223,7 +242,7 @@ export default function PlaybackTimeline({
 
     setHover({
       kind: 'track',
-      label: formatTimeLabel(hoverMs),
+      label: formatTimeLabel(hoverMs, timeZone),
       x,
     });
   };
@@ -293,7 +312,7 @@ export default function PlaybackTimeline({
                 <button
                   key={`gap-${i}`}
                   type="button"
-                  aria-label={`No recording ${formatTimeLabel(seg.startMs)} to ${formatTimeLabel(seg.endMs)}`}
+                  aria-label={`No recording ${formatTimeLabel(seg.startMs, timeZone)} to ${formatTimeLabel(seg.endMs, timeZone)}`}
                   onClick={(ev) => {
                     ev.stopPropagation();
                     onGapClick(clickPercent(ev.clientX));
@@ -305,7 +324,7 @@ export default function PlaybackTimeline({
                     backgroundImage:
                       'repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(0,0,0,0.18) 3px, rgba(0,0,0,0.18) 6px)',
                   }}
-                  title={`No recording · ${formatTimeLabel(seg.startMs)} – ${formatTimeLabel(seg.endMs)}`}
+                  title={`No recording · ${formatTimeLabel(seg.startMs, timeZone)} – ${formatTimeLabel(seg.endMs, timeZone)}`}
                 />
               );
             }
@@ -316,7 +335,7 @@ export default function PlaybackTimeline({
                 key={seg.rec.sessionId}
                 type="button"
                 style={{ left: `${seg.left}%`, width: `${seg.width}%` }}
-                title={`${formatTimeLabel(seg.rec.startTime)} – ${formatTimeLabel(seg.rec.endTime)}`}
+                title={`${formatTimeLabel(seg.rec.startTime, timeZone)} – ${formatTimeLabel(seg.rec.endTime, timeZone)}`}
                 onPointerUp={(ev) => {
                   if (ev.pointerType === 'mouse' && ev.button !== 0) return;
                   handleBlockPointer(seg.rec, ev);

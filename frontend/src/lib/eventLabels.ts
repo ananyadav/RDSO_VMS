@@ -8,8 +8,8 @@ export type AlarmEventStatus = 'open' | 'acknowledged';
 export const EVENT_SOURCE_OPTIONS = [
   { value: '', label: 'All sources' },
   { value: 'signal_loss', label: 'Signal Loss', available: true },
-  { value: 'motion', label: 'Motion (not yet available)', available: false },
-  { value: 'digital_input', label: 'Digital Input (not yet available)', available: false },
+  { value: 'motion', label: 'Motion', available: true },
+  { value: 'digital_input', label: 'Digital Input / Relay', available: true },
   { value: 'recording_failure', label: 'Recording Failure (not yet available)', available: false },
   { value: 'manual_test', label: 'Manual Test (not yet available)', available: false },
 ] as const;
@@ -75,7 +75,17 @@ export function statusBadgeClass(status: string): string {
     : 'bg-gray-500/20 text-gray-300';
 }
 
-const SAFE_METADATA_KEYS = new Set(['health_category', 'strikes', 'checked_at', 'truncated']);
+const SAFE_METADATA_KEYS = new Set([
+  'health_category',
+  'strikes',
+  'checked_at',
+  'truncated',
+  'recovered_at',
+  'signal_restored',
+  'display_reset_at',
+  'display_reset',
+  'display_reset_by',
+]);
 
 export function safeMetadataEntries(metadata: Record<string, unknown> | undefined): [string, string][] {
   if (!metadata || typeof metadata !== 'object') return [];

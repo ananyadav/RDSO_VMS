@@ -9,8 +9,6 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
-import psutil
-
 from app.core.database import camera_collection, recording_status_logs_collection
 from app.services.recording_config import (
     RECORDING_STREAM,
@@ -36,34 +34,15 @@ _FS_EXECUTOR = ThreadPoolExecutor(max_workers=8, thread_name_prefix="storage-fs"
 
 
 def _disk_usage_for_recordings() -> dict:
-    """System disk stats for the volume that holds Recordings/."""
-    path = str(get_effective_recordings_dir().resolve())
-    try:
-        disk = psutil.disk_usage(path)
-    except Exception as e:
-        logger.warning(f"[STORAGE] disk_usage failed for {path}: {e}")
-        disk = psutil.disk_usage("/" if os.name != "nt" else "C:\\")
+    """Stats for the *configured* recordings volume only (no silent disk fallback)."""
+    from app.services.storage_volume import disk_payload_from_probe, probe_recordings_storage
 
-    total_gb = round(disk.total / 1024**3, 2)
-    used_gb = round(disk.used / 1024**3, 2)
-    free_gb = round(disk.free / 1024**3, 2)
-    free_percent = round(disk.free / disk.total * 100, 1) if disk.total else 0.0
-    if free_percent > 20:
-        status_level, status_label = "green", "Healthy"
-    elif free_percent > 10:
-        status_level, status_label = "yellow", "Low"
-    else:
-        status_level, status_label = "red", "Critical"
-    return {
-        "disk_path": path,
-        "disk_total_gb": total_gb,
-        "disk_used_gb": used_gb,
-        "disk_free_gb": free_gb,
-        "disk_free_percent": free_percent,
-        "disk_percent": round(disk.percent, 1),
-        "status_level": status_level,
-        "status_label": status_label,
-    }
+    probe = probe_recordings_storage(create_if_missing=False)
+    payload = disk_payload_from_probe(probe)
+    # Keep dashboard usable when folder is online but temporarily empty of cameras.
+    if not payload.get("status_label"):
+        payload["status_label"] = "Unavailable"
+    return payload
 
 
 def _camera_filesystem_stats(camera_id: str) -> dict:
@@ -358,6 +337,9 @@ async def get_storage_dashboard(*, summary_only: bool = False) -> dict:
 
     recordings_gb = round(total_recordings_bytes / 1e9, 4)
 
+    from app.services.storage_volume import probe_recordings_storage
+
+    storage_health = probe_recordings_storage(create_if_missing=False)
     return {
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "recordings_root": str(get_effective_recordings_dir()),
@@ -365,6 +347,14 @@ async def get_storage_dashboard(*, summary_only: bool = False) -> dict:
         "recording": get_recording_stream_info(),
         "retention": get_retention_policy(),
         "storage_settings": get_storage_settings_public(),
+        "storage_health": {
+            "status": storage_health.get("status"),
+            "status_label": storage_health.get("status_label"),
+            "writable": bool(storage_health.get("writable")),
+            "allow_recording": bool(storage_health.get("allow_recording")),
+            "storage_model": storage_health.get("storage_model"),
+            "error": storage_health.get("error"),
+        },
         "disk": disk,
         "summary": {
             "recordings_storage_gb": recordings_gb,

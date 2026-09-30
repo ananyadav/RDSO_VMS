@@ -303,3 +303,58 @@ class TestEventRoutes(unittest.IsolatedAsyncioTestCase):
             response = await list_events_endpoint(request)
         self.assertEqual(response.status, 200)
         self.assertTrue(list_mock.await_args.kwargs.get("ui_notification"))
+
+
+class TestDisplayResetRoute(unittest.IsolatedAsyncioTestCase):
+    async def test_display_reset_requires_events_permission(self):
+        from app.routes.events import display_reset_event_endpoint
+
+        response = await display_reset_event_endpoint(
+            _request("POST", f"/api/events/{EVENT_ID}/display-reset", OPERATOR, {"id": EVENT_ID}),
+        )
+        self.assertEqual(response.status, 403)
+
+    async def test_display_reset_does_not_acknowledge(self):
+        from app.routes.events import display_reset_event_endpoint
+
+        reset = {
+            **VALID_EVENT,
+            "acknowledged": False,
+            "status": "open",
+            "metadata": {
+                "display_reset": True,
+                "display_reset_at": "2026-09-08T10:05:00+00:00",
+                "display_reset_by": "o2",
+            },
+        }
+        with patch(
+            "app.routes.events.display_reset_event",
+            new_callable=AsyncMock,
+            return_value=reset,
+        ), patch(
+            "app.routes.events.write_audit",
+            new_callable=AsyncMock,
+            return_value=True,
+        ) as audit:
+            response = await display_reset_event_endpoint(
+                _request("POST", f"/api/events/{EVENT_ID}/display-reset", EVENTS_OP, {"id": EVENT_ID}),
+            )
+        self.assertEqual(response.status, 200)
+        body = json.loads(response.text)
+        self.assertFalse(body["acknowledged"])
+        self.assertEqual(body["status"], "open")
+        self.assertTrue(body["metadata"].get("display_reset"))
+        self.assertEqual(audit.await_args.kwargs["action"], "EVENT_DISPLAY_RESET")
+
+    async def test_display_reset_acl_miss_is_404(self):
+        from app.routes.events import display_reset_event_endpoint
+
+        with patch(
+            "app.routes.events.display_reset_event",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            response = await display_reset_event_endpoint(
+                _request("POST", f"/api/events/{EVENT_ID}/display-reset", EVENTS_OP, {"id": EVENT_ID}),
+            )
+        self.assertEqual(response.status, 404)

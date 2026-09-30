@@ -12,8 +12,8 @@ export const LIVE_CAMERA_SEQUENCE_DRAG_MIME = 'application/x-live-camera-sequenc
 
 export function slotCountForLayout(cameraCount: number, gridCols: number): number {
   const cols = Math.max(1, gridCols);
-  const minSlots = cols * cols;
-  const rows = Math.max(1, Math.ceil(cameraCount / cols));
+  const minSlots = cols * cols; // always full layout (e.g. 4x4 → 16) even with fewer cameras
+  const rows = Math.max(1, Math.ceil(Math.max(0, cameraCount) / cols));
   return Math.max(minSlots, rows * cols);
 }
 
@@ -42,7 +42,8 @@ export function migrateAssignmentsForLayout(
     return authorizedSequenceIds.has(slot.id) ? slot : null;
   });
   const assignedCount = preserved.filter(Boolean).length;
-  const count = slotCountForLayout(assignedCount, nextCols);
+  // Always size to the full next layout (cols²), not only filled tiles.
+  const count = slotCountForLayout(Math.max(assignedCount, nextCols * nextCols), nextCols);
   const next: SlotAssignments = Array(count).fill(null);
   for (let i = 0; i < Math.min(preserved.length, count); i += 1) {
     next[i] = preserved[i];

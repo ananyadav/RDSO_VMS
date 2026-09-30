@@ -397,7 +397,11 @@ class TestAlarmRuleEvaluator(unittest.IsolatedAsyncioTestCase):
         ), patch(
             "app.services.alarm_rule_evaluator.start_alarm_triggered_recording",
             new_callable=AsyncMock,
-            return_value={"recording_status": "started", "recording_session_id": "sess123"},
+            return_value={
+                "recording_status": "started",
+                "recording_session_id": "sess123",
+                "pre_alarm": {"status": "ok", "seconds_captured": 10},
+            },
         ) as mock_rec, patch(
             "app.services.alarm_rule_evaluator.update_event_recording_result",
             new_callable=AsyncMock,
@@ -405,8 +409,47 @@ class TestAlarmRuleEvaluator(unittest.IsolatedAsyncioTestCase):
             result = await process_alarm_signal(BASE_SIGNAL)
         self.assertEqual(result["triggered_rules"], 1)
         mock_rec.assert_awaited_once()
+        kwargs = mock_rec.await_args.kwargs
+        self.assertEqual(kwargs.get("post_alarm_seconds"), 30)
+        self.assertEqual(kwargs.get("pre_alarm_seconds"), 0)
         mock_update.assert_awaited_once()
         self.assertEqual(mock_update.await_args.kwargs["recording_status"], "started")
+        self.assertEqual(mock_update.await_args.kwargs["pre_alarm"]["status"], "ok")
+
+
+    async def test_start_recording_passes_pre_post_config(self):
+        rule = {
+            **ENABLED_RULE,
+            "actions": ["create_event", "start_recording"],
+            "recording": {"pre_alarm_seconds": 12, "post_alarm_seconds": 40},
+        }
+        store = FakeAlarmRulesStore([rule])
+        fake_event = {
+            "id": EVENT_ID,
+            "camera_id": CAMERA_ID,
+            "actions_triggered": ["create_event", "start_recording"],
+            "ui_notification": False,
+        }
+        with patch("app.services.alarm_rule_evaluator.alarm_rules_collection", store), patch(
+            "app.services.alarm_rule_evaluator.get_camera_by_ref",
+            new_callable=AsyncMock,
+            return_value=CAMERA_DOC,
+        ), patch(
+            "app.services.alarm_rule_evaluator.create_event",
+            new_callable=AsyncMock,
+            return_value=fake_event,
+        ), patch(
+            "app.services.alarm_rule_evaluator.start_alarm_triggered_recording",
+            new_callable=AsyncMock,
+            return_value={"recording_status": "started", "recording_session_id": "sess123"},
+        ) as mock_rec, patch(
+            "app.services.alarm_rule_evaluator.update_event_recording_result",
+            new_callable=AsyncMock,
+        ):
+            await process_alarm_signal(BASE_SIGNAL)
+        kwargs = mock_rec.await_args.kwargs
+        self.assertEqual(kwargs.get("pre_alarm_seconds"), 12)
+        self.assertEqual(kwargs.get("post_alarm_seconds"), 40)
 
 
 class TestAlarmSignalValidation(unittest.TestCase):

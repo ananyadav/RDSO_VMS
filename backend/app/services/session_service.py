@@ -213,6 +213,18 @@ def _public_session(doc: dict) -> dict:
     }
 
 
+async def count_active_sessions() -> int:
+    """Count non-revoked, non-expired Mongo sessions (RDSO 18.5(i) evidence)."""
+    return int(
+        await SESSION_COLLECTION.count_documents(
+            {
+                "revoked_at": None,
+                "expires_at": {"$gt": _utcnow()},
+            }
+        )
+    )
+
+
 async def list_sessions(
     *,
     user_id: Optional[str] = None,

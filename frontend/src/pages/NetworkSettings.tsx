@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import PageHeader from '../components/PageHeader';
 import TCPIPSettings from '../components/TCPIPSettings';
 import EmailSettings from '../components/EmailSettings';
+import NtpTimeSettings from '../components/NtpTimeSettings';
 import {
   useUrlHydration,
   useUrlSync,
@@ -58,10 +59,11 @@ export default function NetworkSettings(): React.ReactElement {
         <div className="lg:w-3/4">
           {activeTab === 'TCP/IP' && <TCPIPSettings />}
           {activeTab === 'Email' && <EmailSettings />}
-          {activeTab !== 'TCP/IP' && activeTab !== 'Email' && (
+          {activeTab === 'NTP' && <NtpTimeSettings />}
+          {activeTab === 'DDNS' && (
             <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
-              <h3 className="text-xl font-bold text-white">{activeTab} Settings</h3>
-              <p className="text-gray-400 mt-2">Configuration for {activeTab} will be available here.</p>
+              <h3 className="text-xl font-bold text-white">DDNS Settings</h3>
+              <p className="text-gray-400 mt-2">Configuration for DDNS will be available here.</p>
             </div>
           )}
         </div>

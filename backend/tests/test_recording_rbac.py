@@ -125,15 +125,22 @@ class TestRecordingMutationsSuperAdminOnly(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(response.status, 403)
 
-    async def test_admin_config_403(self):
+    async def test_admin_config_allowed(self):
         request = _request("POST", "/api/recordings/schedule", ADMIN)
 
         async def _json():
             return {"schedule": {}}
 
         request.json = _json  # type: ignore[method-assign]
-        response = await update_recording_schedule_endpoint(request)
-        self.assertEqual(response.status, 403)
+        with patch(
+            "app.routes.recording.recording_sched.apply_schedule_update",
+            new_callable=AsyncMock,
+        ), patch(
+            "app.routes.recording._audit_recording_config",
+            new_callable=AsyncMock,
+        ):
+            response = await update_recording_schedule_endpoint(request)
+        self.assertEqual(response.status, 200)
 
         request = _request("PUT", "/api/storage/settings", ADMIN)
 
@@ -141,11 +148,31 @@ class TestRecordingMutationsSuperAdminOnly(unittest.IsolatedAsyncioTestCase):
             return {"retention_days": 7}
 
         request.json = _body  # type: ignore[method-assign]
-        response = await storage_settings_update_endpoint(request)
-        self.assertEqual(response.status, 403)
+        with patch(
+            "app.routes.recording.update_storage_settings",
+            new_callable=AsyncMock,
+            return_value={"retention_days": 7, "recordings_dir": "C:/Recordings"},
+        ), patch(
+            "app.services.storage_settings_store.get_effective_recordings_dir",
+            return_value=Path("C:/Recordings"),
+        ), patch(
+            "app.services.storage_settings_store.get_effective_retention_days",
+            return_value=15.0,
+        ), patch(
+            "app.routes.recording.commit_critical_audit",
+            new_callable=AsyncMock,
+            return_value=True,
+        ):
+            response = await storage_settings_update_endpoint(request)
+        self.assertEqual(response.status, 200)
 
-        response = await retention_run_endpoint(_request("POST", "/api/storage/retention/run", ADMIN))
-        self.assertEqual(response.status, 403)
+        with patch(
+            "app.routes.recording.is_recording_engine_enabled",
+            return_value=False,
+        ):
+            response = await retention_run_endpoint(_request("POST", "/api/storage/retention/run", ADMIN))
+        self.assertEqual(response.status, 409)  # engine disabled, not forbidden
+        self.assertNotEqual(response.status, 403)
 
     async def test_operator_config_403(self):
         request = _request("POST", "/api/recordings/schedule", OPERATOR_VIEW)

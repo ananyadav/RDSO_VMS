@@ -307,6 +307,18 @@ def rewrite_rtsp_credentials(rtsp_url: str, username: str, password: str) -> str
     return f"{scheme}://{user}:{pwd}@{host_path}"
 
 
+def ensure_rtsp_credentials(rtsp_url: str, username: str, password: str) -> str:
+    """Inject or replace credentials so RTSP URIs from GetStreamUri are usable."""
+    if not rtsp_url or "://" not in rtsp_url:
+        return rtsp_url
+    scheme, rest = rtsp_url.split("://", 1)
+    user, pwd = _encode_credentials(username, password)
+    if "@" in rest:
+        _, host_path = rest.split("@", 1)
+        return f"{scheme}://{user}:{pwd}@{host_path}"
+    return f"{scheme}://{user}:{pwd}@{rest}"
+
+
 def _legacy_sub_url(camera_doc: dict) -> str:
     """Read sub URL from canonical field or legacy rtsp_url (not written back)."""
     return (camera_doc.get("sub_rtsp_url") or camera_doc.get("rtsp_url") or "").strip()
@@ -487,10 +499,29 @@ def _go2rtc_browser_source(
 
 
 def stream_source_urls(camera_doc: dict, *, main: bool = False) -> List[str]:
-    """Primary URL plus brand fallbacks for go2rtc (grid=sub, fullscreen=main)."""
+    """Primary URL plus brand fallbacks for go2rtc (grid=sub, fullscreen=main).
+
+    When per-camera multicast ingest is enabled (RDSO 18.2.27), that source is
+    preferred first; unicast RTSP remains the fallback and the default.
+    """
+    out: List[str] = []
+    try:
+        from app.services.network_video_transport import (
+            build_multicast_ingest_url,
+            public_multicast_config,
+        )
+
+        mcast = public_multicast_config(camera_doc.get("multicast"))
+        if mcast.get("enabled"):
+            murl = build_multicast_ingest_url(mcast)
+            if murl:
+                out.append(murl)
+    except Exception:
+        pass
+
     urls = effective_camera_rtsp_urls(camera_doc)
     primary = (urls.get("main_rtsp_url") if main else urls.get("sub_rtsp_url") or "").strip()
-    if not primary:
+    if not primary and not out:
         return []
 
     # Rebuild brand fallbacks so DB-inserted cameras without
@@ -504,7 +535,10 @@ def stream_source_urls(camera_doc: dict, *, main: bool = False) -> List[str]:
     else:
         fallbacks = list(built.get("rtsp_fallback_urls") or [])
 
-    out = [_go2rtc_browser_source(primary, camera_doc, main=main)]
+    if primary:
+        wrapped = _go2rtc_browser_source(primary, camera_doc, main=main)
+        if wrapped and wrapped not in out:
+            out.append(wrapped)
     for url in fallbacks:
         u = (url or "").strip()
         if not u:

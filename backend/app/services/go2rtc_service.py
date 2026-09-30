@@ -127,6 +127,14 @@ def _rtsp_with_tcp(url: str) -> str:
     # go2rtc ffmpeg: sources already carry #video=… options — do not rewrite.
     if url.startswith("ffmpeg:"):
         return url
+    # Multicast UDP/RTP/RTSP — do not force TCP (RDSO 18.2.27 ingest).
+    try:
+        from app.services.network_video_transport import is_multicast_ingest_url
+
+        if is_multicast_ingest_url(url):
+            return url
+    except Exception:
+        pass
     timeout = os.getenv("GO2RTC_RTSP_TIMEOUT", "20").strip()
     base, _, frag = url.partition("#")
     params: Dict[str, str] = {}
@@ -1337,4 +1345,43 @@ def get_live_config() -> Dict[str, Any]:
         # Always true — Python live WS proxy was removed (Task 4B).
         "directMediaEnabled": True,
         "mediaWorkers": media_workers,
+        "transport": {
+            "unicast_default": True,
+            "browser_delivery": "unicast_via_nginx_media",
+            "relative_media_paths": True,
+            "rdso_18_2_2": True,
+            "rdso_18_2_3": True,
+            "rdso_18_2_27": True,
+            "multicast_browser_native": False,
+            "multicast_source_ingest": True,
+        },
+        "live_display": {
+            "rdso_18_2_5": True,
+            "rdso_18_2_6": True,
+            "rdso_18_2_7": True,
+            "rdso_18_2_24": True,
+            "rdso_18_2_25": True,
+            "rdso_18_2_26": True,
+            "layouts": [
+                {"id": "1x1", "cols": 1, "tiles": 1, "rdso_name": "Full screen"},
+                {"id": "2x2", "cols": 2, "tiles": 4, "rdso_name": "Quad"},
+                {"id": "3x3", "cols": 3, "tiles": 9, "rdso_name": "3×3"},
+                {"id": "4x4", "cols": 4, "tiles": 16, "rdso_name": "4×4 (16 cameras)"},
+                {"id": "5x5", "cols": 5, "tiles": 25, "rdso_name": "5×5"},
+                {"id": "6x6", "cols": 6, "tiles": 36, "rdso_name": "6×6"},
+            ],
+            "min_simultaneous_tiles": 16,
+            "grid_stream": "sub",
+            "fullscreen_stream": "main",
+            "software_fps_capability": 25,
+            "software_fps_throttle_below_25": False,
+            "workstation_acceptance_required": True,
+            "resolution_responsive": True,
+            "hardcoded_physical_display_resolution": False,
+            "physical_55_inch_tested": False,
+            "client_pc_display_control": True,
+            "logical_monitors": 8,
+            "independent_monitor_layout_and_cameras": True,
+            "physical_lfd_acceptance_required": True,
+        },
     }

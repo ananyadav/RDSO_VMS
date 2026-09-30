@@ -1,4 +1,8 @@
-"""SUPER_ADMIN-only audit log query. Append-only: no DELETE."""
+"""SUPER_ADMIN-only audit log query. Append-only: no DELETE.
+
+Admin mutations elsewhere are audited; listing remains SUPER_ADMIN per existing RBAC
+(Control Center platform surface).
+"""
 
 from aiohttp import web
 
@@ -33,6 +37,7 @@ async def list_audit_logs_endpoint(request: web.Request) -> web.Response:
         action=q.get("action"),
         resource_type=q.get("resource_type"),
         resource_id=q.get("resource_id"),
+        camera_id=q.get("camera_id") or q.get("camera"),
         start=q.get("start") or q.get("from"),
         end=q.get("end") or q.get("to"),
         success=_bool_arg(q.get("success")),

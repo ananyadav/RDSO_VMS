@@ -8,6 +8,8 @@ export interface AlarmEvent {
   rule_id?: string | null;
   source_type: string;
   severity: string;
+  /** RDSO 18.1.27 numeric priority 1–5 (5 highest). */
+  priority?: number;
   title: string;
   message: string;
   occurred_at: string;
@@ -69,5 +71,11 @@ export async function getEvent(id: string): Promise<AlarmEvent> {
 
 export async function acknowledgeEvent(id: string): Promise<AlarmEvent> {
   const response = await apiFetch(`/api/events/${id}/acknowledge`, { method: 'POST' });
+  return expectOk<AlarmEvent>(response);
+}
+
+/** Clear alarmed-video display without acknowledging (RDSO 18.1.25.2). */
+export async function displayResetEvent(id: string): Promise<AlarmEvent> {
+  const response = await apiFetch(`/api/events/${id}/display-reset`, { method: 'POST' });
   return expectOk<AlarmEvent>(response);
 }

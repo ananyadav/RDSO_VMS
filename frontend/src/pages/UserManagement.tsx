@@ -31,6 +31,8 @@ interface User {
   permissions?: string[];
   password?: string;
   cameraAccess?: CameraAccess;
+  /** RDSO 18.1.27 — 1–5, distinct from RBAC role. */
+  priority?: number;
 }
 
 export type { User, CameraAccess };

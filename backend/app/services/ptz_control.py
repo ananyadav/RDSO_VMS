@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Sequence
+from typing import Any, Dict, List, Sequence
 
 from app.services import dahua_ptz, hikvision_ptz, onvif_ptz
 
@@ -46,7 +46,10 @@ def _module(name: str):
 async def _first_ok(camera: dict, method: str, *args, **kwargs) -> Dict[str, Any]:
     last: Dict[str, Any] = {"ok": False, "error": "PTZ is not available on this camera"}
     for name in backends_for(camera):
-        fn = getattr(_module(name), method)
+        mod = _module(name)
+        if not hasattr(mod, method):
+            continue
+        fn = getattr(mod, method)
         try:
             result = await fn(camera, *args, **kwargs)
         except Exception as exc:
@@ -85,6 +88,68 @@ async def set_preset(camera: dict, preset_id: int, name: str) -> Dict[str, Any]:
 
 async def delete_preset(camera: dict, preset_id: int) -> Dict[str, Any]:
     return await _first_ok(camera, "delete_preset", preset_id)
+
+
+async def list_tours(camera: dict) -> Dict[str, Any]:
+    return await _first_ok(camera, "list_tours")
+
+
+async def set_tour(
+    camera: dict,
+    tour_id: int,
+    *,
+    name: str,
+    steps: List[Dict[str, Any]],
+    enabled: bool = True,
+) -> Dict[str, Any]:
+    return await _first_ok(
+        camera,
+        "set_tour",
+        tour_id,
+        name=name,
+        steps=steps,
+        enabled=enabled,
+    )
+
+
+async def delete_tour(camera: dict, tour_id: int) -> Dict[str, Any]:
+    return await _first_ok(camera, "delete_tour", tour_id)
+
+
+async def start_tour(camera: dict, tour_id: int) -> Dict[str, Any]:
+    return await _first_ok(camera, "start_tour", tour_id)
+
+
+async def stop_tour(camera: dict, tour_id: int) -> Dict[str, Any]:
+    return await _first_ok(camera, "stop_tour", tour_id)
+
+
+async def list_patterns(camera: dict) -> Dict[str, Any]:
+    return await _first_ok(camera, "list_patterns")
+
+
+async def set_pattern(camera: dict, pattern_id: int, *, name: str) -> Dict[str, Any]:
+    return await _first_ok(camera, "set_pattern", pattern_id, name=name)
+
+
+async def delete_pattern(camera: dict, pattern_id: int) -> Dict[str, Any]:
+    return await _first_ok(camera, "delete_pattern", pattern_id)
+
+
+async def start_pattern(camera: dict, pattern_id: int) -> Dict[str, Any]:
+    return await _first_ok(camera, "start_pattern", pattern_id)
+
+
+async def stop_pattern(camera: dict, pattern_id: int) -> Dict[str, Any]:
+    return await _first_ok(camera, "stop_pattern", pattern_id)
+
+
+async def record_pattern_start(camera: dict, pattern_id: int) -> Dict[str, Any]:
+    return await _first_ok(camera, "record_pattern_start", pattern_id)
+
+
+async def record_pattern_stop(camera: dict, pattern_id: int) -> Dict[str, Any]:
+    return await _first_ok(camera, "record_pattern_stop", pattern_id)
 
 
 async def ptz_capabilities(camera: dict) -> Dict[str, Any]:

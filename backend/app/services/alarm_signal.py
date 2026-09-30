@@ -9,7 +9,7 @@ from typing import Any, Optional
 from bson import ObjectId
 from bson.errors import InvalidId
 
-from app.services.alarm_constants import SOURCE_TYPES
+from app.services.alarm_constants import SOURCE_TYPE_ALIASES, SOURCE_TYPES
 from app.services.event_service import sanitize_event_metadata
 
 
@@ -62,6 +62,7 @@ def normalize_alarm_signal(raw: dict) -> NormalizedAlarmSignal:
         raise AlarmSignalValidationError("camera_id must be a valid MongoDB id") from exc
 
     source_type = str(raw.get("source_type") or "").strip().lower()
+    source_type = SOURCE_TYPE_ALIASES.get(source_type, source_type)
     if source_type not in SOURCE_TYPES:
         raise AlarmSignalValidationError(f"Unsupported source_type: {source_type or '(empty)'}")
 

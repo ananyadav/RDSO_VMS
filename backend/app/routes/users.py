@@ -6,6 +6,7 @@ from app.core.http_utils import read_json_body
 from app.core.roles import normalize_role, parse_requested_role
 from app.services.audit_service import (
     ACTION_USER_CREATED,
+    ACTION_USER_DELETED,
     ACTION_USER_DISABLED,
     ACTION_USER_ENABLED,
     ACTION_USER_PASSWORD_RESET,
@@ -180,7 +181,7 @@ async def update_user_endpoint(request):
 
 
 def _user_changes(before: dict, after: dict, payload: dict) -> dict:
-    fields = [k for k in ("name", "email", "status", "role") if k in payload]
+    fields = [k for k in ("name", "email", "status", "role", "priority") if k in payload]
     changes = {}
     for field in fields:
         left = before.get(field)
@@ -206,7 +207,7 @@ async def delete_user_endpoint(request):
     if not target or is_concealed_from(actor, target):
         if target and is_concealed_from(actor, target):
             await write_audit(
-                action="USER_DELETED",
+                action=ACTION_USER_DELETED,
                 actor=actor,
                 resource_type="user",
                 request=request,
@@ -218,7 +219,7 @@ async def delete_user_endpoint(request):
     allowed, _reason = can_delete_user(actor, target)
     if not allowed:
         await write_audit(
-            action="USER_DELETED",
+            action=ACTION_USER_DELETED,
             actor=actor,
             resource_type="user",
             resource_id=user_id,
@@ -235,7 +236,7 @@ async def delete_user_endpoint(request):
 
         ok = await commit_critical_audit(
             compensate=_compensate,
-            action="USER_DELETED",
+            action=ACTION_USER_DELETED,
             actor=actor,
             resource_type="user",
             resource_id=user_id,

@@ -1,7 +1,9 @@
+import os
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from app.services.app_timezone import clear_app_timezone_cache
 from app.services.playback_search import (
     RECORDING_FILE_NOT_FOUND,
     _build_recording_entry,
@@ -13,6 +15,18 @@ from app.services.playback_search import (
 
 
 class TestPlaybackSearchHelpers(unittest.TestCase):
+    def setUp(self):
+        self._prev = os.environ.get("APP_TIMEZONE")
+        os.environ["APP_TIMEZONE"] = "UTC"
+        clear_app_timezone_cache()
+
+    def tearDown(self):
+        if self._prev is None:
+            os.environ.pop("APP_TIMEZONE", None)
+        else:
+            os.environ["APP_TIMEZONE"] = self._prev
+        clear_app_timezone_cache()
+
     def test_parse_date(self):
         start, end = _parse_date("2026-06-08")
         self.assertEqual(start, datetime(2026, 6, 8, tzinfo=timezone.utc))
@@ -43,6 +57,18 @@ class TestPlaybackSearchHelpers(unittest.TestCase):
 
 
 class TestBuildRecordingEntry(unittest.TestCase):
+    def setUp(self):
+        self._prev = os.environ.get("APP_TIMEZONE")
+        os.environ["APP_TIMEZONE"] = "UTC"
+        clear_app_timezone_cache()
+
+    def tearDown(self):
+        if self._prev is None:
+            os.environ.pop("APP_TIMEZONE", None)
+        else:
+            os.environ["APP_TIMEZONE"] = self._prev
+        clear_app_timezone_cache()
+
     @patch("app.services.playback_search._session_status", return_value="stopped")
     @patch("app.services.playback_search._resolve_playback_session_dir")
     def test_mongodb_session_missing_files_excluded_from_search(
@@ -98,6 +124,18 @@ class TestBuildRecordingEntry(unittest.TestCase):
 
 
 class TestPlaybackSearchService(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self._prev = os.environ.get("APP_TIMEZONE")
+        os.environ["APP_TIMEZONE"] = "UTC"
+        clear_app_timezone_cache()
+
+    def tearDown(self):
+        if self._prev is None:
+            os.environ.pop("APP_TIMEZONE", None)
+        else:
+            os.environ["APP_TIMEZONE"] = self._prev
+        clear_app_timezone_cache()
+
     @patch("app.services.playback_search.recording_session_mongo_filter", new_callable=AsyncMock)
     @patch("app.services.playback_search.storage_folder_keys_for_uid", new_callable=AsyncMock)
     @patch("app.services.playback_search.resolve_camera_uid", new_callable=AsyncMock)
